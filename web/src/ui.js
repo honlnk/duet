@@ -110,10 +110,22 @@ function formatDuration(sec) {
   return `${m}m${s.toString().padStart(2, '0')}s`
 }
 
-/** 渲染一条完整消息 */
+/** 渲染一条完整消息（优先复用正在流式的气泡，避免重复） */
 export function appendMessage({ agentId, name, content, truncated }) {
-  finishStreaming()
   clearEmptyHint()
+  // 若存在当前流式气泡且 agentId 一致，直接复用，避免出现两个气泡
+  const streamingDiv = state.currentBubble?.closest('.msg')
+  if (state.currentBubble && streamingDiv && streamingDiv.classList.contains(`agent-${agentId}`)) {
+    streamingDiv.querySelector('.name').innerHTML =
+      escapeHtml(name) + (truncated ? '<span class="tag">[已截断]</span>' : '')
+    state.currentBubble.textContent = content
+    state.currentBubble.classList.remove('cursor')
+    finishStreaming()
+    scrollToBottom()
+    return
+  }
+  // 否则新建（重连 / 首次渲染历史消息时走这里）
+  finishStreaming()
   const div = document.createElement('div')
   div.className = `msg agent-${agentId}`
   div.innerHTML = `<span class="name">${escapeHtml(name)}${truncated ? '<span class="tag">[已截断]</span>' : ''}</span><span class="content"></span>`
