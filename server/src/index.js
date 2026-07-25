@@ -1,0 +1,161 @@
+import Fastify from 'fastify'
+import fastifyStatic from '@fastify/static'
+import fastifyWebsocket from '@fastify/websocket'
+import fs from 'node:fs'
+import path from 'node:path'
+import { spawn } from 'node:child_process'
+import config, { validateConfig } from './config.js'
+import healthRoutes from './routes/health.js'
+import sessionRoutes from './routes/sessions.js'
+import wsRoutes from './ws/wsRoutes.js'
+import { recoverSessions, loadSession, saveSession } from './store/sessionStore.js'
+
+/**
+ * 启动服务器（单端口托管前端 + REST + WS）。
+ * dev 模式下用 vite dev server 中间件；prod 模式用 @fastify/static。
+ */
+export async function buildServer() {
+  validateConfig()
+
+  // 崩溃恢复
+  const recovered = recoverSessions()
+  if (recovered > 0) {
+    console.log(`[startup] 恢复 ${recovered} 个崩溃会话（running → stopped）`)
+  }
+
+  const fastify = Fastify({
+    logger: config.env === 'production' ? { level: 'info' } : { level: 'warn' },
+  })
+  fastify.decorate('config', config)
+
+  // WebSocket
+  await fastify.register(fastifyWebsocket, {
+    options: { maxPayload: 1024 * 1024 },
+  })
+
+  // REST 路由
+  await fastify.register(healthRoutes)
+  await fastify.register(sessionRoutes)
+  await fastify.register(wsRoutes)
+
+  // 静态托管前端
+  await registerStaticOrVite(fastify)
+
+  return fastify
+}
+
+async function registerStaticOrVite(fastify) {
+  const staticDir = config.staticDir
+  const indexHtml = path.join(staticDir, 'index.html')
+  const hasBuild = fs.existsSync(indexHtml)
+
+  if (config.env === 'production' && hasBuild) {
+    // 生产：托管构建产物
+    await fastify.register(fastifyStatic, {
+      root: staticDir,
+      prefix: '/',
+    })
+    // SPA fallback
+    fastify.setNotFoundHandler((req, reply) => {
+      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+        return reply.sendFile('index.html')
+      }
+      reply.code(404).send({ error: 'Not Found' })
+    })
+    return
+  }
+
+  if (hasBuild) {
+    // dev 但已有构建产物：直接托管（无需 vite）
+    await fastify.register(fastifyStatic, {
+      root: staticDir,
+      prefix: '/',
+    })
+    fastify.setNotFoundHandler((req, reply) => {
+      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+        return reply.sendFile('index.html')
+      }
+      reply.code(404).send({ error: 'Not Found' })
+    })
+    return
+  }
+
+  // dev 且无构建产物：内联极简首页（提示先 build 或直接用前端 dev）
+  fastify.get('/', async () => ({
+    message:
+      '前端尚未构建。请运行 `npm run build` 后再启动，或在 web/ 目录单独 `npm run dev`。',
+  }))
+}
+
+function openBrowser(url) {
+  const cmds = {
+    darwin: ['open', [url]],
+    win32: ['cmd', ['/c', 'start', url]],
+    linux: ['xdg-open', [url]],
+  }
+  const entry = cmds[process.platform]
+  if (!entry) return
+  const [cmd, args] = entry
+  try {
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).unref()
+  } catch {
+    /* 忽略，仅打印 URL */
+  }
+}
+
+async function main() {
+  const fastify = await buildServer()
+  try {
+    // PORT=0 时自动分配可用端口
+    const address = await fastify.listen({
+      port: config.port,
+      host: '0.0.0.0',
+    })
+    const displayUrl = address.replace('0.0.0.0', 'localhost')
+    console.log('═══════════════════════════════════════')
+    console.log(`  Duet 已启动`)
+    console.log(`  本地访问: ${displayUrl}`)
+    console.log(`  环境: ${config.env}  模型: ${config.deepseekModel}`)
+    console.log(`  熔断: ≤ ${config.absoluteMaxRounds} 轮 / ${config.absoluteMaxDurationSec}s`)
+    console.log('═══════════════════════════════════════')
+    if (config.env !== 'production') {
+      openBrowser(displayUrl)
+    }
+  } catch (e) {
+    fastify.log.error(e)
+    process.exit(1)
+  }
+
+  // graceful shutdown
+  const shutdown = async (sig) => {
+    console.log(`\n[shutdown] 收到 ${sig}，正在保存会话…`)
+    try {
+      // 把所有 running 会话标记 stopped 并 flush
+      const { listSessions } = await import('./store/sessionStore.js')
+      for (const s of listSessions()) {
+        const full = loadSession(s.id)
+        if (full && full.status === 'running') {
+          full.status = 'stopped'
+          full.finishedReason = full.finishedReason || 'shutdown'
+          full.stoppedAt = Date.now()
+          saveSession(full)
+          console.log(`[shutdown] 会话 ${s.id} 已保存为 stopped`)
+        }
+      }
+      await fastify.close()
+      console.log('[shutdown] 完成')
+      process.exit(0)
+    } catch (e) {
+      console.error('[shutdown] 异常', e)
+      process.exit(1)
+    }
+  }
+  process.on('SIGINT', () => shutdown('SIGINT'))
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+}
+
+// 仅作为入口时执行
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL('.', import.meta.url).pathname.slice(0, -1), 'index.js')
+if (isMain) {
+  main()
+}

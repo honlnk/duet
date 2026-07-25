@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Duet · 双 AI 对话聊天室</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">♪</span>
+        <h1>Duet</h1>
+        <span class="subtitle">双 AI 对话聊天室</span>
+      </div>
+      <div class="status-bar">
+        <span id="status-badge" class="badge idle">待机</span>
+        <span id="round-info" class="info">轮次 0 / ∞</span>
+        <span id="time-info" class="info">时长 ∞</span>
+        <span id="cost-info" class="info">0 token · $0.00</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" id="sidebar">
+        <h2>会话设置</h2>
+        <label class="field">
+          <span>话题</span>
+          <textarea id="topic" rows="2" placeholder="例如：讨论是否应该立法要求 AI 生成内容必须标注"></textarea>
+        </label>
+        <div class="agents">
+          <label class="field">
+            <span>智能体 A 名称</span>
+            <input id="agent-a-name" type="text" value="支持者" />
+          </label>
+          <label class="field">
+            <span>智能体 A 身份设定</span>
+            <textarea id="agent-a-persona" rows="4" placeholder="你是 ...，你的立场是 ..."></textarea>
+          </label>
+          <label class="field">
+            <span>智能体 B 名称</span>
+            <input id="agent-b-name" type="text" value="反对者" />
+          </label>
+          <label class="field">
+            <span>智能体 B 身份设定</span>
+            <textarea id="agent-b-persona" rows="4" placeholder="你是 ...，你的立场是 ..."></textarea>
+          </label>
+        </div>
+        <details class="advanced">
+          <summary>高级设置</summary>
+          <label class="field">
+            <span>模型</span>
+            <select id="model"><option>deepseek-v4-flash</option><option>deepseek-v4-pro</option></select>
+          </label>
+          <label class="field">
+            <span>温度（默认 0.7）</span>
+            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.7" />
+          </label>
+          <label class="field">
+            <span>对话轮数上限（留空=无限）</span>
+            <input id="max-rounds" type="number" min="0" placeholder="如 20" />
+          </label>
+          <label class="field">
+            <span>持续时间上限秒（留空=无限）</span>
+            <input id="duration-sec" type="number" min="0" placeholder="如 600" />
+          </label>
+          <label class="field">
+            <span>每 N 轮触发摘要</span>
+            <input id="summary-every-n" type="number" min="1" value="10" />
+          </label>
+          <label class="field">
+            <span>压缩后保留最近消息数</span>
+            <input id="keep-recent" type="number" min="2" value="8" />
+          </label>
+        </details>
+        <p class="warn">⚠ 无限对话会产生持续 API 费用，请留意顶部 token 与成本统计。</p>
+        <div class="actions">
+          <button id="btn-start" class="primary">开始对话</button>
+          <button id="btn-stop" class="danger" disabled>停止</button>
+          <button id="btn-reset">重置</button>
+        </div>
+        <div class="sidebar-toggle">
+          <a id="toggle-sidebar" href="#">收起 ▸</a>
+        </div>
+      </aside>
+
+      <section class="chat">
+        <div id="messages" class="messages">
+          <div class="empty-hint">填写左侧设置后，点击「开始对话」</div>
+        </div>
+        <div id="event-log" class="event-log"></div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

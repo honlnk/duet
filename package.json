@@ -1,0 +1,23 @@
+{
+  "name": "duet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Duet — 双 AI 自主对话聊天室",
+  "type": "module",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run build --workspace web && node server/src/index.js",
+    "build": "npm run build --workspace web",
+    "start": "cross-env NODE_ENV=production node server/src/index.js",
+    "test": "node scripts/test-e2e.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}
