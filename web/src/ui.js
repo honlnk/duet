@@ -23,6 +23,11 @@ const els = {
   btnStop: $('#btn-stop'),
   btnReset: $('#btn-reset'),
   toggleSidebar: $('#toggle-sidebar'),
+  presetSelect: $('#preset-select'),
+  btnLoadPreset: $('#btn-load-preset'),
+  btnClearDraft: $('#btn-clear-draft'),
+  btnClearHistory: $('#btn-clear-history'),
+  cacheStatus: $('#cache-status'),
 }
 
 const state = {
@@ -49,6 +54,48 @@ export function getFormPayload() {
       summaryEveryN: Number(els.summaryEveryN.value) || 10,
       keepRecent: Number(els.keepRecent.value) || 8,
     },
+  }
+}
+
+/** 字段 key -> DOM 元素 映射（供 storage 读写） */
+const fieldEls = {
+  topic: els.topic,
+  agentAName: els.agentAName,
+  agentAPersona: els.agentAPersona,
+  agentBName: els.agentBName,
+  agentBPersona: els.agentBPersona,
+  model: els.model,
+  temperature: els.temperature,
+  maxRounds: els.maxRounds,
+  durationSec: els.durationSec,
+  summaryEveryN: els.summaryEveryN,
+  keepRecent: els.keepRecent,
+}
+
+/** 收集表单当前值（字符串形式，含空串） */
+export function collectFormValues() {
+  const v = {}
+  for (const k of Object.keys(fieldEls)) v[k] = fieldEls[k].value
+  return v
+}
+
+/** 用一组值回填表单（跳过 undefined） */
+export function restoreFormValues(values) {
+  if (!values) return
+  for (const k of Object.keys(fieldEls)) {
+    if (values[k] !== undefined && values[k] !== null) {
+      fieldEls[k].value = values[k]
+    }
+  }
+}
+
+/** 清空所有输入框（保留默认项） */
+export function clearFormValues() {
+  for (const k of Object.keys(fieldEls)) {
+    const el = fieldEls[k]
+    if (el.tagName === 'SELECT') continue
+    if (['temperature', 'summaryEveryN', 'keepRecent'].includes(k)) continue
+    el.value = ''
   }
 }
 

@@ -126,6 +126,39 @@ body {
 .actions button.danger { border-color: var(--danger); color: var(--danger); }
 .actions button.danger:hover:not(:disabled) { background: rgba(255,84,112,0.15); }
 
+/* 历史预设行 */
+.field-presets .presets-row {
+  display: flex;
+  gap: 6px;
+}
+.field-presets select { flex: 1; }
+.field-presets button {
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.field-presets button:hover { background: var(--bg-hover); color: var(--text); }
+
+/* 缓存提示行 */
+.cache-hint {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 6px 0 2px;
+}
+.cache-hint a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.cache-hint a:hover { color: var(--danger); }
+
 .sidebar-toggle { margin-top: 16px; text-align: right; }
 .sidebar-toggle a { color: var(--text-dim); font-size: 12px; text-decoration: none; }
 

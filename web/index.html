@@ -25,6 +25,14 @@
     <main class="layout">
       <aside class="sidebar" id="sidebar">
         <h2>会话设置</h2>
+        <label class="field field-presets">
+          <span>历史预设（本地缓存）</span>
+          <div class="presets-row">
+            <select id="preset-select"><option value="">— 选择历史配置 —</option></select>
+            <button id="btn-load-preset" type="button" title="载入">载入</button>
+            <button id="btn-clear-draft" type="button" title="清空当前表单">清空</button>
+          </div>
+        </label>
         <label class="field">
           <span>话题</span>
           <textarea id="topic" rows="2" placeholder="例如：讨论是否应该立法要求 AI 生成内容必须标注"></textarea>
@@ -75,6 +83,10 @@
           </label>
         </details>
         <p class="warn">⚠ 无限对话会产生持续 API 费用，请留意顶部 token 与成本统计。</p>
+        <div class="cache-hint">
+          <span id="cache-status">表单输入会自动缓存</span>
+          <a id="btn-clear-history" href="#" title="清除所有历史预设">清空历史</a>
+        </div>
         <div class="actions">
           <button id="btn-start" class="primary">开始对话</button>
           <button id="btn-stop" class="danger" disabled>停止</button>

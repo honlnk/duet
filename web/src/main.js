@@ -1,6 +1,9 @@
 import {
   els,
   getFormPayload,
+  collectFormValues,
+  restoreFormValues,
+  clearFormValues,
   setButtons,
   setStatus,
   updateStats,
@@ -15,6 +18,14 @@ import {
   clearAll,
 } from './ui.js'
 import { createSession, getSession, getLimits, connectWS } from './api.js'
+import {
+  saveDraft,
+  loadDraft,
+  clearDraft,
+  loadHistory,
+  addHistory,
+  clearHistory,
+} from './storage.js'
 
 let ws = null
 let currentSession = null
@@ -65,6 +76,11 @@ async function handleStart() {
     currentSession = session
     renderSession(session)
     addEvent({ type: '', text: `会话已创建：${session.id}` })
+
+    // 成功发起 → 存入历史预设（去重）+ 保存草稿
+    addHistory(collectFormValues())
+    saveDraft(collectFormValues())
+    refreshPresetSelect()
 
     // 连接 WS
     if (ws) ws.close()
@@ -161,6 +177,31 @@ function handleReset() {
   setButtons({ start: true, stop: false })
 }
 
+/** 刷新历史预设下拉 */
+function refreshPresetSelect() {
+  const list = loadHistory()
+  const sel = els.presetSelect
+  sel.innerHTML = '<option value="">— 选择历史配置 —</option>'
+  for (const it of list) {
+    const opt = document.createElement('option')
+    opt.value = it.id
+    opt.textContent = it.label
+    sel.appendChild(opt)
+  }
+  els.cacheStatus.textContent = list.length > 0
+    ? `已缓存 ${list.length} 条历史配置（输入自动保存）`
+    : '表单输入会自动缓存'
+}
+
+/** 实时保存草稿（防抖） */
+let draftTimer = null
+function scheduleSaveDraft() {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    saveDraft(collectFormValues())
+  }, 400)
+}
+
 function bind() {
   els.btnStart.addEventListener('click', handleStart)
   els.btnStop.addEventListener('click', handleStop)
@@ -172,6 +213,51 @@ function bind() {
     els.toggleSidebar.textContent = layout.classList.contains('sidebar-hidden')
       ? '展开 ◂'
       : '收起 ▸'
+  })
+
+  // === 本地缓存功能 ===
+  // 启动时恢复草稿
+  const draft = loadDraft()
+  if (draft) {
+    restoreFormValues(draft)
+    addEvent({ type: '', text: '已恢复上次表单输入（本地缓存）' })
+  }
+  refreshPresetSelect()
+
+  // 输入实时保存（防抖）
+  document.querySelectorAll('.sidebar input, .sidebar textarea, .sidebar select').forEach((el) => {
+    el.addEventListener('input', scheduleSaveDraft)
+    el.addEventListener('change', scheduleSaveDraft)
+  })
+
+  // 载入历史预设
+  els.btnLoadPreset.addEventListener('click', () => {
+    const id = els.presetSelect.value
+    if (!id) {
+      addEvent({ type: 'error', text: '请先选择一个历史配置' })
+      return
+    }
+    const item = loadHistory().find((it) => it.id === id)
+    if (item) {
+      restoreFormValues(item.values)
+      saveDraft(item.values)
+      addEvent({ type: '', text: `已载入预设：${item.label}` })
+    }
+  })
+
+  // 清空当前表单（保留默认值）
+  els.btnClearDraft.addEventListener('click', () => {
+    clearFormValues()
+    saveDraft(collectFormValues())
+    addEvent({ type: '', text: '已清空表单' })
+  })
+
+  // 清空全部历史预设
+  els.btnClearHistory.addEventListener('click', (e) => {
+    e.preventDefault()
+    clearHistory()
+    refreshPresetSelect()
+    addEvent({ type: '', text: '已清除全部历史预设' })
   })
 
   // 加载全局限制展示
