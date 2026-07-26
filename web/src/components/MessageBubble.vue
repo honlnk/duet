@@ -30,7 +30,7 @@ const accentClass = computed(() =>
       {{ name }}
     </span>
     <div
-      class="max-w-[72%] rounded-xl bg-bg-card px-3 py-2 text-text-main whitespace-pre-wrap break-words"
+      class="max-w-[85%] rounded-xl bg-bg-card px-3 py-2 text-text-main whitespace-pre-wrap break-words md:max-w-[72%]"
       :class="[accentClass, message.truncated && 'opacity-60 border border-dashed border-border-subtle']"
     >
       <span>{{ message.content }}</span>

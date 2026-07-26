@@ -37,10 +37,10 @@ const costText = computed(() => {
 </script>
 
 <template>
-  <div class="flex items-center gap-4 text-xs">
+  <div class="flex items-center gap-2 text-xs md:gap-4">
     <StatusBadge :status="status" />
-    <span class="text-text-dim">{{ roundText }}</span>
+    <span class="hidden text-text-dim sm:inline">{{ roundText }}</span>
     <span class="text-text-dim">{{ durationDisplay }}</span>
-    <span class="text-accent font-medium">{{ costText }}</span>
+    <span class="hidden text-accent font-medium md:inline">{{ costText }}</span>
   </div>
 </template>

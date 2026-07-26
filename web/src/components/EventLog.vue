@@ -10,7 +10,7 @@ const visible = computed(() => props.items.length > 0)
 <template>
   <div
     v-if="visible"
-    class="border-t border-border-subtle bg-bg-soft/50 px-4 py-2 max-h-[120px] overflow-y-auto"
+    class="border-t border-border-subtle bg-bg-soft/50 px-3 py-2 max-h-[120px] overflow-y-auto md:px-4"
   >
     <div
       v-for="item in items"

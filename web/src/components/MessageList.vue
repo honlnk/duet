@@ -45,7 +45,7 @@ watch(
 <template>
   <div
     ref="scrollRef"
-    class="flex-1 overflow-y-auto px-4 py-4"
+    class="flex-1 overflow-y-auto px-3 py-4 md:px-4"
     @scroll="onScroll"
   >
     <!-- 空状态提示 -->
@@ -54,7 +54,7 @@ watch(
       class="flex h-full flex-col items-center justify-center text-text-muted"
     >
       <div class="text-4xl mb-2">♪</div>
-      <p class="text-sm">填写左侧话题与身份设定，点击「开始对话」</p>
+      <p class="text-sm">填写话题与身份设定，点击「开始对话」</p>
     </div>
 
     <!-- 消息流 -->
