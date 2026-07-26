@@ -30,3 +30,6 @@ logs/
 
 # 系统文件
 Thumbs.db
+
+# ZCode 会话目录
+.zcode/

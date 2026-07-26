@@ -1,0 +1,219 @@
+/**
+ * 后端 API 契约类型定义
+ *
+ * 严格对应 server/src/store/sessionStore.js 的数据模型，
+ * 以及 server/src/ws/chatHandler.js 的 WebSocket 事件。
+ * 详见 docs/DEVELOPMENT_PLAN.md §5.1 数据模型。
+ */
+
+/** 智能体 ID（固定两个） */
+export type AgentId = 'A' | 'B'
+
+/** 会话状态 */
+export type SessionStatus = 'idle' | 'running' | 'stopped' | 'finished' | 'error'
+
+/** 会话结束原因 */
+export type FinishedReason =
+  | 'stopped'
+  | 'max_rounds'
+  | 'duration'
+  | 'absolute_limit'
+  | 'error'
+  | 'crashed'
+  | 'shutdown'
+
+/** 智能体定义（完整会话中的形态） */
+export interface Agent {
+  id: AgentId
+  name: string
+  persona: string
+}
+
+/** 会话配置 */
+export interface SessionConfig {
+  /** 对话轮数上限（0 = 无限） */
+  maxRounds: number
+  /** 持续时间上限秒数（0 = 无限） */
+  durationSec: number
+  /** DeepSeek 模型名 */
+  model: string
+  /** 生成温度 */
+  temperature: number
+  /** 每 N 轮触发摘要 */
+  summaryEveryN: number
+  /** 压缩后保留最近消息数 */
+  keepRecent: number
+}
+
+/** 单条消息的 token 用量 */
+export interface TokenUsage {
+  prompt: number
+  completion: number
+}
+
+/** 消息（session.messages 数组元素） */
+export interface ChatMessage {
+  agentId: AgentId
+  role: 'assistant'
+  content: string
+  ts: number
+  tokens: TokenUsage
+  /** true 表示被用户停止截断 */
+  truncated: boolean
+}
+
+/** 累计成本统计 */
+export interface SessionStats {
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  estCost: number
+}
+
+/**
+ * 完整的会话对象
+ * 对应 createSession() 的返回，以及 GET /api/sessions/:id 和 WS sync 事件。
+ */
+export interface Session {
+  id: string
+  topic: string
+  agents: Agent[]
+  config: SessionConfig
+  status: SessionStatus
+  finishedReason: FinishedReason | null
+  startedAt: number | null
+  stoppedAt: number | null
+  messageCount: number
+  currentAgentId: AgentId
+  messages: ChatMessage[]
+  /** 后端内部记忆（前端通常不渲染，但会出现在 payload 中） */
+  memory: Record<AgentId, unknown>
+  stats: SessionStats
+  error: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** GET /api/sessions 列表项（注意 agents 是字符串数组，非对象） */
+export interface SessionSummary {
+  id: string
+  topic: string
+  status: SessionStatus
+  messageCount: number
+  updatedAt: number
+  createdAt: number
+  agents: string[]
+}
+
+/** POST /api/sessions 请求体 */
+export interface CreateSessionPayload {
+  topic: string
+  agents: Array<{ name: string; persona?: string }>
+  config: Partial<SessionConfig>
+}
+
+/** GET /api/config/limits 返回 */
+export interface ConfigLimits {
+  absoluteMaxRounds: number
+  absoluteMaxDurationSec: number
+  defaultModel: string
+  cost: {
+    inputPerMTok: number
+    outputPerMTok: number
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* WebSocket 事件类型                                                  */
+/* ------------------------------------------------------------------ */
+
+/** 客户端 → 服务器 */
+export type ClientMessage =
+  | { type: 'start' }
+  | { type: 'stop' }
+  | { type: 'ping' }
+
+/** 服务器 → 客户端：连接时全量同步 */
+export interface SyncEvent {
+  type: 'sync'
+  session: Session
+}
+
+/** 服务器 → 客户端：循环已开始 */
+export interface StartedEvent {
+  type: 'started'
+}
+
+/** 服务器 → 客户端：流式片段 */
+export interface ChunkEvent {
+  type: 'chunk'
+  agentId: AgentId
+  content: string
+}
+
+/** 服务器 → 客户端：一轮发言结束（附带权威 message 对象） */
+export interface MessageDoneEvent {
+  type: 'message_done'
+  agentId: AgentId
+  message: ChatMessage
+}
+
+/** 服务器 → 客户端：摘要生命周期 */
+export interface SummaryEvent {
+  type: 'summary'
+  agentId: AgentId
+  phase: 'start' | 'done' | 'error'
+  /** 仅 phase=done 时存在 */
+  summary?: string
+  /** 仅 phase=error 时存在 */
+  message?: string
+}
+
+/**
+ * 服务器 → 客户端：累计统计
+ * 注意：字段在顶层展开，非嵌套在 stats 下。
+ */
+export interface StatsEvent {
+  type: 'stats'
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  estCost: number
+}
+
+/** 服务器 → 客户端：一轮结束（round = floor(messageCount/2)） */
+export interface TurnEndEvent {
+  type: 'turn_end'
+  round: number
+  messageCount: number
+}
+
+/** 服务器 → 客户端：错误 */
+export interface ErrorEvent {
+  type: 'error'
+  message: string
+}
+
+/** 服务器 → 客户端：循环结束 */
+export interface FinishedEvent {
+  type: 'finished'
+  reason: FinishedReason | string
+}
+
+/** 服务器 → 客户端：心跳回复 */
+export interface PongEvent {
+  type: 'pong'
+}
+
+/** 所有服务器事件联合 */
+export type ServerEvent =
+  | SyncEvent
+  | StartedEvent
+  | ChunkEvent
+  | MessageDoneEvent
+  | SummaryEvent
+  | StatsEvent
+  | TurnEndEvent
+  | ErrorEvent
+  | FinishedEvent
+  | PongEvent
