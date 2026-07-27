@@ -4,7 +4,7 @@
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
 > 两个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
-![status](https://img.shields.io/badge/status-v1.0%20ready-green) ![model](https://img.shields.io/badge/model-deepseek--v4--flash-blue)
+![status](https://img.shields.io/badge/status-v2.0%20ready-green) ![model](https://img.shields.io/badge/model-deepseek--v4--flash-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
 
 ## ✨ 功能特性
 
@@ -26,8 +26,10 @@
 
 ### 1. 安装依赖
 
+项目使用 **pnpm** 管理（需先全局安装：`npm i -g pnpm`）：
+
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2. 配置 API Key
@@ -42,7 +44,7 @@ cp .env.example .env
 ### 3. 本地开发启动
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 启动后终端会打印访问地址（默认 `http://localhost:3000`），并**自动打开浏览器**。
@@ -51,8 +53,8 @@ npm run dev
 ### 4. 生产部署
 
 ```bash
-npm run build    # 构建前端到 server/public
-npm start        # 启动单进程（托管前端 + API + WebSocket）
+pnpm build      # 构建前端到 server/public（含类型检查）
+pnpm start      # 启动单进程（托管前端 + API + WebSocket）
 ```
 
 - 单一 Node 进程托管静态资源 + REST API + WebSocket。
@@ -94,11 +96,11 @@ npm start        # 启动单进程（托管前端 + API + WebSocket）
 
 | 层 | 选型 |
 |---|---|
-| 后端 | Node.js + Fastify + @fastify/websocket + @fastify/static |
+| 后端 | Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
 | AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖）|
-| 前端 | 原生 HTML/CSS/JS + Vite 构建 |
+| 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
 | 持久化 | JSON 文件（每条消息同步落盘，原子替换）|
-| 部署 | 单进程单端口，npm workspaces 管理 |
+| 包管理 | **pnpm workspace**（`server` + `web` 两个工作区）|
 
 ### 双 AI 独立记忆设计（核心）
 
@@ -126,14 +128,22 @@ AI-A 的视角：                 AI-B 的视角：
 ```
 duet/
 ├── docs/                  # 文档（开发计划、调研笔记、审核记录）
-├── server/                # 后端（Fastify + WS + DeepSeek 客户端）
+├── server/                # 后端（Fastify 5 + WS + DeepSeek 客户端）
 │   └── src/
 │       ├── ai/            # DeepSeek 流式客户端 + prompt 模板
 │       ├── memory/        # 上下文管理 + 摘要器
 │       ├── store/         # 会话持久化
 │       ├── ws/            # WebSocket 双 AI 调度
 │       └── routes/        # REST 路由
-├── web/                   # 前端（Vite + 原生 JS）
+├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
+│   └── src/
+│       ├── assets/        # Tailwind 主题（@theme 设计 token）
+│       ├── types/         # 后端 API 契约类型
+│       ├── services/      # REST 封装 + localStorage 草稿
+│       ├── composables/   # WebSocket 连接 + 计时器
+│       ├── stores/        # Pinia（session / form / draft / config）
+│       └── components/    # SFC 组件（Header/Bubble/Sidebar…）
+├── pnpm-workspace.yaml    # pnpm 工作区配置
 └── data/sessions/         # 运行时会话数据（gitignore）
 ```
 

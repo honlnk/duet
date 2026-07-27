@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // 项目根目录（server/ 的上一级）
 const projectRoot = path.resolve(__dirname, '..', '..')
 
-dotenv.config({ path: path.join(projectRoot, '.env') })
+dotenv.config({ path: path.join(projectRoot, '.env'), quiet: true })
 
 function toInt(v, def) {
   const n = Number.parseInt(v, 10)
