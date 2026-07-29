@@ -6,17 +6,20 @@ import { useDurationTracker } from '@/composables/useDurationTracker'
 import StatusBadge from './StatusBadge.vue'
 
 const session = useSessionStore()
-const { status, round, maxRounds, stats, startedAt, durationSec } =
+const { status, round, maxRounds, stats, startedAt, stoppedAt, durationSec } =
   storeToRefs(session)
 
 const { display: durationDisplay, start, stop } = useDurationTracker()
 
-// 开始/停止计时器随会话状态联动
+// 开始/停止计时器随会话状态联动。
+// 仅 running 态跳动；stopped/finished 为终态，冻结在 stoppedAt 不再增长。
 watch(
   () => [startedAt.value, durationSec.value, status.value] as const,
   ([sa, ds, st]) => {
-    if (sa && (st === 'running' || st === 'stopped' || st === 'finished')) {
+    if (sa && st === 'running') {
       start(sa, ds)
+    } else if (sa && (st === 'stopped' || st === 'finished')) {
+      stop(stoppedAt.value ?? undefined)
     } else {
       stop()
     }

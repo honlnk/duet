@@ -73,6 +73,8 @@ export const useSessionStore = defineStore('session', () => {
 
   /** 会话开始时间戳（用于计时器） */
   const startedAt = ref<number | null>(null)
+  /** 会话结束时间戳（用于冻结计时器展示） */
+  const stoppedAt = ref<number | null>(null)
   /** 持续时间上限秒数（0 = 无限） */
   const durationSec = ref(0)
 
@@ -143,6 +145,7 @@ export const useSessionStore = defineStore('session', () => {
     maxRounds.value = s.config.maxRounds
     durationSec.value = s.config.durationSec
     startedAt.value = s.startedAt
+    stoppedAt.value = s.stoppedAt
     stats.value = { ...s.stats }
     streamingAgentId = null
     // 重放历史消息
@@ -268,6 +271,7 @@ export const useSessionStore = defineStore('session', () => {
     const fresh = await getSession(id)
     if (fresh) {
       status.value = fresh.status
+      stoppedAt.value = fresh.stoppedAt
       if (fresh.error) errorMessage.value = fresh.error
       // 若有消息差异（罕见），用权威数据对齐
       if (fresh.messages.length > messages.value.length) {
@@ -301,6 +305,7 @@ export const useSessionStore = defineStore('session', () => {
     status.value = 'idle'
     resetRuntime()
     startedAt.value = null
+    stoppedAt.value = null
     maxRounds.value = 0
     durationSec.value = 0
   }
@@ -314,6 +319,7 @@ export const useSessionStore = defineStore('session', () => {
     maxRounds,
     stats,
     startedAt,
+    stoppedAt,
     durationSec,
     eventLog,
     errorMessage,

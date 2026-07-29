@@ -33,11 +33,17 @@ export function useDurationTracker() {
     }, 1000)
   }
 
-  function stop() {
+  /**
+   * 停止计时。
+   * @param freezeAt 冻结展示的时刻（如会话真实结束时间 stoppedAt）；
+   *                 不传则保留 now 最后值。终态下传入可避免展示漂移。
+   */
+  function stop(freezeAt?: number) {
     if (timer) {
       clearInterval(timer)
       timer = null
     }
+    if (freezeAt) now.value = freezeAt
   }
 
   /** 当前展示文本 */
