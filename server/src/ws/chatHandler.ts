@@ -263,6 +263,19 @@ export async function runLoop(session: Session): Promise<void> {
         const usage: DeepSeekUsage = result.usage || {}
         addStats(session, usage)
 
+        // === 诊断日志：缓存命中情况 ===
+        {
+          const prompt = usage.prompt_tokens ?? 0
+          const hit = usage.prompt_cache_hit_tokens ?? 0
+          const miss = usage.prompt_cache_miss_tokens ?? 0
+          const completion = usage.completion_tokens ?? 0
+          const reasoning = usage.completion_tokens_details?.reasoning_tokens ?? 0
+          const hitRate = prompt > 0 ? ((hit / prompt) * 100).toFixed(1) : '0.0'
+          console.log(
+            `[cache] 轮${round} ${agentId} | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion} (其中思维链=${reasoning})`
+          )
+        }
+
         const ts = Date.now()
         const msg: PersistedMessage = {
           agentId,

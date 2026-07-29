@@ -45,16 +45,16 @@ export class AgentMemory {
     this.messages.push({ role: 'user', content })
   }
 
-  /** 取最近 n 条（保留最新的） */
-  recent(n: number): MemoryMessage[] {
-    return this.messages.slice(-n)
-  }
-
   /**
    * 组装发给 LLM 的完整 messages。
-   * @param keepRecent 保留最近 N 条原始消息
+   *
+   * 不在此处裁剪历史——只做拼装。消息序列从对话开始起纯追加，
+   * 直到下一次摘要触发时才由 trimToRecent() 物理裁剪一次。
+   * 这样在两次摘要之间，prompt 前缀只增不变，最大化命中 DeepSeek 上下文缓存。
+   *
+   * @param _keepRecent 已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
    */
-  buildApiMessages(keepRecent: number = 8): ApiMessage[] {
+  buildApiMessages(_keepRecent: number = 8): ApiMessage[] {
     const sys = buildAgentSystem({
       name: this.agent.name,
       persona: this.agent.persona,
@@ -65,7 +65,7 @@ export class AgentMemory {
     if (this.summary) {
       out.push({ role: 'system', content: buildSummaryInjection(this.summary) })
     }
-    out.push(...this.recent(keepRecent))
+    out.push(...this.messages)
     return out
   }
 

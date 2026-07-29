@@ -149,6 +149,15 @@ export interface DeepSeekUsage {
   prompt_tokens?: number
   completion_tokens?: number
   total_tokens?: number
+  /** 缓存命中 token（命中按低价计费） */
+  prompt_cache_hit_tokens?: number
+  /** 缓存未命中 token（按高价计费） */
+  prompt_cache_miss_tokens?: number
+  /** 输出 token 细分（含 reasoning） */
+  completion_tokens_details?: {
+    reasoning_tokens?: number
+    [k: string]: unknown
+  }
   [k: string]: unknown
 }
 
