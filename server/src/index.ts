@@ -52,6 +52,14 @@ export async function buildServer(): Promise<FastifyInstance> {
 }
 
 async function registerStaticOrVite(fastify: FastifyInstance): Promise<void> {
+  // 分离开发：后端仅提供 API/WS，前端由 vite 独立托管（避免 serve 旧产物造成混淆）
+  if (process.env.SKIP_STATIC === '1' || process.env.SKIP_STATIC === 'true') {
+    fastify.get('/', async () => ({
+      message: '后端运行于分离模式（SKIP_STATIC），前端请访问 vite dev server。',
+    }))
+    return
+  }
+
   const staticDir = config.staticDir
   const indexHtml = path.join(staticDir, 'index.html')
   const hasBuild = fs.existsSync(indexHtml)

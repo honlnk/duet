@@ -6,6 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @duet/web build && pnpm --filter @duet/server dev",
+    "dev:split": "run-p -l dev:web dev:server",
+    "dev:web": "pnpm --filter @duet/web dev",
+    "dev:server": "SKIP_STATIC=1 pnpm --filter @duet/server dev",
     "build": "pnpm --filter @duet/web build && pnpm --filter @duet/server build",
     "start": "cross-env NODE_ENV=production node server/dist/index.js",
     "test": "pnpm --filter @duet/server exec tsx ../scripts/test-e2e.ts",
@@ -17,6 +20,7 @@
   "devDependencies": {
     "@types/ws": "^8.5.10",
     "cross-env": "^7.0.3",
+    "npm-run-all2": "^9.0.2",
     "ws": "^8.18.0"
   }
 }
