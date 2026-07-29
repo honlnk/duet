@@ -1,4 +1,10 @@
 import { buildAgentSystem, buildSummaryInjection } from '../ai/prompts.js'
+import type {
+  AgentMemoryData,
+  AgentRef,
+  ApiMessage,
+  MemoryMessage,
+} from '../types/index.js'
 
 /**
  * 单个 AI 的上下文管理器。
@@ -13,43 +19,49 @@ import { buildAgentSystem, buildSummaryInjection } from '../ai/prompts.js'
  *   [...messages]（已按 keepRecent 裁剪）
  */
 export class AgentMemory {
-  constructor(agent, other, topic) {
-    this.agent = agent   // { id, name, persona }
-    this.other = other   // { id, name, persona }
+  agent: AgentRef
+  other: AgentRef
+  topic: string
+  messages: MemoryMessage[]
+  summary: string
+  lastSummarizedRound: number
+
+  constructor(agent: AgentRef, other: AgentRef, topic: string) {
+    this.agent = agent
+    this.other = other
     this.topic = topic
-    this.messages = []   // [{role, content}]
+    this.messages = []
     this.summary = ''
     this.lastSummarizedRound = 0
   }
 
   /** 追加一条「我自己」的发言（assistant） */
-  pushSelf(content) {
+  pushSelf(content: string): void {
     this.messages.push({ role: 'assistant', content })
   }
 
   /** 追加一条「对方」的发言（user） */
-  pushOther(content) {
+  pushOther(content: string): void {
     this.messages.push({ role: 'user', content })
   }
 
   /** 取最近 n 条（保留最新的） */
-  recent(n) {
+  recent(n: number): MemoryMessage[] {
     return this.messages.slice(-n)
   }
 
   /**
    * 组装发给 LLM 的完整 messages。
-   * @param {number} keepRecent 保留最近 N 条原始消息
-   * @returns {Array<{role,content}>}
+   * @param keepRecent 保留最近 N 条原始消息
    */
-  buildApiMessages(keepRecent = 8) {
+  buildApiMessages(keepRecent: number = 8): ApiMessage[] {
     const sys = buildAgentSystem({
       name: this.agent.name,
       persona: this.agent.persona,
       otherName: this.other.name,
       topic: this.topic,
     })
-    const out = [{ role: 'system', content: sys }]
+    const out: ApiMessage[] = [{ role: 'system', content: sys }]
     if (this.summary) {
       out.push({ role: 'system', content: buildSummaryInjection(this.summary) })
     }
@@ -58,20 +70,20 @@ export class AgentMemory {
   }
 
   /** 重建：把摘要后的历史压回 messages（保留最近 keepRecent 条 + 重置 summary） */
-  applySummary(newSummary, lastRound) {
+  applySummary(newSummary: string, lastRound: number): void {
     this.summary = newSummary
     this.lastSummarizedRound = lastRound
     // 保留最近 N 条原始消息，更早的已被摘要吸收
     // 由调用方在压缩时显式 trim，这里只更新 summary 与 watermark
   }
 
-  trimToRecent(keepRecent) {
+  trimToRecent(keepRecent: number): void {
     if (this.messages.length > keepRecent) {
       this.messages = this.messages.slice(-keepRecent)
     }
   }
 
-  toJSON() {
+  toJSON(): AgentMemoryData {
     return {
       agent: this.agent,
       other: this.other,
@@ -82,7 +94,7 @@ export class AgentMemory {
     }
   }
 
-  static fromJSON(obj) {
+  static fromJSON(obj: AgentMemoryData): AgentMemory {
     const m = new AgentMemory(obj.agent, obj.other, obj.topic)
     m.messages = obj.messages || []
     m.summary = obj.summary || ''

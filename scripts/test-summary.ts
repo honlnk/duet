@@ -19,14 +19,15 @@ async function main() {
 
   const ws = new WebSocket(`${WS_URL}/ws/chat?sessionId=${session.id}`)
   let summarySeen = false
-  const done = new Promise((resolve) => {
+  const done = new Promise<void>((resolve) => {
     ws.on('open', () => ws.send(JSON.stringify({ type: 'start' })))
-    ws.on('message', (raw) => {
-      const msg = JSON.parse(raw.toString())
+    ws.on('message', (raw: Buffer) => {
+      const msg = JSON.parse(raw.toString()) as { type: string; [k: string]: unknown }
       if (msg.type === 'summary') {
         summarySeen = true
-        console.log(`[test] 摘要事件 ${msg.agentId} ${msg.phase}${msg.summary ? ' (' + msg.summary.length + '字)' : ''}`)
-        if (msg.summary) console.log(`  内容: ${msg.summary.slice(0, 120)}...`)
+        const summary = msg.summary as string | undefined
+        console.log(`[test] 摘要事件 ${msg.agentId} ${msg.phase}${summary ? ' (' + summary.length + '字)' : ''}`)
+        if (summary) console.log(`  内容: ${summary.slice(0, 120)}...`)
       } else if (msg.type === 'finished') {
         console.log(`[test] 结束: ${msg.reason}`)
         resolve()
@@ -35,12 +36,15 @@ async function main() {
         resolve()
       }
     })
-    ws.on('error', (e) => { console.error('[test] WS', e.message); resolve() })
+    ws.on('error', (e: Error) => {
+      console.error('[test] WS', e.message)
+      resolve()
+    })
   })
-  await Promise.race([done, new Promise((r) => setTimeout(r, 120000))])
+  await Promise.race([done, new Promise<void>((r) => setTimeout(r, 120000))])
   ws.close()
 
-  const final = loadSession(session.id)
+  const final = loadSession(session.id)!
   console.log('\n========== 摘要校验 ==========')
   console.log('A summary:', final.memory.A.summary ? `✅ 有 (${final.memory.A.summary.length}字)` : '❌ 无')
   console.log('B summary:', final.memory.B.summary ? `✅ 有 (${final.memory.B.summary.length}字)` : '❌ 无')
@@ -52,4 +56,7 @@ async function main() {
   console.log('看到摘要事件:', summarySeen ? '✅' : '❌')
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

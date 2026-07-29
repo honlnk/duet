@@ -2,11 +2,19 @@
  * Prompt 模板
  */
 
+/** buildAgentSystem 的参数 */
+interface AgentSystemParams {
+  name: string
+  persona?: string
+  otherName: string
+  topic: string
+}
+
 /**
  * 构建某个 AI 的 system prompt（persona + 对话规则）
  * 规则强调「避免复读、主动推进话题」，防双 AI 漂移。
  */
-export function buildAgentSystem({ name, persona, otherName, topic }) {
+export function buildAgentSystem({ name, persona, otherName, topic }: AgentSystemParams): string {
   return [
     `你是「${name}」。${persona || ''}`,
     '',
@@ -20,10 +28,17 @@ export function buildAgentSystem({ name, persona, otherName, topic }) {
   ].join('\n')
 }
 
+/** buildOpeningPrompt 的参数 */
+interface OpeningPromptParams {
+  name: string
+  otherName: string
+  topic: string
+}
+
 /**
  * A 首次发言时的开场 user 提示（只进 A 的 messages，作为 user 角色）
  */
-export function buildOpeningPrompt({ name, otherName, topic }) {
+export function buildOpeningPrompt({ name, otherName, topic }: OpeningPromptParams): string {
   return [
     `现在请就话题「${topic}」开始对话。`,
     `你是「${name}」，你的对话对象是「${otherName}」。`,
@@ -33,11 +48,20 @@ export function buildOpeningPrompt({ name, otherName, topic }) {
 
 /**
  * 把对方的发言包装成 user 消息（加前缀，避免被误以为自言自语）
- * @param {string} otherName
- * @param {string} otherContent  仅取 content，不含 reasoning
+ * @param otherName  对方名字
+ * @param otherContent  仅取 content，不含 reasoning
  */
-export function wrapOtherMessage(otherName, otherContent) {
+export function wrapOtherMessage(otherName: string, otherContent: string): string {
   return `[${otherName}]: ${otherContent}`
+}
+
+/** buildSummaryPrompt 的参数 */
+interface SummaryPromptParams {
+  agentName: string
+  otherName: string
+  oldSummary?: string
+  recentMessages: string
+  words?: number
 }
 
 /**
@@ -50,7 +74,7 @@ export function buildSummaryPrompt({
   oldSummary,
   recentMessages,
   words = 200,
-}) {
+}: SummaryPromptParams): string {
   return [
     `下面是「${agentName}」参与的一段与「${otherName}」的对话。`,
     `请改以「${agentName}」的第一人称视角重写一份摘要，仿佛这份摘要就是「${agentName}」自己的备忘日记，供它后续继续对话时回忆使用。`,
@@ -72,6 +96,6 @@ export function buildSummaryPrompt({
 /**
  * 把摘要注入上下文（system 角色）
  */
-export function buildSummaryInjection(summary) {
+export function buildSummaryInjection(summary: string): string {
   return `[对话进展摘要（你的视角）]\n${summary}`
 }

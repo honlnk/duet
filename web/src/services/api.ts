@@ -2,7 +2,7 @@
  * REST API 封装层
  *
  * 同源调用（前端由后端 @fastify/static 托管），apiBase 为空串。
- * 对应 server/src/routes/sessions.js 和 health.js。
+ * 对应 server/src/routes/sessions.ts 和 health.ts。
  */
 import type {
   ConfigLimits,

@@ -5,15 +5,17 @@
   "description": "Duet — 双 AI 自主对话聊天室",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @duet/web build && node server/src/index.js",
-    "build": "pnpm --filter @duet/web build",
-    "start": "cross-env NODE_ENV=production node server/src/index.js",
-    "test": "node scripts/test-e2e.js"
+    "dev": "pnpm --filter @duet/web build && pnpm --filter @duet/server dev",
+    "build": "pnpm --filter @duet/web build && pnpm --filter @duet/server build",
+    "start": "cross-env NODE_ENV=production node server/dist/index.js",
+    "test": "pnpm --filter @duet/server exec tsx ../scripts/test-e2e.ts",
+    "typecheck": "pnpm --filter @duet/server typecheck && pnpm --filter @duet/server exec tsc --noEmit -p ../scripts/tsconfig.json"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.10",
     "cross-env": "^7.0.3",
     "ws": "^8.18.0"
   }

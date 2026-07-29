@@ -1,6 +1,7 @@
 import dotenv from 'dotenv'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { AppConfig } from './types/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // 项目根目录（server/ 的上一级）
@@ -8,17 +9,17 @@ const projectRoot = path.resolve(__dirname, '..', '..')
 
 dotenv.config({ path: path.join(projectRoot, '.env'), quiet: true })
 
-function toInt(v, def) {
-  const n = Number.parseInt(v, 10)
+function toInt(v: string | undefined, def: number): number {
+  const n = Number.parseInt(v ?? '', 10)
   return Number.isFinite(n) ? n : def
 }
 
-function toFloat(v, def) {
-  const n = Number.parseFloat(v)
+function toFloat(v: string | undefined, def: number): number {
+  const n = Number.parseFloat(v ?? '')
   return Number.isFinite(n) ? n : def
 }
 
-const config = {
+const config: AppConfig = {
   env: process.env.NODE_ENV || 'development',
   port: toInt(process.env.PORT, 3000),
   projectRoot,
@@ -43,8 +44,8 @@ const config = {
  * fail-fast 校验：生产模式必须配置 API Key
  * dev 模式下若缺失仅警告（允许先跑骨架）
  */
-export function validateConfig() {
-  const errors = []
+export function validateConfig(): AppConfig {
+  const errors: string[] = []
   if (!config.deepseekApiKey) {
     if (config.env === 'production') {
       errors.push('DEEPSEEK_API_KEY 未配置（请在 .env 中设置）')

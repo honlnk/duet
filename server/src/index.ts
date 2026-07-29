@@ -1,20 +1,27 @@
 import Fastify from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import config, { validateConfig } from './config.js'
 import healthRoutes from './routes/health.js'
 import sessionRoutes from './routes/sessions.js'
 import wsRoutes from './ws/wsRoutes.js'
-import { recoverSessions, loadSession, saveSession } from './store/sessionStore.js'
+import {
+  recoverSessions,
+  loadSession,
+  saveSession,
+  listSessions,
+} from './store/sessionStore.js'
 
 /**
  * 启动服务器（单端口托管前端 + REST + WS）。
- * dev 模式下用 vite dev server 中间件；prod 模式用 @fastify/static。
+ * dev 模式下若已有构建产物则直接托管；prod 模式用 @fastify/static。
  */
-export async function buildServer() {
+export async function buildServer(): Promise<FastifyInstance> {
   validateConfig()
 
   // 崩溃恢复
@@ -44,7 +51,7 @@ export async function buildServer() {
   return fastify
 }
 
-async function registerStaticOrVite(fastify) {
+async function registerStaticOrVite(fastify: FastifyInstance): Promise<void> {
   const staticDir = config.staticDir
   const indexHtml = path.join(staticDir, 'index.html')
   const hasBuild = fs.existsSync(indexHtml)
@@ -83,27 +90,29 @@ async function registerStaticOrVite(fastify) {
   // dev 且无构建产物：内联极简首页（提示先 build 或直接用前端 dev）
   fastify.get('/', async () => ({
     message:
-      '前端尚未构建。请运行 `npm run build` 后再启动，或在 web/ 目录单独 `npm run dev`。',
+      '前端尚未构建。请运行 `pnpm build` 后再启动，或在 web/ 目录单独 `pnpm dev`。',
   }))
 }
 
-function openBrowser(url) {
-  const cmds = {
-    darwin: ['open', [url]],
-    win32: ['cmd', ['/c', 'start', url]],
-    linux: ['xdg-open', [url]],
-  }
-  const entry = cmds[process.platform]
+/** 各平台的「打开浏览器」命令 */
+const browserCmds: Partial<Record<NodeJS.Platform, readonly [string, string[]]>> = {
+  darwin: ['open', []],
+  win32: ['cmd', ['/c', 'start']],
+  linux: ['xdg-open', []],
+}
+
+function openBrowser(url: string): void {
+  const entry = browserCmds[process.platform as NodeJS.Platform]
   if (!entry) return
-  const [cmd, args] = entry
+  const [cmd, baseArgs] = entry
   try {
-    spawn(cmd, args, { stdio: 'ignore', detached: true }).unref()
+    spawn(cmd, [...baseArgs, url], { stdio: 'ignore', detached: true }).unref()
   } catch {
     /* 忽略，仅打印 URL */
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const fastify = await buildServer()
   try {
     // PORT=0 时自动分配可用端口
@@ -127,11 +136,10 @@ async function main() {
   }
 
   // graceful shutdown
-  const shutdown = async (sig) => {
+  const shutdown = async (sig: string): Promise<void> => {
     console.log(`\n[shutdown] 收到 ${sig}，正在保存会话…`)
     try {
       // 把所有 running 会话标记 stopped 并 flush
-      const { listSessions } = await import('./store/sessionStore.js')
       for (const s of listSessions()) {
         const full = loadSession(s.id)
         if (full && full.status === 'running') {
@@ -150,12 +158,16 @@ async function main() {
       process.exit(1)
     }
   }
-  process.on('SIGINT', () => shutdown('SIGINT'))
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT')
+  })
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM')
+  })
 }
 
-// 仅作为入口时执行
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL('.', import.meta.url).pathname.slice(0, -1), 'index.js')
+// 仅作为入口时执行（兼容 tsx 跑 .ts 与 node 跑 dist/.js）
+const isMain = process.argv[1] === fileURLToPath(import.meta.url)
 if (isMain) {
   main()
 }

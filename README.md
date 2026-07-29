@@ -53,7 +53,7 @@ pnpm dev
 ### 4. 生产部署
 
 ```bash
-pnpm build      # 构建前端到 server/public（含类型检查）
+pnpm build      # 构建前端到 server/public，并编译后端到 server/dist
 pnpm start      # 启动单进程（托管前端 + API + WebSocket）
 ```
 
@@ -96,7 +96,7 @@ pnpm start      # 启动单进程（托管前端 + API + WebSocket）
 
 | 层 | 选型 |
 |---|---|
-| 后端 | Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
+| 后端 | **TypeScript** + Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
 | AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖）|
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
 | 持久化 | JSON 文件（每条消息同步落盘，原子替换）|

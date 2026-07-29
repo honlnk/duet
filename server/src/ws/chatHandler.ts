@@ -1,4 +1,4 @@
-import { chatCompletion, DeepSeekError } from '../ai/deepseek.js'
+import { chatCompletion } from '../ai/deepseek.js'
 import {
   buildOpeningPrompt,
   wrapOtherMessage,
@@ -11,22 +11,42 @@ import {
   currentRound,
 } from '../store/sessionStore.js'
 import config from '../config.js'
+import type {
+  AgentId,
+  BroadcastFn,
+  DeepSeekUsage,
+  PersistedMessage,
+  Session,
+  SessionStatus,
+  ServerToClientMsg,
+} from '../types/index.js'
+
+/** 单会话运行时状态（内存态，含当前 fetch 的 AbortController） */
+interface Runtime {
+  abortCtrl: AbortController | null
+  wsClients: Set<BroadcastFn>
+  running: boolean
+  /** 用户请求停止标志（runLoop 每轮检查） */
+  stopRequested: boolean
+  /** runLoop 当前操作的 session 内存引用 */
+  activeSession: Session | null
+}
 
 /**
  * 会话运行时状态（内存态，含当前 fetch 的 AbortController）。
  * key: sessionId
  */
-const runtimes = new Map()
+const runtimes = new Map<string, Runtime>()
 
-function getRuntime(sessionId) {
+function getRuntime(sessionId: string): Runtime {
   let rt = runtimes.get(sessionId)
   if (!rt) {
     rt = {
       abortCtrl: null,
       wsClients: new Set(),
       running: false,
-      stopRequested: false, // 用户请求停止标志（runLoop 每轮检查）
-      activeSession: null,  // runLoop 当前操作的 session 内存引用
+      stopRequested: false,
+      activeSession: null,
     }
     runtimes.set(sessionId, rt)
   }
@@ -34,25 +54,27 @@ function getRuntime(sessionId) {
 }
 
 /** 注册一个 WS 连接到会话 */
-export function attachClient(sessionId, send) {
+export function attachClient(sessionId: string, send: BroadcastFn): () => void {
   const rt = getRuntime(sessionId)
   rt.wsClients.add(send)
   return () => rt.wsClients.delete(send)
 }
 
 /** 向该会话所有 WS 客户端广播 */
-function broadcast(sessionId, msg) {
+function broadcast(sessionId: string, msg: ServerToClientMsg): void {
   const rt = runtimes.get(sessionId)
   if (!rt) return
   for (const send of rt.wsClients) {
     try {
       send(msg)
-    } catch {}
+    } catch {
+      // 单客户端发送失败不影响其它客户端
+    }
   }
 }
 
 /** 用户主动停止：设置标志位 + 中断当前 fetch（runLoop 退出时统一发 finished） */
-export function stopSession(sessionId) {
+export function stopSession(sessionId: string): void {
   const rt = getRuntime(sessionId)
   rt.stopRequested = true
   // 同步操作 runLoop 当前持有的 session 引用（若有）
@@ -63,16 +85,31 @@ export function stopSession(sessionId) {
     saveSession(rt.activeSession)
   }
   if (rt.abortCtrl) {
-    try { rt.abortCtrl.abort() } catch {}
+    try {
+      rt.abortCtrl.abort()
+    } catch {
+      // abort 失败忽略
+    }
   }
+}
+
+/** 判断是否为 abort 类型错误 */
+function isAbortError(e: unknown, abortCtrl: AbortController | null): boolean {
+  const errorAborted = e instanceof Error && (e.name === 'AbortError' || /aborted/i.test(e.message))
+  return errorAborted || (abortCtrl?.signal.aborted ?? false)
+}
+
+/** 提取错误信息 */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  return String(e)
 }
 
 /**
  * 主循环：让两个 AI 自动对话。
- * @param {object} session  会话对象（会被原地修改）
- * @param {object} deps     { getSession, saveSession }
+ * @param session  会话对象（会被原地修改）
  */
-export async function runLoop(session) {
+export async function runLoop(session: Session): Promise<void> {
   const rt = getRuntime(session.id)
 
   // 防止重复 start
@@ -126,23 +163,23 @@ export async function runLoop(session) {
       // 用户时长上限
       if (
         session.config.durationSec > 0 &&
-        Date.now() - session.startedAt >= session.config.durationSec * 1000
+        Date.now() - (session.startedAt ?? 0) >= session.config.durationSec * 1000
       ) {
         session.finishedReason = 'duration'
         break
       }
       // 全局硬熔断：时长
-      if (Date.now() - session.startedAt >= config.absoluteMaxDurationSec * 1000) {
+      if (Date.now() - (session.startedAt ?? 0) >= config.absoluteMaxDurationSec * 1000) {
         session.finishedReason = 'absolute_limit'
         break
       }
 
       // === 2. 决定当前发言者 ===
-      const agentId = session.currentAgentId
+      const agentId: AgentId = session.currentAgentId
       const myMem = agentId === 'A' ? memA : memB
       const otherMem = agentId === 'A' ? memB : memA
-      const me = session.agents.find((a) => a.id === agentId)
-      const other = session.agents.find((a) => a.id !== agentId)
+      const me = session.agents.find((a) => a.id === agentId) ?? session.agents[0]
+      const other = session.agents.find((a) => a.id !== agentId) ?? session.agents[1]
 
       // === 3. 触发摘要？ ===
       const roundsSinceSummary = round - myMem.lastSummarizedRound
@@ -179,7 +216,7 @@ export async function runLoop(session) {
             type: 'summary',
             agentId,
             phase: 'error',
-            message: e.message,
+            message: errorMessage(e),
           })
         }
       }
@@ -223,11 +260,11 @@ export async function runLoop(session) {
           content = '（无内容）'
         }
 
-        const usage = result.usage || {}
+        const usage: DeepSeekUsage = result.usage || {}
         addStats(session, usage)
 
         const ts = Date.now()
-        const msg = {
+        const msg: PersistedMessage = {
           agentId,
           role: 'assistant',
           content,
@@ -253,7 +290,10 @@ export async function runLoop(session) {
         broadcast(session.id, { type: 'message_done', agentId, message: msg })
         broadcast(session.id, {
           type: 'stats',
-          ...session.stats,
+          totalPromptTokens: session.stats.totalPromptTokens,
+          totalCompletionTokens: session.stats.totalCompletionTokens,
+          totalTokens: session.stats.totalTokens,
+          estCost: session.stats.estCost,
         })
         broadcast(session.id, {
           type: 'turn_end',
@@ -262,14 +302,14 @@ export async function runLoop(session) {
         })
       } catch (e) {
         // === 流式中断 / API 错误 ===
-        const aborted =
-          e?.name === 'AbortError' ||
-          /aborted/i.test(e?.message || '') ||
-          rt.abortCtrl?.signal.aborted
+        const aborted = isAbortError(e, rt.abortCtrl)
+        // stopSession 可能在 await 期间把 status 改为 'stopped'；
+        // TS 无法追踪跨 await 的外部修改，需以宽类型重新读取实际值
+        const statusNow = session.status as SessionStatus
         // 用户主动停止：保留已收 chunk，静默退出（不报错）
-        if (session.status === 'stopped') {
+        if (statusNow === 'stopped') {
           if (content.trim()) {
-            const msg = {
+            const msg: PersistedMessage = {
               agentId,
               role: 'assistant',
               content: content.trim(),
@@ -288,7 +328,7 @@ export async function runLoop(session) {
         }
         // 其它错误（含超时） → error 状态
         session.status = 'error'
-        session.error = aborted ? '请求超时或被中断' : e.message
+        session.error = aborted ? '请求超时或被中断' : errorMessage(e)
         session.finishedReason = 'error'
         saveSession(session)
         broadcast(session.id, { type: 'error', message: session.error })

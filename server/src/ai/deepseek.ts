@@ -1,4 +1,42 @@
 import config from '../config.js'
+import type { ApiMessage, ChatCompletionResult, DeepSeekUsage } from '../types/index.js'
+
+/** DeepSeek 流式响应中的 delta */
+interface StreamDelta {
+  content?: string | null
+  reasoning_content?: string | null
+}
+
+/** DeepSeek 流式响应 chunk */
+interface StreamChunk {
+  choices?: Array<{ delta?: StreamDelta }>
+  usage?: DeepSeekUsage
+}
+
+/** DeepSeek 非流式响应 */
+interface ChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string
+      reasoning_content?: string
+    }
+  }>
+  usage?: DeepSeekUsage
+}
+
+/** chatCompletion 参数 */
+interface ChatCompletionOpts {
+  messages: ApiMessage[]
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  /** content 流式回调 */
+  onContent?: (chunk: string) => void
+  /** reasoning 流式回调（仅日志，不进对方上下文） */
+  onReasoning?: (chunk: string) => void
+  /** 外部中止信号 */
+  signal?: AbortSignal
+}
 
 /**
  * DeepSeek 流式聊天客户端
@@ -8,17 +46,7 @@ import config from '../config.js'
  *    reasoning_content 仅通过 onReasoning 回调透出，供后端调试日志。
  * 2. 流式响应中 content 与 reasoning_content 分阶段到达，每个 chunk 二者其一为 null。
  * 3. 必须传入 AbortSignal 以支持「用户点停止立即中断」。
- * 4. 使用 30s 超时（AbortController.timeout）兜底，防止卡死。
- *
- * @param {object} opts
- * @param {Array<{role:string,content:string}>} opts.messages
- * @param {string} [opts.model]
- * @param {number} [opts.temperature]
- * @param {number} [opts.maxTokens]
- * @param {(chunk:string)=>void} [opts.onContent]    content 流式回调
- * @param {(chunk:string)=>void} [opts.onReasoning]  reasoning 流式回调（仅日志）
- * @param {AbortSignal} [opts.signal]                外部中止信号
- * @returns {Promise<{content:string, reasoning:string, usage:object}>}
+ * 4. 使用 30s 超时（AbortSignal.timeout）兜底，防止卡死。
  */
 export async function chatCompletion({
   messages,
@@ -28,7 +56,7 @@ export async function chatCompletion({
   onContent,
   onReasoning,
   signal,
-}) {
+}: ChatCompletionOpts): Promise<ChatCompletionResult> {
   const url = `${config.deepseekBaseUrl}/chat/completions`
   const body = {
     model: model || config.deepseekModel,
@@ -41,7 +69,7 @@ export async function chatCompletion({
 
   // 合并外部 signal 与超时 signal
   const timeoutSignal = AbortSignal.timeout(config.requestTimeoutMs)
-  const signals = [timeoutSignal]
+  const signals: AbortSignal[] = [timeoutSignal]
   if (signal) signals.push(signal)
   const combined = AbortSignal.any(signals)
 
@@ -63,7 +91,7 @@ export async function chatCompletion({
 
   let content = ''
   let reasoning = ''
-  let usage = null
+  let usage: DeepSeekUsage | null = null
 
   const reader = resp.body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -75,7 +103,7 @@ export async function chatCompletion({
     buffer += decoder.decode(value, { stream: true })
 
     // SSE 以 \n\n 分隔事件
-    let idx
+    let idx: number
     while ((idx = buffer.indexOf('\n\n')) !== -1) {
       const rawEvent = buffer.slice(0, idx)
       buffer = buffer.slice(idx + 2)
@@ -87,9 +115,9 @@ export async function chatCompletion({
       if (data === '[DONE]') {
         return { content, reasoning, usage: usage || {} }
       }
-      let json
+      let json: StreamChunk
       try {
-        json = JSON.parse(data)
+        json = JSON.parse(data) as StreamChunk
       } catch {
         continue
       }
@@ -110,10 +138,21 @@ export async function chatCompletion({
   return { content, reasoning, usage: usage || {} }
 }
 
+/** chatComplete 参数 */
+interface ChatCompleteOpts {
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  signal?: AbortSignal
+}
+
 /**
  * 非流式调用（用于摘要等内部任务）。仍只返回 content。
  */
-export async function chatComplete(messages, opts = {}) {
+export async function chatComplete(
+  messages: ApiMessage[],
+  opts: ChatCompleteOpts = {}
+): Promise<ChatCompletionResult> {
   const url = `${config.deepseekBaseUrl}/chat/completions`
   const body = {
     model: opts.model || config.deepseekModel,
@@ -123,7 +162,7 @@ export async function chatComplete(messages, opts = {}) {
     stream: false,
   }
   const timeoutSignal = AbortSignal.timeout(config.requestTimeoutMs)
-  const signals = [timeoutSignal]
+  const signals: AbortSignal[] = [timeoutSignal]
   if (opts.signal) signals.push(opts.signal)
   const resp = await fetch(url, {
     method: 'POST',
@@ -138,7 +177,7 @@ export async function chatComplete(messages, opts = {}) {
     const text = await resp.text().catch(() => '')
     throw new DeepSeekError(`DeepSeek API ${resp.status}: ${text}`, resp.status)
   }
-  const json = await resp.json()
+  const json = (await resp.json()) as ChatCompletionResponse
   return {
     content: json.choices?.[0]?.message?.content || '',
     reasoning: json.choices?.[0]?.message?.reasoning_content || '',
@@ -147,7 +186,9 @@ export async function chatComplete(messages, opts = {}) {
 }
 
 export class DeepSeekError extends Error {
-  constructor(message, status) {
+  status: number
+
+  constructor(message: string, status: number) {
     super(message)
     this.name = 'DeepSeekError'
     this.status = status

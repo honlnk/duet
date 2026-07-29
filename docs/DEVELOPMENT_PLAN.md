@@ -54,16 +54,16 @@
 
 | 层 | 选型 | 理由 |
 |---|---|---|
-| 运行时 | **Node.js (v20+)** | 已装 v24；单语言栈前后端统一 |
-| 后端框架 | **Fastify** | 比 Express 快、内置 schema、插件体系清晰 |
-| 实时通信 | **WebSocket (ws)** | AI 对话流式 + 对方 AI 接力，需双向推送 |
+| 运行时 | **Node.js (v20+) + TypeScript** | 前后端统一使用 TypeScript |
+| 后端框架 | **Fastify 5** | 比 Express 快、内置 schema、插件体系清晰 |
+| 实时通信 | **@fastify/websocket** | AI 对话流式 + 对方 AI 接力，需双向推送 |
 | AI 调用 | **原生 fetch + SSE 解析** | 不依赖 OpenAI SDK，零额外依赖 |
-| 前端 | **原生 HTML/CSS/JS + Vite** | 单页应用，降低部署复杂度 |
-| 前端集成 | **后端单端口托管**（dev 用 vite middleware，prod 用 @fastify/static）| 单进程单端口，零代理 |
+| 前端 | **Vue 3 + TypeScript + Pinia + Tailwind CSS v4 + Vite** | 组件化单页应用 |
+| 前端集成 | **后端单端口托管**（前端构建到 server/public）| 单进程单端口，零代理 |
 | 持久化 | **JSON 文件（每条 message_done 同步落盘）** | v1 不引入数据库 |
-| 进程管理 | CLI 直接 `node server.js` | 远程用 pm2/systemd |
+| 进程管理 | 开发用 `tsx`，生产用 `tsc` + Node.js | 远程用 pm2/systemd |
 | 配置 | `.env` + 环境变量 + 校验 | API Key、端口、模型名、熔断阈值 |
-| Monorepo | **npm workspaces** | 根 package.json 管理 server/web |
+| Monorepo | **pnpm workspace** | 根 package.json 管理 server/web |
 
 ## 4. 项目结构
 
@@ -80,32 +80,34 @@ duet/
 ├── server/                    # 后端 workspace
 │   ├── package.json
 │   └── src/
-│       ├── index.js           # 入口：Fastify + WS + 静态托管 + graceful shutdown
-│       ├── config.js          # 环境变量加载 + fail-fast 校验
+│       ├── index.ts           # 入口：Fastify + WS + 静态托管 + graceful shutdown
+│       ├── config.ts          # 环境变量加载 + fail-fast 校验
 │       ├── routes/
-│       │   ├── sessions.js    # REST: 会话 CRUD
-│       │   └── health.js
+│       │   ├── sessions.ts    # REST: 会话 CRUD
+│       │   └── health.ts
 │       ├── ws/
-│       │   └── chatHandler.js # WebSocket 主逻辑：双 AI 调度
+│       │   └── chatHandler.ts # WebSocket 主逻辑：双 AI 调度
 │       ├── ai/
-│       │   ├── deepseek.js    # DeepSeek 客户端（SSE 流式 + AbortController）
-│       │   └── prompts.js     # system prompt + 摘要 prompt 模板
+│       │   ├── deepseek.ts    # DeepSeek 客户端（SSE 流式 + AbortController）
+│       │   └── prompts.ts     # system prompt + 摘要 prompt 模板
 │       ├── memory/
-│       │   ├── context.js     # 单 AI 上下文管理（窗口+摘要注入）
-│       │   └── summarizer.js  # 摘要生成器（第一人称视角）
+│       │   ├── context.ts     # 单 AI 上下文管理（窗口+摘要注入）
+│       │   └── summarizer.ts  # 摘要生成器（第一人称视角）
 │       ├── store/
-│       │   └── sessionStore.js# 会话持久化（同步落盘 + 启动恢复）
+│       │   └── sessionStore.ts# 会话持久化（同步落盘 + 启动恢复）
 │       └── utils/
-│           └── cost.js        # token -> 估算成本
-├── web/                       # 前端 workspace
+│           └── cost.ts        # token -> 估算成本
+├── web/                       # 前端 workspace（Vue 3 + TypeScript）
 │   ├── package.json
-│   ├── vite.config.js
+│   ├── vite.config.ts
 │   ├── index.html
 │   └── src/
-│       ├── main.js            # 入口
-│       ├── api.js             # WebSocket + REST 封装
-│       ├── ui.js              # DOM 渲染
-│       └── styles.css
+│       ├── main.ts            # 入口
+│       ├── App.vue            # 根组件
+│       ├── services/          # REST + 本地缓存封装
+│       ├── stores/            # Pinia 状态管理
+│       ├── composables/       # WebSocket + 响应式逻辑
+│       └── components/        # Vue 组件
 └── data/                      # 运行时数据（gitignore）
     └── sessions/              # 每会话一个 JSON
 ```
@@ -309,11 +311,11 @@ duet/
 
 **本地开发**
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
-- 采用**单端口方案**：dev 模式下 Fastify (默认 3000) 通过 vite dev middleware
-  挂载前端，用户**只访问 `http://localhost:3000`**，零跨端口代理。
+- 采用**单端口方案**：dev 脚本先构建前端到 `server/public`，再由 Fastify（默认 3000）
+  托管前端，用户**只访问 `http://localhost:3000`**，零跨端口代理。
 - 启动后终端打印：`>>> 本地访问: http://localhost:<port>`。
 - 自动打开浏览器：探测 `open`（macOS）/ `xdg-open`（Linux）/ `start`（Windows），
   探测失败只打印 URL 不报错。
@@ -321,8 +323,8 @@ npm run dev
 
 **生产/远程**
 ```bash
-npm run build   # vite build -> server/public
-npm start       # node server/src/index.js, @fastify/static 托管 + SPA fallback
+pnpm build      # vite build -> server/public；tsc -> server/dist
+pnpm start      # node server/dist/index.js, @fastify/static 托管 + SPA fallback
 ```
 - 单一 Node 进程托管前端静态资源 + API + WS。
 - 启动时 **fail-fast 校验** `DEEPSEEK_API_KEY`（缺失直接退出报错）。
@@ -352,12 +354,12 @@ npm start       # node server/src/index.js, @fastify/static 托管 + SPA fallbac
 
 | # | 里程碑 | 产出 | 验收 |
 |---|---|---|---|
-| M0 | 仓库初始化 | workspaces package.json、.gitignore、.env.example、目录骨架 | `npm install` 通过 |
+| M0 | 仓库初始化 | pnpm workspace package.json、.gitignore、.env.example、目录骨架 | `pnpm install` 通过 |
 | M1 | 后端骨架 | Fastify + WS + 健康检查 + fail-fast 校验 + 静态托管 | `curl /api/health` 200；缺 KEY 时退出 |
-| M2 | DeepSeek 客户端 | `ai/deepseek.js` 流式调用 + AbortController + 30s 超时 | 命令行跑通一轮流式（仅取 content）|
+| M2 | DeepSeek 客户端 | `ai/deepseek.ts` 流式调用 + AbortController + 30s 超时 | 命令行跑通一轮流式（仅取 content）|
 | M3 | 会话存储 | sessionStore JSON 同步落盘 + 启动恢复 + REST CRUD | curl 创建/读取；重启后 running→stopped |
-| M4 | 上下文 + 摘要 | `memory/context.js` + `summarizer.js`（第一人称）| 单测覆盖压缩、role 翻转、content-only |
-| M5 | 双 AI 调度 | `ws/chatHandler.js` 完整循环 + 停止/容错 | WS 客户端脚本跑通 5 round |
+| M4 | 上下文 + 摘要 | `memory/context.ts` + `summarizer.ts`（第一人称）| 单测覆盖压缩、role 翻转、content-only |
+| M5 | 双 AI 调度 | `ws/chatHandler.ts` 完整循环 + 停止/容错 | WS 客户端脚本跑通 5 round |
 | M6 | 前端页面 | 设置区 + 消息流 + WS + stats 显示 | 浏览器能跑完整对话 |
 | M7 | 停止/限额/熔断 | 轮数、时长、停止、绝对熔断、成本展示 | 三种结束条件 + 熔断生效 |
 | M8 | 部署打磨 | README、build/start、自动打开浏览器、graceful shutdown | 本地一键起、远程可部署 |
@@ -386,7 +388,7 @@ npm start       # node server/src/index.js, @fastify/static 托管 + SPA fallbac
 - [ ] **关浏览器重开，历史对话仍在；崩溃重启后 running 状态自动恢复为 stopped。**
 - [ ] **API Key 错误 / 网络断开 / 达到限额时，前端有清晰错误提示，不卡死。**
 - [ ] **顶部常驻显示累计 token 与估算成本。**
-- [ ] `npm run dev` 本地起服务（单端口）并打开浏览器；`npm run build && npm start` 单进程可部署。
+- [ ] `pnpm dev` 本地起服务（单端口）并打开浏览器；`pnpm build && pnpm start` 单进程可部署。
 - [ ] API Key 通过 `.env` 注入，不入库 git；缺失时 fail-fast 退出。
 
 ## 9. 不在 v1 范围内

@@ -18,15 +18,16 @@ async function main() {
 
   const ws = new WebSocket(`${WS_URL}/ws/chat?sessionId=${session.id}`)
   let chunkCount = 0
-  const done = new Promise((resolve) => {
+  const done = new Promise<void>((resolve) => {
     ws.on('open', () => ws.send(JSON.stringify({ type: 'start' })))
-    ws.on('message', (raw) => {
-      const msg = JSON.parse(raw.toString())
+    ws.on('message', (raw: Buffer) => {
+      const msg = JSON.parse(raw.toString()) as { type: string; [k: string]: unknown }
       if (msg.type === 'chunk') {
         chunkCount++
         if (chunkCount === 1) console.log('[test] 收到第一个 chunk，准备 1.5s 后停止')
       } else if (msg.type === 'message_done') {
-        console.log(`[test] 消息完成: ${msg.agentId} (${msg.message.content.length}字, truncated=${msg.message.truncated})`)
+        const m = msg.message as { content: string; truncated: boolean }
+        console.log(`[test] 消息完成: ${msg.agentId} (${m.content.length}字, truncated=${m.truncated})`)
       } else if (msg.type === 'finished') {
         console.log(`[test] 对话结束: ${msg.reason}`)
         resolve()
@@ -35,7 +36,10 @@ async function main() {
         resolve()
       }
     })
-    ws.on('error', (e) => { console.error('[test] WS', e.message); resolve() })
+    ws.on('error', (e: Error) => {
+      console.error('[test] WS', e.message)
+      resolve()
+    })
   })
 
   // 收到第一个 chunk 后 1.5s 发停止
@@ -49,11 +53,11 @@ async function main() {
     }
   }, 200)
 
-  await Promise.race([done, new Promise((r) => setTimeout(r, 60000))])
+  await Promise.race([done, new Promise<void>((r) => setTimeout(r, 60000))])
   clearInterval(stopTimer)
   ws.close()
 
-  const final = loadSession(session.id)
+  const final = loadSession(session.id)!
   console.log('\n========== 停止校验 ==========')
   console.log('status:', final.status, final.status === 'stopped' ? '✅' : '❌')
   console.log('finishedReason:', final.finishedReason, final.finishedReason === 'stopped' ? '✅' : '❌')
@@ -61,4 +65,7 @@ async function main() {
   console.log('stoppedAt 已设置:', final.stoppedAt ? '✅' : '❌')
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})

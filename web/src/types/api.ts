@@ -1,8 +1,8 @@
 /**
  * 后端 API 契约类型定义
  *
- * 严格对应 server/src/store/sessionStore.js 的数据模型，
- * 以及 server/src/ws/chatHandler.js 的 WebSocket 事件。
+ * 严格对应 server/src/store/sessionStore.ts 的数据模型，
+ * 以及 server/src/ws/chatHandler.ts 的 WebSocket 事件。
  * 详见 docs/DEVELOPMENT_PLAN.md §5.1 数据模型。
  */
 

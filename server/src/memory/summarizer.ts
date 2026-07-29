@@ -1,5 +1,16 @@
 import { chatComplete } from '../ai/deepseek.js'
 import { buildSummaryPrompt } from '../ai/prompts.js'
+import type { MemoryMessage } from '../types/index.js'
+
+/** summarizeConversation 参数 */
+interface SummarizeOpts {
+  agentName: string
+  otherName: string
+  messages: MemoryMessage[]
+  oldSummary?: string
+  words?: number
+  signal?: AbortSignal
+}
 
 /**
  * 摘要生成器。
@@ -16,7 +27,7 @@ export async function summarizeConversation({
   oldSummary,
   words = 200,
   signal,
-}) {
+}: SummarizeOpts): Promise<string> {
   // 把 messages 格式化为可读对话
   const recentText = messages
     .map((m) => {
