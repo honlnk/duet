@@ -9,6 +9,19 @@ const projectRoot = path.resolve(__dirname, '..', '..')
 
 dotenv.config({ path: path.join(projectRoot, '.env'), quiet: true })
 
+/**
+ * 推断运行环境：
+ * - 显式设置 NODE_ENV 时，尊重它（开发用 cross-env / 测试用环境变量）
+ * - 未设置时：跑的是编译产物（dist/*.js）默认生产（终端用户 npx / docker / node dist 场景），
+ *   跑的是源码（src/*.ts via tsx）默认开发
+ */
+function detectEnv(): string {
+  if (process.env.NODE_ENV) return process.env.NODE_ENV
+  // 编译产物恒在名为 dist 的目录下（源码开发时是 src）
+  const runningFromDist = path.basename(__dirname) === 'dist'
+  return runningFromDist ? 'production' : 'development'
+}
+
 function toInt(v: string | undefined, def: number): number {
   const n = Number.parseInt(v ?? '', 10)
   return Number.isFinite(n) ? n : def
@@ -20,7 +33,7 @@ function toFloat(v: string | undefined, def: number): number {
 }
 
 const config: AppConfig = {
-  env: process.env.NODE_ENV || 'development',
+  env: detectEnv(),
   port: toInt(process.env.PORT, 3000),
   projectRoot,
   // DeepSeek
@@ -34,8 +47,11 @@ const config: AppConfig = {
   // 成本估算（美元/百万 token，参考价）
   costInputPerMTok: toFloat(process.env.COST_INPUT_PER_MTOK, 0.27),
   costOutputPerMTok: toFloat(process.env.COST_OUTPUT_PER_MTOK, 1.10),
-  // 数据目录
-  dataDir: path.join(projectRoot, 'data', 'sessions'),
+  // 数据目录：优先用 DATA_DIR 环境变量（npm 包 / Docker 场景下指向持久化目录），
+  // 否则回退到项目根的 data/sessions（开发 / 源码部署）
+  dataDir: process.env.DATA_DIR
+    ? path.resolve(process.env.DATA_DIR)
+    : path.join(projectRoot, 'data', 'sessions'),
   // 前端构建产物（生产模式托管）
   staticDir: path.join(__dirname, '..', 'public'),
 }

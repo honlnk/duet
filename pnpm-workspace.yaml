@@ -1,3 +1,8 @@
 packages:
   - 'server'
   - 'web'
+
+# pnpm 10 默认不运行依赖的构建脚本（安全策略）。
+# esbuild（vite 依赖）需运行 postinstall 下载原生二进制，故显式批准。
+onlyBuiltDependencies:
+  - esbuild

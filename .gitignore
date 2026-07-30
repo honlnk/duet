@@ -16,6 +16,10 @@ data/
 server/public/
 dist/
 build/
+*.tgz
+
+# Docker 构建产生的本地 pnpm 缓存（cache mount 泄漏防护）
+.pnpm-store/
 
 # 日志
 *.log

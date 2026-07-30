@@ -5,18 +5,19 @@
   "description": "Duet — 双 AI 自主对话聊天室",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @duet/web build && pnpm --filter @duet/server dev",
-    "dev:split": "run-p -l dev:web dev:server",
+    "dev": "run-p -l dev:web dev:server",
     "dev:web": "pnpm --filter @duet/web dev",
-    "dev:server": "SKIP_STATIC=1 pnpm --filter @duet/server dev",
-    "build": "pnpm --filter @duet/web build && pnpm --filter @duet/server build",
+    "dev:server": "pnpm --filter @honlnk/duet dev",
+    "build": "pnpm --filter @duet/web build && pnpm --filter @honlnk/duet build",
     "start": "cross-env NODE_ENV=production node server/dist/index.js",
-    "test": "pnpm --filter @duet/server exec tsx ../scripts/test-e2e.ts",
-    "typecheck": "pnpm --filter @duet/server typecheck && pnpm --filter @duet/server exec tsc --noEmit -p ../scripts/tsconfig.json"
+    "test": "pnpm --filter @honlnk/duet exec tsx ../scripts/test-e2e.ts",
+    "typecheck": "pnpm --filter @honlnk/duet typecheck && pnpm --filter @honlnk/duet exec tsc --noEmit -p ../scripts/tsconfig.json",
+    "release": "pnpm build && pnpm --filter @honlnk/duet publish --access public --no-git-checks"
   },
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@10.21.0",
   "devDependencies": {
     "@types/ws": "^8.5.10",
     "cross-env": "^7.0.3",

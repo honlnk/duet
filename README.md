@@ -20,7 +20,7 @@
   - 滑动窗口保留最近若干条原始消息。
 - **成本可控**：顶部常驻显示累计 token 与估算成本；全局硬熔断兜底（默认 ≤ 200 轮 / 2 小时）。
 - **持久化与崩溃恢复**：每条消息同步落盘，关闭浏览器重开历史仍在；进程崩溃重启后自动恢复。
-- **双部署形态**：本地 CLI 一键起服务并打开浏览器；远程服务器单进程可部署。
+- **多种部署形态**：源码本地运行、`npx` 一键启动、Docker 容器部署，任选其一。
 
 ## 🚀 快速开始
 
@@ -47,10 +47,16 @@ cp .env.example .env
 pnpm dev
 ```
 
-启动后终端会打印访问地址（默认 `http://localhost:3000`），并**自动打开浏览器**。
-在左侧填写话题和两个智能体的身份设定，点击「开始对话」即可。
+开发模式采用前后端分离：后端跑在 `http://localhost:3000`（仅提供 API/WebSocket），前端由 vite 独立托管在 `http://localhost:5174`（支持热更新）。
+请用浏览器访问 **`http://localhost:5174`**，在左侧填写话题和两个智能体的身份设定，点击「开始对话」即可。
+
+> 开发模式下后端不会自动打开浏览器（前端由 vite 托管）。自动打开浏览器的行为仅在生产模式（`pnpm start`）下发生。
 
 ### 4. 生产部署
+
+提供三种生产部署形态，按需选择。无论哪种形态，都需要配置 `DEEPSEEK_API_KEY` 环境变量。
+
+#### 形态 A：源码部署（本地或服务器）
 
 ```bash
 pnpm build      # 构建前端到 server/public，并编译后端到 server/dist
@@ -61,6 +67,53 @@ pnpm start      # 启动单进程（托管前端 + API + WebSocket）
 - 通过 `PORT` 环境变量改端口（设为 `0` 自动分配可用端口）。
 - 远程服务器反向代理到 80/443 即可对外服务。
 - 推荐用 `pm2` 或 `systemd` 守护进程。
+
+#### 形态 B：npm 包（npx 一键启动，无需 clone 源码）
+
+```bash
+# 临时运行（自动拉取并启动，随后自动打开浏览器）
+npx @honlnk/duet
+
+# 或全局安装后使用
+npm i -g @honlnk/duet
+DEEPSEEK_API_KEY=sk-xxxx DATA_DIR=~/.duet duet-chat
+```
+
+- 包内已内置前端构建产物，开箱即用。
+- 建议用 `DATA_DIR` 指定数据持久化目录（如 `~/.duet`），避免会话数据写到包目录。
+- 其余配置通过环境变量传入（见 `.env.example`）。
+
+#### 形态 C：Docker（容器化部署）
+
+```bash
+# 方式一：docker run
+docker build -t duet .
+docker run -d -p 3000:3000 \
+  -e DEEPSEEK_API_KEY=sk-xxxx \
+  -v duet-data:/data \
+  duet
+
+# 方式二：docker compose（推荐，配置已写在 docker-compose.yml）
+cp .env.example .env   # 编辑填入 DEEPSEEK_API_KEY
+docker compose up -d --build
+```
+
+- 多阶段构建（alpine），运行镜像仅含编译产物 + 生产依赖，体积小。
+- 会话数据通过卷（`/data`）持久化，容器删除重建后仍在。
+- 以非 root 用户运行，内置健康检查（`/api/health`）。
+
+#### 配置项
+
+| 环境变量 | 必填 | 默认 | 说明 |
+|---|:---:|---|---|
+| `DEEPSEEK_API_KEY` | ✅ | — | DeepSeek API 密钥 |
+| `PORT` | | `3000` | 服务端口（`0` = 自动分配） |
+| `DATA_DIR` | | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定） |
+| `DEEPSEEK_MODEL` | | `deepseek-v4-flash` | 模型名 |
+| `ABSOLUTE_MAX_ROUNDS` | | `200` | 全局硬熔断轮数 |
+| `ABSOLUTE_MAX_DURATION_SEC` | | `7200` | 全局硬熔断时长（秒） |
+
+完整配置见 [`.env.example`](./.env.example)。
 
 ## 📖 使用说明
 

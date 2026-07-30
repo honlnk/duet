@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
@@ -18,8 +19,9 @@ import {
 } from './store/sessionStore.js'
 
 /**
- * 启动服务器（单端口托管前端 + REST + WS）。
- * dev 模式下若已有构建产物则直接托管；prod 模式用 @fastify/static。
+ * 启动服务器。
+ * 生产模式：单进程托管前端构建产物 + REST + WS。
+ * 开发模式：仅提供 REST + WS，前端由 vite 独立托管。
  */
 export async function buildServer(): Promise<FastifyInstance> {
   validateConfig()
@@ -52,54 +54,36 @@ export async function buildServer(): Promise<FastifyInstance> {
 }
 
 async function registerStaticOrVite(fastify: FastifyInstance): Promise<void> {
-  // 分离开发：后端仅提供 API/WS，前端由 vite 独立托管（避免 serve 旧产物造成混淆）
-  if (process.env.SKIP_STATIC === '1' || process.env.SKIP_STATIC === 'true') {
+  // 开发：后端仅提供 API/WS，前端由 vite 独立托管（默认 http://localhost:5174）
+  if (config.env !== 'production') {
     fastify.get('/', async () => ({
-      message: '后端运行于分离模式（SKIP_STATIC），前端请访问 vite dev server。',
+      message: '后端运行于开发模式，仅提供 API/WebSocket。前端请访问 vite dev server。',
     }))
     return
   }
 
+  // 生产：托管前端构建产物（server/public）
   const staticDir = config.staticDir
   const indexHtml = path.join(staticDir, 'index.html')
-  const hasBuild = fs.existsSync(indexHtml)
-
-  if (config.env === 'production' && hasBuild) {
-    // 生产：托管构建产物
-    await fastify.register(fastifyStatic, {
-      root: staticDir,
-      prefix: '/',
-    })
-    // SPA fallback
-    fastify.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
-        return reply.sendFile('index.html')
-      }
-      reply.code(404).send({ error: 'Not Found' })
-    })
+  if (!fs.existsSync(indexHtml)) {
+    fastify.get('/', async () => ({
+      error:
+        '前端尚未构建，生产模式无法托管。请先运行 `pnpm build`。',
+    }))
     return
   }
 
-  if (hasBuild) {
-    // dev 但已有构建产物：直接托管（无需 vite）
-    await fastify.register(fastifyStatic, {
-      root: staticDir,
-      prefix: '/',
-    })
-    fastify.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
-        return reply.sendFile('index.html')
-      }
-      reply.code(404).send({ error: 'Not Found' })
-    })
-    return
-  }
-
-  // dev 且无构建产物：内联极简首页（提示先 build 或直接用前端 dev）
-  fastify.get('/', async () => ({
-    message:
-      '前端尚未构建。请运行 `pnpm build` 后再启动，或在 web/ 目录单独 `pnpm dev`。',
-  }))
+  await fastify.register(fastifyStatic, {
+    root: staticDir,
+    prefix: '/',
+  })
+  // SPA fallback
+  fastify.setNotFoundHandler((req, reply) => {
+    if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws')) {
+      return reply.sendFile('index.html')
+    }
+    reply.code(404).send({ error: 'Not Found' })
+  })
 }
 
 /** 各平台的「打开浏览器」命令 */
@@ -113,11 +97,14 @@ function openBrowser(url: string): void {
   const entry = browserCmds[process.platform as NodeJS.Platform]
   if (!entry) return
   const [cmd, baseArgs] = entry
-  try {
-    spawn(cmd, [...baseArgs, url], { stdio: 'ignore', detached: true }).unref()
-  } catch {
-    /* 忽略，仅打印 URL */
-  }
+  // spawn 的 ENOENT 等错误是异步经 'error' 事件抛出的，同步 try/catch 接不住。
+  // 无图形环境（Docker / 远程服务器 / headless）下打开命令不存在，静默忽略即可，
+  // 避免未监听的 'error' 事件把进程拖崩。
+  const child = spawn(cmd, [...baseArgs, url], { stdio: 'ignore', detached: true })
+  child.on('error', () => {
+    /* 无可用浏览器或命令缺失，忽略 */
+  })
+  child.unref()
 }
 
 async function main(): Promise<void> {
@@ -135,8 +122,15 @@ async function main(): Promise<void> {
     console.log(`  环境: ${config.env}  模型: ${config.deepseekModel}`)
     console.log(`  熔断: ≤ ${config.absoluteMaxRounds} 轮 / ${config.absoluteMaxDurationSec}s`)
     console.log('═══════════════════════════════════════')
-    if (config.env !== 'production') {
+
+    // 生产模式：后端托管前端，自动打开浏览器。
+    // 开发模式：后端仅提供 API/WS，前端由 vite 独立托管，不碰页面。
+    if (config.env === 'production') {
       openBrowser(displayUrl)
+    } else {
+      console.log(
+        '  ℹ️  开发模式：后端仅提供 API/WS，前端请访问 vite dev server（默认 http://localhost:5174）。',
+      )
     }
   } catch (e) {
     fastify.log.error(e)
@@ -174,8 +168,22 @@ async function main(): Promise<void> {
   })
 }
 
-// 仅作为入口时执行（兼容 tsx 跑 .ts 与 node 跑 dist/.js）
-const isMain = process.argv[1] === fileURLToPath(import.meta.url)
+// 仅作为入口时执行。
+// 用 realpath 比较，兼容全局安装的软链接（process.argv[1] 是 bin 软链接路径，
+// import.meta.url 是其指向的真实 dist/index.js，直接 === 会不等）。
+const isMain = (() => {
+  const argvPath = process.argv[1]
+  if (!argvPath) return false
+  const modulePath = fileURLToPath(import.meta.url)
+  try {
+    return fs.realpathSync(argvPath) === fs.realpathSync(modulePath)
+  } catch {
+    return argvPath === modulePath
+  }
+})()
 if (isMain) {
-  main()
+  main().catch((e) => {
+    console.error('[fatal] 启动失败', e)
+    process.exit(1)
+  })
 }

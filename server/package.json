@@ -1,9 +1,26 @@
 {
-  "name": "@duet/server",
+  "name": "@honlnk/duet",
   "version": "1.0.0",
-  "private": true,
+  "description": "Duet — 双 AI 自主对话聊天室（终端用户可 npx 运行）",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "duet-chat": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "public",
+    "README.md"
+  ],
+  "keywords": [
+    "duet",
+    "ai",
+    "chat",
+    "deepseek",
+    "multi-agent",
+    "conversation"
+  ],
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
@@ -23,5 +40,8 @@
     "cross-env": "^7.0.3",
     "tsx": "^4.19.2",
     "typescript": "~6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

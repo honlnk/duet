@@ -1,0 +1,31 @@
+# 依赖与构建产物（容器内重新构建）
+node_modules
+**/node_modules
+server/dist
+server/public
+
+# 运行时数据（绝不打进镜像）
+data/
+
+# 版本控制与工具
+.git
+.gitignore
+.github
+.zcode
+
+# 文档与脚本（镜像不需要）
+docs/
+scripts/
+*.md
+!README.md
+
+# 环境变量与敏感信息（容器运行时通过 -e 注入）
+.env
+.env.*
+!.env.example
+
+# 本地工具与临时文件
+.vscode
+.idea
+*.log
+.DS_Store
