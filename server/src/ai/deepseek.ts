@@ -1,6 +1,17 @@
 import config from '../config.js'
 import type { ApiMessage, ChatCompletionResult, DeepSeekUsage } from '../types/index.js'
 
+/**
+ * AI 调用所需的连接参数。
+ * 由调用方从 Provider 解析后显式传入，不再从全局 config 单例读取。
+ * 这样支持多 Provider 并发（每个 Agent 可用不同 baseUrl / apiKey / model）。
+ */
+export interface ConnectionConfig {
+  baseUrl: string
+  apiKey: string
+  model: string
+}
+
 /** DeepSeek 流式响应中的 delta */
 interface StreamDelta {
   content?: string | null
@@ -27,7 +38,8 @@ interface ChatCompletionResponse {
 /** chatCompletion 参数 */
 interface ChatCompletionOpts {
   messages: ApiMessage[]
-  model?: string
+  /** 连接配置（baseUrl / apiKey / model），必填 */
+  conn: ConnectionConfig
   temperature?: number
   maxTokens?: number
   /** content 流式回调 */
@@ -50,16 +62,16 @@ interface ChatCompletionOpts {
  */
 export async function chatCompletion({
   messages,
-  model,
+  conn,
   temperature = 0.7,
   maxTokens = 1024,
   onContent,
   onReasoning,
   signal,
 }: ChatCompletionOpts): Promise<ChatCompletionResult> {
-  const url = `${config.deepseekBaseUrl}/chat/completions`
+  const url = `${conn.baseUrl}/chat/completions`
   const body = {
-    model: model || config.deepseekModel,
+    model: conn.model,
     messages,
     temperature,
     max_tokens: maxTokens,
@@ -77,7 +89,7 @@ export async function chatCompletion({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.deepseekApiKey}`,
+      Authorization: `Bearer ${conn.apiKey}`,
     },
     body: JSON.stringify(body),
     signal: combined,
@@ -140,7 +152,8 @@ export async function chatCompletion({
 
 /** chatComplete 参数 */
 interface ChatCompleteOpts {
-  model?: string
+  /** 连接配置（baseUrl / apiKey / model），必填 */
+  conn: ConnectionConfig
   temperature?: number
   maxTokens?: number
   signal?: AbortSignal
@@ -151,11 +164,11 @@ interface ChatCompleteOpts {
  */
 export async function chatComplete(
   messages: ApiMessage[],
-  opts: ChatCompleteOpts = {}
+  opts: ChatCompleteOpts
 ): Promise<ChatCompletionResult> {
-  const url = `${config.deepseekBaseUrl}/chat/completions`
+  const url = `${opts.conn.baseUrl}/chat/completions`
   const body = {
-    model: opts.model || config.deepseekModel,
+    model: opts.conn.model,
     messages,
     temperature: opts.temperature ?? 0.3,
     max_tokens: opts.maxTokens ?? 800,
@@ -168,7 +181,7 @@ export async function chatComplete(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.deepseekApiKey}`,
+      Authorization: `Bearer ${opts.conn.apiKey}`,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.any(signals),

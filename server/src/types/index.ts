@@ -80,7 +80,7 @@ export interface SessionConfig {
   maxRounds: number
   /** 持续时间上限秒数（0 = 无限） */
   durationSec: number
-  /** DeepSeek 模型名 */
+  /** DeepSeek 模型名（保留向后兼容；新逻辑以 provider 的 model 为准） */
   model: string
   /** 生成温度 */
   temperature: number
@@ -88,6 +88,10 @@ export interface SessionConfig {
   summaryEveryN: number
   /** 压缩后保留最近消息数 */
   keepRecent: number
+  /** 智能体 A 使用的 Provider id（空 = 默认 Provider） */
+  providerA?: string
+  /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
+  providerB?: string
 }
 
 /** 累计成本统计 */
@@ -168,6 +172,59 @@ export interface ChatCompletionResult {
   usage: DeepSeekUsage
 }
 
+/* ============================== Provider ============================== */
+
+/**
+ * 一个 Provider = 一套 OpenAI 兼容的连接配置。
+ * 存储在 data/providers.json，可在 UI 中增删改查。
+ */
+export interface Provider {
+  id: string
+  /** 显示名，如 "DeepSeek 官方" */
+  name: string
+  /** API 基址，如 https://api.deepseek.com/v1 */
+  baseUrl: string
+  /** API 密钥（后端持有，前端列表不回显原文） */
+  apiKey: string
+  /** 模型 ID，如 deepseek-v4-flash */
+  model: string
+  /** 输入单价（美元/百万 token，参考展示用） */
+  inputPerMTok: number
+  /** 输出单价（美元/百万 token，参考展示用） */
+  outputPerMTok: number
+}
+
+/** 创建 / 更新 Provider 的入参（不含 id） */
+export interface ProviderFormData {
+  name: string
+  baseUrl: string
+  apiKey: string
+  model: string
+  inputPerMTok?: number
+  outputPerMTok?: number
+}
+
+/**
+ * 前端列表项——apiKey 打码，不暴露原文。
+ * 列表 API 返回此类型，而非完整 Provider。
+ */
+export interface ProviderListItem {
+  id: string
+  name: string
+  baseUrl: string
+  model: string
+  inputPerMTok: number
+  outputPerMTok: number
+  /** 打码后的 key，如 sk-***x4f2，仅供前端显示「已配置」状态 */
+  apiKeyMasked: string
+}
+
+/** providers.json 的完整结构 */
+export interface ProvidersFile {
+  providers: Provider[]
+  defaultId: string
+}
+
 /* ============================== 配置 ============================== */
 
 /** AppConfig 的环境（宽松，不强制枚举） */
@@ -178,15 +235,12 @@ export interface AppConfig {
   env: NodeEnv
   port: number
   projectRoot: string
-  deepseekApiKey: string
-  deepseekBaseUrl: string
-  deepseekModel: string
   requestTimeoutMs: number
   absoluteMaxRounds: number
   absoluteMaxDurationSec: number
-  costInputPerMTok: number
-  costOutputPerMTok: number
   dataDir: string
+  /** Provider 配置文件路径（单文件 JSON） */
+  providersFile: string
   staticDir: string
 }
 

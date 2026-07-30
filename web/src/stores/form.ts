@@ -23,6 +23,9 @@ function defaultValues(): FormValues {
     durationSec: '',
     summaryEveryN: '10',
     keepRecent: '8',
+    // 空 = 使用默认 Provider
+    providerA: '',
+    providerB: '',
   }
 }
 
@@ -80,6 +83,8 @@ export const useFormStore = defineStore('form', () => {
       durationSec: num('durationSec'),
       summaryEveryN: num('summaryEveryN') || 10,
       keepRecent: num('keepRecent') || 8,
+      providerA: values.providerA || undefined,
+      providerB: values.providerB || undefined,
     } satisfies SessionConfig,
   }))
 

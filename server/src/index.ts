@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import config, { validateConfig } from './config.js'
 import healthRoutes from './routes/health.js'
 import sessionRoutes from './routes/sessions.js'
+import providerRoutes from './routes/providers.js'
 import wsRoutes from './ws/wsRoutes.js'
 import {
   recoverSessions,
@@ -17,6 +18,7 @@ import {
   saveSession,
   listSessions,
 } from './store/sessionStore.js'
+import { validateProviders } from './store/providerStore.js'
 
 /**
  * 启动服务器。
@@ -32,6 +34,9 @@ export async function buildServer(): Promise<FastifyInstance> {
     console.log(`[startup] 恢复 ${recovered} 个崩溃会话（running → stopped）`)
   }
 
+  // Provider 校验（确认至少有一条可用）
+  validateProviders()
+
   const fastify = Fastify({
     logger: config.env === 'production' ? { level: 'info' } : { level: 'warn' },
   })
@@ -45,6 +50,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // REST 路由
   await fastify.register(healthRoutes)
   await fastify.register(sessionRoutes)
+  await fastify.register(providerRoutes)
   await fastify.register(wsRoutes)
 
   // 静态托管前端
@@ -119,7 +125,7 @@ async function main(): Promise<void> {
     console.log('═══════════════════════════════════════')
     console.log(`  Duet 已启动`)
     console.log(`  本地访问: ${displayUrl}`)
-    console.log(`  环境: ${config.env}  模型: ${config.deepseekModel}`)
+    console.log(`  环境: ${config.env}`)
     console.log(`  熔断: ≤ ${config.absoluteMaxRounds} 轮 / ${config.absoluteMaxDurationSec}s`)
     console.log('═══════════════════════════════════════')
 

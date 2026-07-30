@@ -35,7 +35,7 @@ export interface SessionConfig {
   maxRounds: number
   /** 持续时间上限秒数（0 = 无限） */
   durationSec: number
-  /** DeepSeek 模型名 */
+  /** 模型名（保留向后兼容） */
   model: string
   /** 生成温度 */
   temperature: number
@@ -43,6 +43,10 @@ export interface SessionConfig {
   summaryEveryN: number
   /** 压缩后保留最近消息数 */
   keepRecent: number
+  /** 智能体 A 使用的 Provider id（空 = 默认 Provider） */
+  providerA?: string
+  /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
+  providerB?: string
 }
 
 /** 单条消息的 token 用量 */
@@ -116,11 +120,40 @@ export interface CreateSessionPayload {
 export interface ConfigLimits {
   absoluteMaxRounds: number
   absoluteMaxDurationSec: number
-  defaultModel: string
-  cost: {
-    inputPerMTok: number
-    outputPerMTok: number
-  }
+  /** 默认 Provider id（供前端默认选中） */
+  defaultProviderId: string
+}
+
+/* ------------------------------------------------------------------ */
+/* Provider（多套模型连接配置）                                         */
+/* ------------------------------------------------------------------ */
+
+/** Provider 列表项（apiKey 打码，不暴露原文） */
+export interface ProviderListItem {
+  id: string
+  name: string
+  baseUrl: string
+  model: string
+  inputPerMTok: number
+  outputPerMTok: number
+  /** 打码后的 key，如 sk-***x4f2 */
+  apiKeyMasked: string
+}
+
+/** 创建 / 更新 Provider 的入参 */
+export interface ProviderFormData {
+  name: string
+  baseUrl: string
+  apiKey: string
+  model: string
+  inputPerMTok?: number
+  outputPerMTok?: number
+}
+
+/** GET /api/providers 返回 */
+export interface ProviderListResponse {
+  providers: ProviderListItem[]
+  defaultId: string
 }
 
 /* ------------------------------------------------------------------ */

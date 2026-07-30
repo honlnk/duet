@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useFormStore } from '@/stores/form'
+import { useProviderStore } from '@/stores/provider'
 
 const form = useFormStore()
 const { values } = storeToRefs(form)
-
-/** 可选模型列表（与后端 defaultModel 对齐） */
-const models = ['deepseek-v4-flash', 'deepseek-v4-pro']
+const { providers, defaultId } = storeToRefs(useProviderStore())
 
 interface Field {
   key:
@@ -55,6 +54,14 @@ const fields: Field[] = [
     inputmode: 'numeric',
   },
 ]
+
+/** 选项标签：显示名称 + 模型 + 默认标记 */
+function labelOf(id: string): string {
+  const p = providers.value.find((x) => x.id === id)
+  if (!p) return ''
+  const star = id === defaultId.value ? ' ★' : ''
+  return `${p.name}（${p.model}）${star}`
+}
 </script>
 
 <template>
@@ -66,14 +73,31 @@ const fields: Field[] = [
       <span class="transition-transform group-open:rotate-90">▸</span>
     </summary>
     <div class="flex flex-col gap-3 px-3 pb-3 pt-1">
-      <!-- 模型下拉框 -->
+      <!-- 智能体 A 的模型 -->
       <div class="flex flex-col gap-1">
-        <label class="text-xs text-text-dim">模型</label>
+        <label class="text-xs text-text-dim">智能体 A 模型</label>
         <select
-          v-model="values.model"
+          v-model="values.providerA"
           class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
-          <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+          <option value="">默认（{{ labelOf(defaultId) }}）</option>
+          <option v-for="p in providers" :key="p.id" :value="p.id">
+            {{ labelOf(p.id) }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 智能体 B 的模型 -->
+      <div class="flex flex-col gap-1">
+        <label class="text-xs text-text-dim">智能体 B 模型</label>
+        <select
+          v-model="values.providerB"
+          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          <option value="">默认（{{ labelOf(defaultId) }}）</option>
+          <option v-for="p in providers" :key="p.id" :value="p.id">
+            {{ labelOf(p.id) }}
+          </option>
         </select>
       </div>
 

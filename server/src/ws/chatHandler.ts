@@ -1,4 +1,5 @@
 import { chatCompletion } from '../ai/deepseek.js'
+import type { ConnectionConfig } from '../ai/deepseek.js'
 import {
   buildOpeningPrompt,
   wrapOtherMessage,
@@ -10,6 +11,7 @@ import {
   addStats,
   currentRound,
 } from '../store/sessionStore.js'
+import { resolveProvider } from '../store/providerStore.js'
 import config from '../config.js'
 import type {
   AgentId,
@@ -136,6 +138,36 @@ export async function runLoop(session: Session): Promise<void> {
   const memA = AgentMemory.fromJSON(session.memory.A)
   const memB = AgentMemory.fromJSON(session.memory.B)
 
+  // 解析两个 Agent 各自使用的 Provider 连接配置。
+  // providerA/B 为空或找不到时，resolveProvider 会回落到默认 Provider。
+  const provA = resolveProvider(session.config.providerA)
+  const provB = resolveProvider(session.config.providerB)
+  if (!provA || !provB) {
+    broadcast(session.id, {
+      type: 'error',
+      message: '无可用的 Provider。请在设置中配置至少一个模型连接。',
+    })
+    session.status = 'error'
+    session.error = '无可用的 Provider'
+    session.finishedReason = 'error'
+    saveSession(session)
+    rt.running = false
+    return
+  }
+  const connA: ConnectionConfig = {
+    baseUrl: provA.baseUrl,
+    apiKey: provA.apiKey,
+    model: provA.model,
+  }
+  const connB: ConnectionConfig = {
+    baseUrl: provB.baseUrl,
+    apiKey: provB.apiKey,
+    model: provB.model,
+  }
+  // 缓存单价，供 addStats 用
+  const ratesA = { inputPerMTok: provA.inputPerMTok, outputPerMTok: provA.outputPerMTok }
+  const ratesB = { inputPerMTok: provB.inputPerMTok, outputPerMTok: provB.outputPerMTok }
+
   try {
     while (true) {
       // === 1. 顶部检查停止条件 ===
@@ -186,6 +218,10 @@ export async function runLoop(session: Session): Promise<void> {
       const shouldSummarize =
         myMem.messages.length > session.config.keepRecent &&
         roundsSinceSummary >= session.config.summaryEveryN
+      // 当前发言者的连接配置与单价（摘要跟 Agent 走）
+      const myConn = agentId === 'A' ? connA : connB
+      const myRates = agentId === 'A' ? ratesA : ratesB
+      const myProvName = agentId === 'A' ? provA.name : provB.name
       if (shouldSummarize) {
         broadcast(session.id, {
           type: 'summary',
@@ -199,6 +235,7 @@ export async function runLoop(session: Session): Promise<void> {
             messages: myMem.messages,
             oldSummary: myMem.summary,
             words: 200,
+            conn: myConn,
           })
           if (summary) {
             myMem.applySummary(summary, round)
@@ -240,7 +277,7 @@ export async function runLoop(session: Session): Promise<void> {
       try {
         const result = await chatCompletion({
           messages: apiMessages,
-          model: session.config.model,
+          conn: myConn,
           temperature: session.config.temperature,
           maxTokens: 1024,
           signal: rt.abortCtrl.signal,
@@ -261,7 +298,7 @@ export async function runLoop(session: Session): Promise<void> {
         }
 
         const usage: DeepSeekUsage = result.usage || {}
-        addStats(session, usage)
+        addStats(session, usage, myRates)
 
         // === 诊断日志：缓存命中情况 ===
         {
@@ -272,7 +309,7 @@ export async function runLoop(session: Session): Promise<void> {
           const reasoning = usage.completion_tokens_details?.reasoning_tokens ?? 0
           const hitRate = prompt > 0 ? ((hit / prompt) * 100).toFixed(1) : '0.0'
           console.log(
-            `[cache] 轮${round} ${agentId} | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion} (其中思维链=${reasoning})`
+            `[cache] 轮${round} ${agentId} [${myProvName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion} (其中思维链=${reasoning})`
           )
         }
 

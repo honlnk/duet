@@ -1,13 +1,15 @@
 import type { FastifyInstance } from 'fastify'
+import { listProviderItems } from '../store/providerStore.js'
 
 async function healthRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/api/health', async () => {
+    const providers = listProviderItems()
     return {
       status: 'ok',
       ts: Date.now(),
       env: fastify.config.env,
-      model: fastify.config.deepseekModel,
-      apiKeyConfigured: !!fastify.config.deepseekApiKey,
+      providerCount: providers.providers.length,
+      hasDefaultProvider: !!providers.defaultId,
       limits: {
         absoluteMaxRounds: fastify.config.absoluteMaxRounds,
         absoluteMaxDurationSec: fastify.config.absoluteMaxDurationSec,
@@ -16,14 +18,11 @@ async function healthRoutes(fastify: FastifyInstance): Promise<void> {
   })
 
   fastify.get('/api/config/limits', async () => {
+    const providers = listProviderItems()
     return {
       absoluteMaxRounds: fastify.config.absoluteMaxRounds,
       absoluteMaxDurationSec: fastify.config.absoluteMaxDurationSec,
-      defaultModel: fastify.config.deepseekModel,
-      cost: {
-        inputPerMTok: fastify.config.costInputPerMTok,
-        outputPerMTok: fastify.config.costOutputPerMTok,
-      },
+      defaultProviderId: providers.defaultId,
     }
   })
 }

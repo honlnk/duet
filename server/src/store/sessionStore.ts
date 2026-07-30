@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import config from '../config.js'
 import { AgentMemory } from '../memory/context.js'
 import { estimateCost } from '../utils/cost.js'
+import type { CostRates } from '../utils/cost.js'
 import type {
   CreateSessionInput,
   DeepSeekUsage,
@@ -18,7 +19,8 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
   return {
     maxRounds: 0,
     durationSec: 0,
-    model: config.deepseekModel,
+    // model 仅为向后兼容保留；实际模型由 Provider 配置决定
+    model: 'deepseek-v4-flash',
     temperature: 0.7,
     summaryEveryN: 10,
     keepRecent: 8,
@@ -160,8 +162,17 @@ export function recoverSessions(): number {
   return n
 }
 
-/** 累加 token 统计 */
-export function addStats(session: Session, usage: DeepSeekUsage): SessionStats {
+/**
+ * 累加 token 统计。
+ * @param rates 该次调用所用 Provider 的单价；不同 Provider 价格不同时按实际传入。
+ *             注意：成本是按累计 token 量乘以「最新一次传入的 rate」重算的近似值，
+ *             混合多 Provider 的会话里会略有偏差，仅作展示参考。
+ */
+export function addStats(
+  session: Session,
+  usage: DeepSeekUsage,
+  rates?: CostRates
+): SessionStats {
   const pt = usage.prompt_tokens || 0
   const ct = usage.completion_tokens || 0
   session.stats.totalPromptTokens += pt
@@ -169,7 +180,8 @@ export function addStats(session: Session, usage: DeepSeekUsage): SessionStats {
   session.stats.totalTokens = session.stats.totalPromptTokens + session.stats.totalCompletionTokens
   session.stats.estCost = estimateCost(
     session.stats.totalPromptTokens,
-    session.stats.totalCompletionTokens
+    session.stats.totalCompletionTokens,
+    rates
   )
   return session.stats
 }

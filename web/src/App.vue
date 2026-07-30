@@ -5,18 +5,21 @@ import { useSessionStore } from '@/stores/session'
 import { useFormStore } from '@/stores/form'
 import { useDraftStore } from '@/stores/draft'
 import { useConfigStore } from '@/stores/config'
+import { useProviderStore } from '@/stores/provider'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import AppHeader from '@/components/AppHeader.vue'
 import SettingsSidebar from '@/components/SettingsSidebar.vue'
 import MessageList from '@/components/MessageList.vue'
 import EventLog from '@/components/EventLog.vue'
+import ProviderPanel from '@/components/ProviderPanel.vue'
 import type { ServerEvent } from '@/types/api'
 
 const session = useSessionStore()
 const form = useFormStore()
 const draft = useDraftStore()
 const config = useConfigStore()
+const provider = useProviderStore()
 const { status, eventLog } = storeToRefs(session)
 
 const { connected, open: openWs, send: sendWs, close: closeWs } = useWebSocket()
@@ -26,6 +29,8 @@ const { isMobile } = useBreakpoint()
 const sidebarCollapsed = ref(false)
 /** 手机端：抽屉是否展开（覆盖模式） */
 const drawerOpen = ref(false)
+/** Provider 管理面板是否展开 */
+const showProviders = ref(false)
 
 /** 切换侧栏：手机走抽屉开关，平板/桌面走内联收起 */
 function toggleSidebar() {
@@ -94,6 +99,8 @@ function handleReset() {
 onMounted(async () => {
   // 拉取全局限制
   await config.load()
+  // 拉取 Provider 列表
+  await provider.load()
   // 恢复草稿
   const saved = draft.readDraft()
   if (saved) {
@@ -112,7 +119,10 @@ watch(connected, (c) => {
 
 <template>
   <div class="flex h-full flex-col">
-    <AppHeader @toggle-sidebar="toggleSidebar" />
+    <AppHeader
+      @toggle-sidebar="toggleSidebar"
+      @open-providers="showProviders = true"
+    />
 
     <main class="relative flex min-h-0 flex-1">
       <!-- 侧栏 -->
@@ -138,5 +148,8 @@ watch(connected, (c) => {
         <EventLog :items="eventLog" />
       </section>
     </main>
+
+    <!-- Provider 管理面板 -->
+    <ProviderPanel v-if="showProviders" @close="showProviders = false" />
   </div>
 </template>

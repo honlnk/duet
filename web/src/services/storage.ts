@@ -18,6 +18,8 @@ export const FIELD_KEYS = [
   'durationSec',
   'summaryEveryN',
   'keepRecent',
+  'providerA',
+  'providerB',
 ] as const
 
 export type FieldKey = (typeof FIELD_KEYS)[number]

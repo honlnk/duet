@@ -1,4 +1,5 @@
 import { chatComplete } from '../ai/deepseek.js'
+import type { ConnectionConfig } from '../ai/deepseek.js'
 import { buildSummaryPrompt } from '../ai/prompts.js'
 import type { MemoryMessage } from '../types/index.js'
 
@@ -9,6 +10,8 @@ interface SummarizeOpts {
   messages: MemoryMessage[]
   oldSummary?: string
   words?: number
+  /** 该 Agent 使用的 Provider 连接配置（跟 Agent 走） */
+  conn: ConnectionConfig
   signal?: AbortSignal
 }
 
@@ -26,6 +29,7 @@ export async function summarizeConversation({
   messages,
   oldSummary,
   words = 200,
+  conn,
   signal,
 }: SummarizeOpts): Promise<string> {
   // 把 messages 格式化为可读对话
@@ -52,7 +56,7 @@ export async function summarizeConversation({
       },
       { role: 'user', content: prompt },
     ],
-    { temperature: 0.3, maxTokens: 600, signal }
+    { conn, temperature: 0.3, maxTokens: 600, signal }
   )
 
   return (result.content || '').trim()

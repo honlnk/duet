@@ -52,6 +52,8 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                 temperature: { type: 'number', minimum: 0, maximum: 2 },
                 summaryEveryN: { type: 'integer', minimum: 1 },
                 keepRecent: { type: 'integer', minimum: 1 },
+                providerA: { type: 'string' },
+                providerB: { type: 'string' },
               },
             },
           },

@@ -7,6 +7,8 @@
 import type {
   ConfigLimits,
   CreateSessionPayload,
+  ProviderFormData,
+  ProviderListResponse,
   Session,
   SessionSummary,
 } from '@/types/api'
@@ -54,6 +56,44 @@ export async function deleteSession(id: string): Promise<void> {
 /** 获取全局熔断限制与成本单价 */
 export function getLimits(): Promise<ConfigLimits> {
   return request<ConfigLimits>('/api/config/limits')
+}
+
+/* ----------------------------- Provider ----------------------------- */
+
+/** 列出所有 Provider（apiKey 打码） */
+export function listProviders(): Promise<ProviderListResponse> {
+  return request<ProviderListResponse>('/api/providers')
+}
+
+/** 创建 Provider */
+export function createProvider(data: ProviderFormData): Promise<ProviderListResponse> {
+  return request<ProviderListResponse>('/api/providers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+/** 更新 Provider（apiKey 为空字符串表示不修改） */
+export function updateProvider(
+  id: string,
+  data: Partial<ProviderFormData>
+): Promise<ProviderListResponse> {
+  return request<ProviderListResponse>(`/api/providers/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+/** 删除 Provider */
+export function deleteProvider(id: string): Promise<ProviderListResponse> {
+  return request<ProviderListResponse>(`/api/providers/${id}`, { method: 'DELETE' })
+}
+
+/** 设为默认 Provider */
+export function setDefaultProvider(id: string): Promise<ProviderListResponse> {
+  return request<ProviderListResponse>(`/api/providers/default/${id}`, { method: 'PUT' })
 }
 
 /** 构造 WebSocket 地址 */
