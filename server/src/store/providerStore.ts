@@ -2,16 +2,54 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import config from '../config.js'
+import {
+  FALLBACK_INPUT_PER_MTOK,
+  FALLBACK_OUTPUT_PER_MTOK,
+} from '../utils/cost.js'
 import type {
   Provider,
   ProviderFormData,
   ProviderListItem,
+  ProviderPricing,
   ProvidersFile,
 } from '../types/index.js'
 
-/** 新增 Provider 时的默认单价（参考价，用户可在 UI 修改） */
-const DEFAULT_INPUT_PER_MTOK = 0.27
-const DEFAULT_OUTPUT_PER_MTOK = 1.10
+/**
+ * 归一化价格配置：补全缺失字段。
+ * - currency 缺失 → 默认 'CNY'
+ * - 缓存命中单价缺失 → 取输入单价的 1/4（DeepSeek 经验值）
+ * - 缓存写入单价缺失 → 0（默认关闭，需用户显式开启）
+ */
+function normalizePricing(p?: Partial<ProviderPricing> | null): ProviderPricing {
+  const input = Number(p?.inputPerMTok)
+  const inputPerMTok = Number.isFinite(input) && input >= 0 ? input : FALLBACK_INPUT_PER_MTOK
+
+  const output = Number(p?.outputPerMTok)
+  const outputPerMTok =
+    Number.isFinite(output) && output >= 0 ? output : FALLBACK_OUTPUT_PER_MTOK
+
+  const cacheHit = Number(p?.cacheHitPerMTok)
+  const cacheHitPerMTok =
+    Number.isFinite(cacheHit) && cacheHit >= 0 ? cacheHit : round4(inputPerMTok * 0.25)
+
+  const cacheWrite = Number(p?.cacheWritePerMTok)
+  const cacheWritePerMTok = Number.isFinite(cacheWrite) && cacheWrite >= 0 ? cacheWrite : 0
+
+  return {
+    currency: typeof p?.currency === 'string' && p.currency.trim() ? p.currency.trim() : 'CNY',
+    inputPerMTok,
+    outputPerMTok,
+    cacheHitEnabled: p?.cacheHitEnabled ?? true,
+    cacheHitPerMTok,
+    cacheWriteEnabled: p?.cacheWriteEnabled ?? false,
+    cacheWritePerMTok,
+  }
+}
+
+/** 保留 4 位小数（单价展示用） */
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000
+}
 
 /** 空文件结构 */
 function emptyFile(): ProvidersFile {
@@ -64,8 +102,7 @@ function toListItem(p: Provider): ProviderListItem {
     name: p.name,
     baseUrl: p.baseUrl,
     model: p.model,
-    inputPerMTok: p.inputPerMTok,
-    outputPerMTok: p.outputPerMTok,
+    pricing: p.pricing,
     apiKeyMasked: maskKey(p.apiKey),
   }
 }
@@ -119,8 +156,7 @@ export function addProvider(data: ProviderFormData): Provider {
     baseUrl: data.baseUrl.trim() || 'https://api.deepseek.com/v1',
     apiKey: data.apiKey.trim(),
     model: data.model.trim() || 'deepseek-v4-flash',
-    inputPerMTok: data.inputPerMTok ?? DEFAULT_INPUT_PER_MTOK,
-    outputPerMTok: data.outputPerMTok ?? DEFAULT_OUTPUT_PER_MTOK,
+    pricing: normalizePricing(data.pricing),
   }
   file.providers.push(provider)
   // 第一条自动设为默认
@@ -142,8 +178,9 @@ export function updateProvider(id: string, data: Partial<ProviderFormData>): Pro
     // apiKey 为空字符串时视为「不修改」（前端编辑时若未重填则不改 key）
     apiKey: data.apiKey != null && data.apiKey.trim() ? data.apiKey.trim() : old.apiKey,
     model: data.model != null ? (data.model.trim() || old.model) : old.model,
-    inputPerMTok: data.inputPerMTok ?? old.inputPerMTok,
-    outputPerMTok: data.outputPerMTok ?? old.outputPerMTok,
+    // pricing 为部分更新：以旧值为底，用传入字段覆盖后归一化
+    pricing:
+      data.pricing != null ? normalizePricing({ ...old.pricing, ...data.pricing }) : old.pricing,
   }
   saveRaw(file)
   return file.providers[idx]!

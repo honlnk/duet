@@ -3,7 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import config from '../config.js'
 import { AgentMemory } from '../memory/context.js'
-import { estimateCost } from '../utils/cost.js'
+import { estimateStepCost, round6 } from '../utils/cost.js'
 import type { CostRates } from '../utils/cost.js'
 import type {
   CreateSessionInput,
@@ -64,7 +64,12 @@ export function createSession({ topic, agents, config: cfg }: CreateSessionInput
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalTokens: 0,
+      totalCacheHitTokens: 0,
+      totalCacheMissTokens: 0,
+      totalCacheWriteTokens: 0,
       estCost: 0,
+      costCurrency: '',
+      totalChars: 0,
     },
     error: null,
     createdAt: now,
@@ -163,26 +168,37 @@ export function recoverSessions(): number {
 }
 
 /**
- * 累加 token 统计。
- * @param rates 该次调用所用 Provider 的单价；不同 Provider 价格不同时按实际传入。
- *             注意：成本是按累计 token 量乘以「最新一次传入的 rate」重算的近似值，
- *             混合多 Provider 的会话里会略有偏差，仅作展示参考。
+ * 累加 token 统计 + 增量累加成本。
+ *
+ * 成本按「单次调用用量 × 该次 Provider 单价」增量累加，
+ * 从根本上修复旧实现「按累计 token × 最新 rate 重算全量」在混合多 Provider 会话中的偏差。
+ *
+ * @param session 当前会话
+ * @param usage 该次调用返回的 usage（含缓存拆分字段）
+ * @param rates 该次调用所用 Provider 的完整单价（含缓存维度）
  */
 export function addStats(
   session: Session,
   usage: DeepSeekUsage,
-  rates?: CostRates
+  rates: CostRates
 ): SessionStats {
   const pt = usage.prompt_tokens || 0
   const ct = usage.completion_tokens || 0
+  const hit = usage.prompt_cache_hit_tokens || 0
+  const miss = usage.prompt_cache_miss_tokens || 0
+  const write = usage.prompt_cache_write_tokens || 0
+
   session.stats.totalPromptTokens += pt
   session.stats.totalCompletionTokens += ct
-  session.stats.totalTokens = session.stats.totalPromptTokens + session.stats.totalCompletionTokens
-  session.stats.estCost = estimateCost(
-    session.stats.totalPromptTokens,
-    session.stats.totalCompletionTokens,
-    rates
-  )
+  session.stats.totalCacheHitTokens += hit
+  session.stats.totalCacheMissTokens += miss
+  session.stats.totalCacheWriteTokens += write
+  session.stats.totalTokens =
+    session.stats.totalPromptTokens + session.stats.totalCompletionTokens
+  // 记录货币（取首个调用方 / 后续以实际为准），供前端展示符号
+  session.stats.costCurrency = rates.currency || session.stats.costCurrency
+  // 增量累加成本，不再重算全量
+  session.stats.estCost = round6(session.stats.estCost + estimateStepCost(usage, rates))
   return session.stats
 }
 

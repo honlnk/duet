@@ -68,7 +68,12 @@ export const useSessionStore = defineStore('session', () => {
     totalPromptTokens: 0,
     totalCompletionTokens: 0,
     totalTokens: 0,
+    totalCacheHitTokens: 0,
+    totalCacheMissTokens: 0,
+    totalCacheWriteTokens: 0,
     estCost: 0,
+    costCurrency: '',
+    totalChars: 0,
   })
 
   /** 会话开始时间戳（用于计时器） */
@@ -131,7 +136,12 @@ export const useSessionStore = defineStore('session', () => {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
       totalTokens: 0,
+      totalCacheHitTokens: 0,
+      totalCacheMissTokens: 0,
+      totalCacheWriteTokens: 0,
       estCost: 0,
+      costCurrency: '',
+      totalChars: 0,
     }
   }
 
@@ -228,7 +238,12 @@ export const useSessionStore = defineStore('session', () => {
           totalPromptTokens: msg.totalPromptTokens,
           totalCompletionTokens: msg.totalCompletionTokens,
           totalTokens: msg.totalTokens,
+          totalCacheHitTokens: msg.totalCacheHitTokens,
+          totalCacheMissTokens: msg.totalCacheMissTokens,
+          totalCacheWriteTokens: msg.totalCacheWriteTokens,
           estCost: msg.estCost,
+          costCurrency: msg.costCurrency,
+          totalChars: msg.totalChars,
         }
         return 'none'
 

@@ -164,9 +164,25 @@ export async function runLoop(session: Session): Promise<void> {
     apiKey: provB.apiKey,
     model: provB.model,
   }
-  // 缓存单价，供 addStats 用
-  const ratesA = { inputPerMTok: provA.inputPerMTok, outputPerMTok: provA.outputPerMTok }
-  const ratesB = { inputPerMTok: provB.inputPerMTok, outputPerMTok: provB.outputPerMTok }
+  // 缓存单价（含货币与缓存维度），供 addStats 增量累加成本用
+  const ratesA = {
+    currency: provA.pricing.currency,
+    inputPerMTok: provA.pricing.inputPerMTok,
+    outputPerMTok: provA.pricing.outputPerMTok,
+    cacheHitEnabled: provA.pricing.cacheHitEnabled,
+    cacheHitPerMTok: provA.pricing.cacheHitPerMTok,
+    cacheWriteEnabled: provA.pricing.cacheWriteEnabled,
+    cacheWritePerMTok: provA.pricing.cacheWritePerMTok,
+  }
+  const ratesB = {
+    currency: provB.pricing.currency,
+    inputPerMTok: provB.pricing.inputPerMTok,
+    outputPerMTok: provB.pricing.outputPerMTok,
+    cacheHitEnabled: provB.pricing.cacheHitEnabled,
+    cacheHitPerMTok: provB.pricing.cacheHitPerMTok,
+    cacheWriteEnabled: provB.pricing.cacheWriteEnabled,
+    cacheWritePerMTok: provB.pricing.cacheWritePerMTok,
+  }
 
   try {
     while (true) {
@@ -299,6 +315,8 @@ export async function runLoop(session: Session): Promise<void> {
 
         const usage: DeepSeekUsage = result.usage || {}
         addStats(session, usage, myRates)
+        // 累计发言字符数（用于右上角统计展示）
+        session.stats.totalChars += content.length
 
         // === 诊断日志：缓存命中情况 ===
         {
@@ -343,7 +361,12 @@ export async function runLoop(session: Session): Promise<void> {
           totalPromptTokens: session.stats.totalPromptTokens,
           totalCompletionTokens: session.stats.totalCompletionTokens,
           totalTokens: session.stats.totalTokens,
+          totalCacheHitTokens: session.stats.totalCacheHitTokens,
+          totalCacheMissTokens: session.stats.totalCacheMissTokens,
+          totalCacheWriteTokens: session.stats.totalCacheWriteTokens,
           estCost: session.stats.estCost,
+          costCurrency: session.stats.costCurrency,
+          totalChars: session.stats.totalChars,
         })
         broadcast(session.id, {
           type: 'turn_end',

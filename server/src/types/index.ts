@@ -99,7 +99,17 @@ export interface SessionStats {
   totalPromptTokens: number
   totalCompletionTokens: number
   totalTokens: number
+  /** 缓存命中 token 累计（命中按低价计费） */
+  totalCacheHitTokens: number
+  /** 缓存未命中 token 累计（按输入原价计费） */
+  totalCacheMissTokens: number
+  /** 缓存写入 token 累计（少数模型按额外价计费） */
+  totalCacheWriteTokens: number
   estCost: number
+  /** 成本货币代码（取默认 Provider 的货币，用于前端展示符号） */
+  costCurrency: string
+  /** 所有 AI 发言内容的累计字符数 */
+  totalChars: number
 }
 
 /** 完整会话对象（写盘 JSON 形状） */
@@ -157,6 +167,8 @@ export interface DeepSeekUsage {
   prompt_cache_hit_tokens?: number
   /** 缓存未命中 token（按高价计费） */
   prompt_cache_miss_tokens?: number
+  /** 缓存写入 token（Anthropic 风格字段，少数模型按额外价计费） */
+  prompt_cache_write_tokens?: number
   /** 输出 token 细分（含 reasoning） */
   completion_tokens_details?: {
     reasoning_tokens?: number
@@ -175,6 +187,29 @@ export interface ChatCompletionResult {
 /* ============================== Provider ============================== */
 
 /**
+ * 价格配置（Provider 维度）。
+ * - 输入、输出为必填基础项；
+ * - 缓存命中默认启用（多数 Provider 有该计价维度）；
+ * - 缓存写入默认关闭（仅 Anthropic 等少数模型存在该计价维度）。
+ */
+export interface ProviderPricing {
+  /** 货币代码，如 'CNY' | 'USD'，默认 'CNY' */
+  currency: string
+  /** 输入（缓存未命中）单价，单位：该货币/百万 token */
+  inputPerMTok: number
+  /** 输出单价，单位：该货币/百万 token */
+  outputPerMTok: number
+  /** 是否启用缓存命中计价维度（默认 true） */
+  cacheHitEnabled: boolean
+  /** 缓存命中单价（通常远低于 input） */
+  cacheHitPerMTok: number
+  /** 是否启用缓存写入计价维度（默认 false） */
+  cacheWriteEnabled: boolean
+  /** 缓存写入单价（仅少数模型存在该计价维度） */
+  cacheWritePerMTok: number
+}
+
+/**
  * 一个 Provider = 一套 OpenAI 兼容的连接配置。
  * 存储在 data/providers.json，可在 UI 中增删改查。
  */
@@ -188,10 +223,8 @@ export interface Provider {
   apiKey: string
   /** 模型 ID，如 deepseek-v4-flash */
   model: string
-  /** 输入单价（美元/百万 token，参考展示用） */
-  inputPerMTok: number
-  /** 输出单价（美元/百万 token，参考展示用） */
-  outputPerMTok: number
+  /** 价格配置（货币、输入/输出/缓存单价） */
+  pricing: ProviderPricing
 }
 
 /** 创建 / 更新 Provider 的入参（不含 id） */
@@ -200,8 +233,8 @@ export interface ProviderFormData {
   baseUrl: string
   apiKey: string
   model: string
-  inputPerMTok?: number
-  outputPerMTok?: number
+  /** 价格配置；为可选以兼容旧入参，后端会归一化补全 */
+  pricing?: Partial<ProviderPricing>
 }
 
 /**
@@ -213,8 +246,8 @@ export interface ProviderListItem {
   name: string
   baseUrl: string
   model: string
-  inputPerMTok: number
-  outputPerMTok: number
+  /** 价格配置（含货币与缓存单价） */
+  pricing: ProviderPricing
   /** 打码后的 key，如 sk-***x4f2，仅供前端显示「已配置」状态 */
   apiKeyMasked: string
 }
@@ -297,7 +330,12 @@ export interface StatsMsg {
   totalPromptTokens: number
   totalCompletionTokens: number
   totalTokens: number
+  totalCacheHitTokens: number
+  totalCacheMissTokens: number
+  totalCacheWriteTokens: number
   estCost: number
+  costCurrency: string
+  totalChars: number
 }
 
 /** 服务器 → 客户端：一轮结束（round = floor(messageCount/2)） */

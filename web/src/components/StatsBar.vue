@@ -49,9 +49,27 @@ const roundText = computed(() => {
   return `轮次 ${round.value} / ${max}`
 })
 
-/** 成本展示 */
+/** 成本展示：根据 costCurrency 选择货币符号（CNY→¥，USD→$，其他→代码前缀） */
 const costText = computed(() => {
-  return `${stats.value.totalTokens} token · $${stats.value.estCost.toFixed(4)}`
+  const cur = stats.value.costCurrency || 'CNY'
+  const symbol = cur === 'CNY' ? '¥' : cur === 'USD' ? '$' : cur + ' '
+  return `${stats.value.totalTokens.toLocaleString()} token · ${symbol}${stats.value.estCost.toFixed(4)}`
+})
+
+/** 缓存命中率：命中 / (命中 + 未命中)。无数据时为 0% */
+const cacheHitRate = computed(() => {
+  const hit = stats.value.totalCacheHitTokens
+  const miss = stats.value.totalCacheMissTokens
+  const total = hit + miss
+  if (total === 0) return '0%'
+  return `${((hit / total) * 100).toFixed(1)}%`
+})
+
+/** 总字数展示：超过万则用万为单位 */
+const charsText = computed(() => {
+  const n = stats.value.totalChars
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万字`
+  return `${n}字`
 })
 </script>
 
@@ -60,6 +78,8 @@ const costText = computed(() => {
     <StatusBadge :status="status" />
     <span v-if="showRound" class="hidden text-text-dim sm:inline">{{ roundText }}</span>
     <span v-if="showDuration" class="text-text-dim">{{ durationDisplay }}</span>
+    <span class="hidden text-text-dim md:inline">缓存命中 {{ cacheHitRate }}</span>
+    <span class="hidden text-text-dim md:inline">{{ charsText }}</span>
     <span class="hidden text-accent font-medium md:inline">{{ costText }}</span>
   </div>
 </template>

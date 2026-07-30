@@ -71,7 +71,17 @@ export interface SessionStats {
   totalPromptTokens: number
   totalCompletionTokens: number
   totalTokens: number
+  /** 缓存命中 token 累计 */
+  totalCacheHitTokens: number
+  /** 缓存未命中 token 累计 */
+  totalCacheMissTokens: number
+  /** 缓存写入 token 累计 */
+  totalCacheWriteTokens: number
   estCost: number
+  /** 成本货币代码（用于展示符号） */
+  costCurrency: string
+  /** 所有 AI 发言内容的累计字符数 */
+  totalChars: number
 }
 
 /**
@@ -128,14 +138,37 @@ export interface ConfigLimits {
 /* Provider（多套模型连接配置）                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 价格配置（Provider 维度）。
+ * - 输入、输出为必填基础项；
+ * - 缓存命中默认启用（多数 Provider 有该计价维度）；
+ * - 缓存写入默认关闭（仅 Anthropic 等少数模型存在该计价维度）。
+ */
+export interface ProviderPricing {
+  /** 货币代码，如 'CNY' | 'USD' */
+  currency: string
+  /** 输入（缓存未命中）单价，单位：该货币/百万 token */
+  inputPerMTok: number
+  /** 输出单价 */
+  outputPerMTok: number
+  /** 是否启用缓存命中计价维度 */
+  cacheHitEnabled: boolean
+  /** 缓存命中单价 */
+  cacheHitPerMTok: number
+  /** 是否启用缓存写入计价维度 */
+  cacheWriteEnabled: boolean
+  /** 缓存写入单价 */
+  cacheWritePerMTok: number
+}
+
 /** Provider 列表项（apiKey 打码，不暴露原文） */
 export interface ProviderListItem {
   id: string
   name: string
   baseUrl: string
   model: string
-  inputPerMTok: number
-  outputPerMTok: number
+  /** 价格配置（含货币与缓存单价） */
+  pricing: ProviderPricing
   /** 打码后的 key，如 sk-***x4f2 */
   apiKeyMasked: string
 }
@@ -146,8 +179,13 @@ export interface ProviderFormData {
   baseUrl: string
   apiKey: string
   model: string
-  inputPerMTok?: number
-  outputPerMTok?: number
+  /** 价格配置；可选以兼容旧入参，后端归一化补全 */
+  pricing?: Partial<ProviderPricing>
+}
+
+/** POST /api/providers/:id/models 或 POST /api/providers/models 的返回 */
+export interface ModelsResponse {
+  models: string[]
 }
 
 /** GET /api/providers 返回 */
@@ -211,7 +249,12 @@ export interface StatsEvent {
   totalPromptTokens: number
   totalCompletionTokens: number
   totalTokens: number
+  totalCacheHitTokens: number
+  totalCacheMissTokens: number
+  totalCacheWriteTokens: number
   estCost: number
+  costCurrency: string
+  totalChars: number
 }
 
 /** 服务器 → 客户端：一轮结束（round = floor(messageCount/2)） */

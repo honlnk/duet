@@ -7,6 +7,7 @@
 import type {
   ConfigLimits,
   CreateSessionPayload,
+  ModelsResponse,
   ProviderFormData,
   ProviderListResponse,
   Session,
@@ -94,6 +95,26 @@ export function deleteProvider(id: string): Promise<ProviderListResponse> {
 /** 设为默认 Provider */
 export function setDefaultProvider(id: string): Promise<ProviderListResponse> {
   return request<ProviderListResponse>(`/api/providers/default/${id}`, { method: 'PUT' })
+}
+
+/**
+ * 拉取模型列表：用已保存 Provider 的凭证（编辑/选择态）。
+ * 后端代理调用上游 GET /models，不暴露 apiKey。
+ */
+export function fetchProviderModels(id: string): Promise<ModelsResponse> {
+  return request<ModelsResponse>(`/api/providers/${id}/models`, { method: 'POST' })
+}
+
+/**
+ * 拉取模型列表：用临时凭证（新增态尚未保存时）。
+ * baseUrl / apiKey 仅在后端内存中使用，不落盘。
+ */
+export function fetchModelsByCred(baseUrl: string, apiKey: string): Promise<ModelsResponse> {
+  return request<ModelsResponse>('/api/providers/models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ baseUrl, apiKey }),
+  })
 }
 
 /** 构造 WebSocket 地址 */
