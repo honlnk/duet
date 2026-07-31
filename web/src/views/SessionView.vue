@@ -19,7 +19,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import MessageList from '@/components/MessageList.vue'
 import SessionInspector from '@/components/SessionInspector.vue'
-import type { ServerEvent } from '@/types/api'
+import type { ServerEvent, SessionStatus } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -41,14 +41,53 @@ const loadError = ref<string | null>(null)
 /** 主区 header 标题：会话话题，缺省回退品牌名 */
 const headerTitle = computed(() => session.session?.topic ?? 'Duet')
 
+/**
+ * finished 事件 reason → 列表项 status 的映射。
+ * 与后端 chatHandler.runLoop 的终态语义一致：
+ *  - stopped / shutdown（用户停止或服务重启）→ stopped
+ *  - error / crashed                       → error
+ *  - max_rounds / duration / absolute_limit → finished
+ */
+function reasonToStatus(reason: string): SessionStatus {
+  switch (reason) {
+    case 'stopped':
+    case 'shutdown':
+      return 'stopped'
+    case 'error':
+    case 'crashed':
+      return 'error'
+    default:
+      return 'finished'
+  }
+}
+
 /** WS 事件分发器 */
 function onEvent(msg: ServerEvent) {
-  const result = session.handleEvent(msg)
-  if (result === 'finished') {
-    const id = session.session?.id
-    if (id) void session.syncFinalStatus(id)
-    // 刷新侧栏列表（轮次/状态/消息数可能更新）
-    void sessions.refresh()
+  session.handleEvent(msg)
+  const id = session.session?.id
+  switch (msg.type) {
+    case 'started':
+      // 即时把列表项标记为 running（触发侧栏 spinner）
+      if (id) sessions.patch(id, { status: 'running' })
+      break
+    case 'turn_end':
+      // 更新消息数与时间，保持列表排序新鲜
+      if (id) {
+        sessions.patch(id, {
+          messageCount: msg.messageCount,
+          updatedAt: Date.now(),
+        })
+      }
+      break
+    case 'finished': {
+      if (id) {
+        // 先用 reason 推导终态即时刷新列表，再拉取权威数据对齐
+        sessions.patch(id, { status: reasonToStatus(msg.reason) })
+        void session.syncFinalStatus(id)
+        void sessions.refresh()
+      }
+      break
+    }
   }
 }
 
