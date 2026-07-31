@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useProviderStore } from '@/stores/provider'
 import { fetchProviderModels, fetchModelsByCred } from '@/services/api'
-import type { ProviderListItem, ProviderPricing } from '@/types/api'
+import type { ApiProtocol, ProviderListItem, ProviderPricing } from '@/types/api'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -28,14 +28,43 @@ function defaultPricing(): ProviderPricing {
   }
 }
 
+/** 协议选项：值 + 显示名 + 对应官方 baseUrl 占位符 */
+const protocolOptions: Array<{ value: ApiProtocol; label: string; baseUrl: string }> = [
+  { value: 'openai', label: 'OpenAI 兼容', baseUrl: 'https://api.deepseek.com/v1' },
+  { value: 'openai-responses', label: 'OpenAI Responses', baseUrl: 'https://api.openai.com/v1' },
+  { value: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com' },
+  { value: 'gemini', label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com' },
+]
+
+/** 协议 → 显示名（列表标签用） */
+function protocolLabel(p: ApiProtocol): string {
+  return protocolOptions.find((o) => o.value === p)?.label ?? p
+}
+
+/** 当前协议对应的 baseUrl 占位符 */
+const baseUrlPlaceholder = computed(() => {
+  const opt = protocolOptions.find((o) => o.value === form.protocol)
+  return opt?.baseUrl ?? 'https://api.example.com/v1'
+})
+
 const form = reactive({
   name: '',
   baseUrl: 'https://api.deepseek.com/v1',
   apiKey: '',
   apiKeyConfirm: '',
   model: '',
+  protocol: 'openai' as ApiProtocol,
   ...defaultPricing(),
 })
+
+/** 切换协议时，若 baseUrl 为空或仍是某协议默认值，则更新为该协议的默认地址 */
+function onProtocolChange() {
+  const opt = protocolOptions.find((o) => o.value === form.protocol)
+  if (!opt) return
+  // 当前 baseUrl 为空，或等于任意协议的默认地址时，自动切换到新协议的默认地址
+  const isDefault = !form.baseUrl.trim() || protocolOptions.some((o) => o.baseUrl === form.baseUrl)
+  if (isDefault) form.baseUrl = opt.baseUrl
+}
 
 /* ----------------------- 模型列表拉取 ----------------------- */
 const modelsLoading = ref(false)
@@ -61,7 +90,7 @@ async function loadModels() {
     const res =
       editing.value && editing.value !== 'new'
         ? await fetchProviderModels(editing.value)
-        : await fetchModelsByCred(form.baseUrl.trim(), form.apiKey.trim())
+        : await fetchModelsByCred(form.baseUrl.trim(), form.apiKey.trim(), form.protocol)
     modelsList.value = res.models
     if (res.models.length === 0) {
       modelsError.value = '上游未返回任何模型'
@@ -96,6 +125,7 @@ function startEdit(p: ProviderListItem) {
   form.apiKey = '' // 编辑时不回显真实 key
   form.apiKeyConfirm = ''
   form.model = p.model
+  form.protocol = p.protocol
   Object.assign(form, defaultPricing(), p.pricing)
   modelsList.value = []
   modelsError.value = ''
@@ -110,6 +140,7 @@ function startNew() {
     apiKey: '',
     apiKeyConfirm: '',
     model: '',
+    protocol: 'openai' as ApiProtocol,
     ...defaultPricing(),
   })
   modelsList.value = []
@@ -160,6 +191,7 @@ async function save() {
         baseUrl: form.baseUrl.trim(),
         apiKey: form.apiKey.trim(),
         model: form.model.trim(),
+        protocol: form.protocol,
         pricing,
       })
     } else if (editing.value) {
@@ -167,6 +199,7 @@ async function save() {
         name: form.name.trim(),
         baseUrl: form.baseUrl.trim(),
         model: form.model.trim(),
+        protocol: form.protocol,
         pricing,
       }
       // 只在用户填了新 key 时才传
@@ -269,6 +302,9 @@ function onOverlayMouseUp(e: MouseEvent) {
                       v-if="p.id === defaultId"
                       class="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent"
                     >默认</span>
+                    <span class="rounded bg-bg-hover px-1.5 py-0.5 text-[10px] text-text-dim">
+                      {{ protocolLabel(p.protocol) }}
+                    </span>
                   </div>
                   <div class="mt-0.5 truncate text-xs text-text-muted">{{ p.baseUrl }}</div>
                   <div class="mt-1 flex items-center gap-3 text-xs text-text-dim">
@@ -326,6 +362,19 @@ function onOverlayMouseUp(e: MouseEvent) {
         <!-- 编辑/新增态 -->
         <template v-else>
           <div class="flex flex-col gap-3">
+            <!-- API 协议：决定请求端点/鉴权/流式格式，切换时联动 baseUrl -->
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-text-dim">API 协议</label>
+              <select
+                v-model="form.protocol"
+                class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                @change="onProtocolChange"
+              >
+                <option v-for="o in protocolOptions" :key="o.value" :value="o.value">
+                  {{ o.label }}
+                </option>
+              </select>
+            </div>
             <div class="flex flex-col gap-1">
               <label class="text-xs text-text-dim">名称</label>
               <input
@@ -340,7 +389,7 @@ function onOverlayMouseUp(e: MouseEvent) {
               <input
                 v-model="form.baseUrl"
                 type="text"
-                placeholder="https://api.deepseek.com/v1"
+                :placeholder="baseUrlPlaceholder"
                 class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
             </div>

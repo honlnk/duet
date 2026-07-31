@@ -1,5 +1,5 @@
-import { chatComplete } from '../ai/deepseek.js'
-import type { ConnectionConfig } from '../ai/deepseek.js'
+import { getAdapter } from '../ai/providers/index.js'
+import type { ConnectionConfig } from '../types/index.js'
 import { buildSummaryPrompt } from '../ai/prompts.js'
 import type { MemoryMessage } from '../types/index.js'
 
@@ -48,16 +48,19 @@ export async function summarizeConversation({
     words,
   })
 
-  const result = await chatComplete(
-    [
+  const result = await getAdapter(conn.protocol).chatComplete({
+    messages: [
       {
         role: 'system',
         content: '你是一个对话摘要助手。请严格按照用户指令输出摘要。',
       },
       { role: 'user', content: prompt },
     ],
-    { conn, temperature: 0.3, maxTokens: 600, signal }
-  )
+    conn,
+    temperature: 0.3,
+    maxTokens: 600,
+    signal,
+  })
 
   return (result.content || '').trim()
 }

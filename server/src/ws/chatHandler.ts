@@ -1,5 +1,6 @@
-import { chatCompletion } from '../ai/deepseek.js'
-import type { ConnectionConfig } from '../ai/deepseek.js'
+import { getAdapter } from '../ai/providers/index.js'
+import type { ConnectionConfig } from '../types/index.js'
+import type { NormalizedUsage } from '../ai/providers/types.js'
 import {
   buildOpeningPrompt,
   wrapOtherMessage,
@@ -16,7 +17,6 @@ import config from '../config.js'
 import type {
   AgentId,
   BroadcastFn,
-  DeepSeekUsage,
   PersistedMessage,
   Session,
   SessionStatus,
@@ -158,11 +158,13 @@ export async function runLoop(session: Session): Promise<void> {
     baseUrl: provA.baseUrl,
     apiKey: provA.apiKey,
     model: provA.model,
+    protocol: provA.protocol,
   }
   const connB: ConnectionConfig = {
     baseUrl: provB.baseUrl,
     apiKey: provB.apiKey,
     model: provB.model,
+    protocol: provB.protocol,
   }
   // 缓存单价（含货币与缓存维度），供 addStats 增量累加成本用
   const ratesA = {
@@ -291,7 +293,7 @@ export async function runLoop(session: Session): Promise<void> {
       rt.abortCtrl = new AbortController()
       let content = ''
       try {
-        const result = await chatCompletion({
+        const result = await getAdapter(myConn.protocol).chatCompletion({
           messages: apiMessages,
           conn: myConn,
           temperature: session.config.temperature,
@@ -313,7 +315,7 @@ export async function runLoop(session: Session): Promise<void> {
           content = '（无内容）'
         }
 
-        const usage: DeepSeekUsage = result.usage || {}
+        const usage: NormalizedUsage = result.usage
         addStats(session, usage, myRates)
         // 累计发言字符数（用于右上角统计展示）
         session.stats.totalChars += content.length
@@ -324,10 +326,9 @@ export async function runLoop(session: Session): Promise<void> {
           const hit = usage.prompt_cache_hit_tokens ?? 0
           const miss = usage.prompt_cache_miss_tokens ?? 0
           const completion = usage.completion_tokens ?? 0
-          const reasoning = usage.completion_tokens_details?.reasoning_tokens ?? 0
           const hitRate = prompt > 0 ? ((hit / prompt) * 100).toFixed(1) : '0.0'
           console.log(
-            `[cache] 轮${round} ${agentId} [${myProvName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion} (其中思维链=${reasoning})`
+            `[cache] 轮${round} ${agentId} [${myProvName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion}`
           )
         }
 

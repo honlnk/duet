@@ -5,6 +5,7 @@
  * 对应 server/src/routes/sessions.ts 和 health.ts。
  */
 import type {
+  ApiProtocol,
   ConfigLimits,
   CreateSessionPayload,
   ModelsResponse,
@@ -107,13 +108,17 @@ export function fetchProviderModels(id: string): Promise<ModelsResponse> {
 
 /**
  * 拉取模型列表：用临时凭证（新增态尚未保存时）。
- * baseUrl / apiKey 仅在后端内存中使用，不落盘。
+ * baseUrl / apiKey / protocol 仅在后端内存中使用，不落盘。
  */
-export function fetchModelsByCred(baseUrl: string, apiKey: string): Promise<ModelsResponse> {
+export function fetchModelsByCred(
+  baseUrl: string,
+  apiKey: string,
+  protocol: ApiProtocol = 'openai'
+): Promise<ModelsResponse> {
   return request<ModelsResponse>('/api/providers/models', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ baseUrl, apiKey }),
+    body: JSON.stringify({ baseUrl, apiKey, protocol }),
   })
 }
 

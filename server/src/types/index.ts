@@ -13,6 +13,15 @@ export type AgentId = 'A' | 'B'
 /** 消息角色（发给 LLM 的完整消息） */
 export type MessageRole = 'system' | 'user' | 'assistant'
 
+/**
+ * 支持的 API 协议。
+ * - openai: OpenAI 兼容（/chat/completions），DeepSeek/OpenAI/OpenRouter 等
+ * - openai-responses: OpenAI Responses API（/responses）
+ * - anthropic: Anthropic Messages API（/messages），Claude 官方
+ * - gemini: Google Gemini API（generateContent）
+ */
+export type ApiProtocol = 'openai' | 'openai-responses' | 'anthropic' | 'gemini'
+
 /** 会话状态 */
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'finished' | 'error'
 
@@ -210,7 +219,19 @@ export interface ProviderPricing {
 }
 
 /**
- * 一个 Provider = 一套 OpenAI 兼容的连接配置。
+ * AI 调用所需的连接参数。
+ * 由调用方从 Provider 解析后显式传入，支持多 Provider 并发（每个 Agent 可用不同协议/baseUrl/apiKey/model）。
+ */
+export interface ConnectionConfig {
+  baseUrl: string
+  apiKey: string
+  model: string
+  /** API 协议类型，决定走哪个适配器 */
+  protocol: ApiProtocol
+}
+
+/**
+ * 一个 Provider = 一套连接配置（含协议、凭证、模型、价格）。
  * 存储在 data/providers.json，可在 UI 中增删改查。
  */
 export interface Provider {
@@ -223,6 +244,8 @@ export interface Provider {
   apiKey: string
   /** 模型 ID，如 deepseek-v4-flash */
   model: string
+  /** API 协议类型（默认 openai） */
+  protocol: ApiProtocol
   /** 价格配置（货币、输入/输出/缓存单价） */
   pricing: ProviderPricing
 }
@@ -233,6 +256,8 @@ export interface ProviderFormData {
   baseUrl: string
   apiKey: string
   model: string
+  /** API 协议类型 */
+  protocol?: ApiProtocol
   /** 价格配置；为可选以兼容旧入参，后端会归一化补全 */
   pricing?: Partial<ProviderPricing>
 }
@@ -246,6 +271,8 @@ export interface ProviderListItem {
   name: string
   baseUrl: string
   model: string
+  /** API 协议类型 */
+  protocol: ApiProtocol
   /** 价格配置（含货币与缓存单价） */
   pricing: ProviderPricing
   /** 打码后的 key，如 sk-***x4f2，仅供前端显示「已配置」状态 */

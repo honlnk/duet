@@ -7,12 +7,12 @@ import { estimateStepCost, round6 } from '../utils/cost.js'
 import type { CostRates } from '../utils/cost.js'
 import type {
   CreateSessionInput,
-  DeepSeekUsage,
   Session,
   SessionConfig,
   SessionListItem,
   SessionStats,
 } from '../types/index.js'
+import type { NormalizedUsage } from '../ai/providers/types.js'
 
 /** 默认会话配置 */
 export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionConfig {
@@ -179,7 +179,7 @@ export function recoverSessions(): number {
  */
 export function addStats(
   session: Session,
-  usage: DeepSeekUsage,
+  usage: NormalizedUsage,
   rates: CostRates
 ): SessionStats {
   const pt = usage.prompt_tokens || 0

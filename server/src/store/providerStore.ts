@@ -67,6 +67,15 @@ function loadRaw(): ProvidersFile {
     const raw = fs.readFileSync(file, 'utf8')
     const parsed = JSON.parse(raw) as ProvidersFile
     if (!Array.isArray(parsed.providers)) return emptyFile()
+    // 补全旧数据缺的 protocol 字段（默认 openai）
+    let dirty = false
+    for (const p of parsed.providers) {
+      if (!p.protocol) {
+        p.protocol = 'openai'
+        dirty = true
+      }
+    }
+    if (dirty) saveRaw(parsed)
     return parsed
   } catch (e) {
     console.error('[provider] 配置文件损坏:', e instanceof Error ? e.message : e)
@@ -102,6 +111,7 @@ function toListItem(p: Provider): ProviderListItem {
     name: p.name,
     baseUrl: p.baseUrl,
     model: p.model,
+    protocol: p.protocol,
     pricing: p.pricing,
     apiKeyMasked: maskKey(p.apiKey),
   }
@@ -156,6 +166,7 @@ export function addProvider(data: ProviderFormData): Provider {
     baseUrl: data.baseUrl.trim() || 'https://api.deepseek.com/v1',
     apiKey: data.apiKey.trim(),
     model: data.model.trim() || 'deepseek-v4-flash',
+    protocol: data.protocol ?? 'openai',
     pricing: normalizePricing(data.pricing),
   }
   file.providers.push(provider)
@@ -178,6 +189,7 @@ export function updateProvider(id: string, data: Partial<ProviderFormData>): Pro
     // apiKey 为空字符串时视为「不修改」（前端编辑时若未重填则不改 key）
     apiKey: data.apiKey != null && data.apiKey.trim() ? data.apiKey.trim() : old.apiKey,
     model: data.model != null ? (data.model.trim() || old.model) : old.model,
+    protocol: data.protocol ?? old.protocol,
     // pricing 为部分更新：以旧值为底，用传入字段覆盖后归一化
     pricing:
       data.pricing != null ? normalizePricing({ ...old.pricing, ...data.pricing }) : old.pricing,

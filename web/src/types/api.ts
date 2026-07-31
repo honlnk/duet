@@ -161,12 +161,23 @@ export interface ProviderPricing {
   cacheWritePerMTok: number
 }
 
+/**
+ * 支持的 API 协议。
+ * - openai: OpenAI 兼容（/chat/completions）
+ * - openai-responses: OpenAI Responses API（/responses）
+ * - anthropic: Anthropic Messages API（Claude）
+ * - gemini: Google Gemini API
+ */
+export type ApiProtocol = 'openai' | 'openai-responses' | 'anthropic' | 'gemini'
+
 /** Provider 列表项（apiKey 打码，不暴露原文） */
 export interface ProviderListItem {
   id: string
   name: string
   baseUrl: string
   model: string
+  /** API 协议类型 */
+  protocol: ApiProtocol
   /** 价格配置（含货币与缓存单价） */
   pricing: ProviderPricing
   /** 打码后的 key，如 sk-***x4f2 */
@@ -179,6 +190,8 @@ export interface ProviderFormData {
   baseUrl: string
   apiKey: string
   model: string
+  /** API 协议类型 */
+  protocol?: ApiProtocol
   /** 价格配置；可选以兼容旧入参，后端归一化补全 */
   pricing?: Partial<ProviderPricing>
 }

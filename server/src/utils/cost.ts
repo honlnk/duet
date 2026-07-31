@@ -1,4 +1,4 @@
-import type { DeepSeekUsage } from '../types/index.js'
+import type { NormalizedUsage } from '../ai/providers/types.js'
 
 /**
  * 计费单价（Provider 维度）。
@@ -33,7 +33,7 @@ export const FALLBACK_OUTPUT_PER_MTOK = 1.1
  * @param rates 该次调用所用 Provider 的单价
  * @returns 该次调用成本（不四舍五入，由累加方控制精度）
  */
-export function estimateStepCost(usage: DeepSeekUsage, rates: CostRates): number {
+export function estimateStepCost(usage: NormalizedUsage, rates: CostRates): number {
   const hit = usage.prompt_cache_hit_tokens ?? 0
   const miss = usage.prompt_cache_miss_tokens ?? 0
   const write = usage.prompt_cache_write_tokens ?? 0
