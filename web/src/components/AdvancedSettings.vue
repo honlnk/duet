@@ -78,7 +78,7 @@ function labelOf(id: string): string {
         <label class="text-xs text-text-dim">智能体 A 模型</label>
         <select
           v-model="values.providerA"
-          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
         >
           <option value="">默认（{{ labelOf(defaultId) }}）</option>
           <option v-for="p in providers" :key="p.id" :value="p.id">
@@ -92,7 +92,7 @@ function labelOf(id: string): string {
         <label class="text-xs text-text-dim">智能体 B 模型</label>
         <select
           v-model="values.providerB"
-          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
         >
           <option value="">默认（{{ labelOf(defaultId) }}）</option>
           <option v-for="p in providers" :key="p.id" :value="p.id">
@@ -113,7 +113,7 @@ function labelOf(id: string): string {
           type="text"
           :inputmode="f.inputmode ?? 'decimal'"
           :placeholder="f.placeholder"
-          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
         />
         <span v-if="f.hint" class="text-xs text-text-muted">{{ f.hint }}</span>
       </div>

@@ -1,36 +1,52 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+/**
+ * 应用根布局
+ *
+ * 三段式：顶栏（AppHeader）+ 主体（会话列表侧栏 + RouterView）+ 全局模态（NewChatModal / SettingsModal）。
+ *
+ * - 侧栏从「新建对话表单」改为「会话历史列表」（SessionSidebar）；
+ * - 新建对话由顶栏「新建」按钮触发，打开 NewChatModal 模态；
+ * - 设置（含 Provider / 智能体模板 / 话题模板 / 历史预设）由顶栏齿轮触发 SettingsModal；
+ * - 会话工作区交给路由 SessionView，WS 在其内部管理。
+ */
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
+import { useSessionsStore } from '@/stores/sessions'
 import { useFormStore } from '@/stores/form'
 import { useDraftStore } from '@/stores/draft'
 import { useConfigStore } from '@/stores/config'
 import { useProviderStore } from '@/stores/provider'
-import { useWebSocket } from '@/composables/useWebSocket'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import AppHeader from '@/components/AppHeader.vue'
-import SettingsSidebar from '@/components/SettingsSidebar.vue'
-import MessageList from '@/components/MessageList.vue'
-import EventLog from '@/components/EventLog.vue'
-import ProviderPanel from '@/components/ProviderPanel.vue'
-import type { ServerEvent } from '@/types/api'
+import SessionSidebar from '@/components/SessionSidebar.vue'
+import NewChatModal from '@/components/NewChatModal.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 
+const route = useRoute()
 const session = useSessionStore()
+const sessions = useSessionsStore()
 const form = useFormStore()
 const draft = useDraftStore()
 const config = useConfigStore()
 const provider = useProviderStore()
-const { status, eventLog } = storeToRefs(session)
 
-const { connected, open: openWs, send: sendWs, close: closeWs } = useWebSocket()
 const { isMobile } = useBreakpoint()
 
 /** 平板/桌面端：侧栏是否收起（内联模式） */
 const sidebarCollapsed = ref(false)
 /** 手机端：抽屉是否展开（覆盖模式） */
 const drawerOpen = ref(false)
-/** Provider 管理面板是否展开 */
-const showProviders = ref(false)
+/** 新建对话模态 */
+const showNewChat = ref(false)
+/** 综合设置模态 */
+const showSettings = ref(false)
+
+/** 当前会话 id（路由派生） */
+const currentSessionId = computed(() =>
+  route.name === 'session' ? (route.params.id as string) : null,
+)
 
 /** 切换侧栏：手机走抽屉开关，平板/桌面走内联收起 */
 function toggleSidebar() {
@@ -43,6 +59,17 @@ watch(isMobile, (mobile) => {
   if (!mobile) drawerOpen.value = false
 })
 
+/** 路由变化时：同步侧栏 currentId、关闭抽屉 */
+watch(currentSessionId, (id) => {
+  sessions.currentId = id
+  drawerOpen.value = false
+})
+
+/** 打开新建对话模态前，确保 Provider 已加载（新建表单依赖它） */
+function openNewChat() {
+  showNewChat.value = true
+}
+
 /** 草稿自动保存：监听表单字段变化，防抖存盘 */
 watch(
   () => ({ ...form.values }),
@@ -50,106 +77,57 @@ watch(
   { deep: true },
 )
 
-/** WS 事件分发器 */
-function onEvent(msg: ServerEvent) {
-  const result = session.handleEvent(msg)
-  if (result === 'finished') {
-    // 重拉权威终态
-    const id = session.session?.id
-    if (id) void session.syncFinalStatus(id)
-  }
-}
-
-/* ----------------------------- 动作 ----------------------------- */
-
-/** 开始对话 */
-async function handleStart() {
-  if (!form.hasTopic) {
-    session.log('error', '请先填写话题')
-    return
-  }
-  try {
-    // 创建会话 → 渲染 → 保存到历史
-    const id = await session.create(form.payload)
-    draft.saveToHistory({ ...form.values })
-    // 连接 WS 并在 onOpen 自动发送 start
-    openWs(id, { onEvent })
-    sendWs({ type: 'start' })
-    // 手机端：收起抽屉，让出空间看对话
-    drawerOpen.value = false
-  } catch (e) {
-    session.log('error', `创建会话失败：${(e as Error).message}`)
-  }
-}
-
-/** 停止对话 */
-function handleStop() {
-  sendWs({ type: 'stop' })
-}
-
-/** 重置 */
-function handleReset() {
-  closeWs()
-  session.clearSession()
-  drawerOpen.value = false
-}
-
 /* --------------------------- 生命周期 --------------------------- */
 
 onMounted(async () => {
-  // 拉取全局限制
-  await config.load()
-  // 拉取 Provider 列表
-  await provider.load()
-  // 恢复草稿
+  // 全局限制、Provider、会话列表
+  await Promise.all([config.load(), provider.load(), sessions.load()])
+  // 恢复草稿（供 NewChatModal 使用）
   const saved = draft.readDraft()
-  if (saved) {
-    form.replace(saved)
-    session.log('info', '已恢复上次的草稿')
-  }
+  if (saved) form.replace(saved)
+  // 同步当前会话 id
+  sessions.currentId = currentSessionId.value
 })
 
-// 连接状态变化时记日志（可选，便于调试）
-watch(connected, (c) => {
-  if (!c && status.value === 'running') {
-    session.log('info', '连接断开，正在重连…')
-  }
-})
+// storeToRefs 仅用于解构响应式引用（此处暂未用到，保留 import 以备扩展）
+void storeToRefs
 </script>
 
 <template>
   <div class="flex h-full flex-col">
     <AppHeader
       @toggle-sidebar="toggleSidebar"
-      @open-providers="showProviders = true"
+      @new-chat="openNewChat"
+      @open-settings="showSettings = true"
     />
 
     <main class="relative flex min-h-0 flex-1">
-      <!-- 侧栏 -->
-      <SettingsSidebar
+      <!-- 会话列表侧栏 -->
+      <SessionSidebar
         :collapsed="sidebarCollapsed"
         :is-mobile="isMobile"
         :drawer-open="drawerOpen"
-        @start="handleStart"
-        @stop="handleStop"
-        @reset="handleReset"
+        @new-chat="openNewChat"
       />
 
       <!-- 手机端抽屉遮罩 -->
       <div
         v-if="isMobile && drawerOpen"
-        class="fixed inset-0 z-30 bg-black/50 md:hidden"
+        class="fixed inset-0 z-30 bg-black/50 lg:hidden"
         @click="drawerOpen = false"
       />
 
-      <!-- 聊天区 -->
-      <section class="flex min-w-0 flex-1 flex-col bg-bg">
-        <MessageList />
-        <EventLog :items="eventLog" />
-      </section>
+      <!-- 主区：路由视图（HomeView / SessionView） -->
+      <router-view />
     </main>
 
-    <!-- Provider 管理面板 -->
-    <ProviderPanel v-if="showProviders" @close="showProviders = false" />
+    <!-- 新建对话模态 -->
+    <NewChatModal v-if="showNewChat" @close="showNewChat = false" />
+
+    <!-- 综合设置模态 -->
+    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+
+    <!-- 隐藏引用：session store 供模板外的逻辑共享 -->
+    <span hidden>{{ session.session?.id }}</span>
   </div>
 </template>

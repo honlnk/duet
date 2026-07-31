@@ -17,6 +17,14 @@ import NumberStepper from "./NumberStepper.vue";
 
 const emit = defineEmits<{ close: [] }>();
 
+/**
+ * 内嵌模式：true 时不渲染遮罩/外层壳/关闭按钮，
+ * 供 SettingsModal 作为 Provider tab 嵌入；false（默认）为独立居中模态。
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), {
+  embedded: false,
+});
+
 const providerStore = useProviderStore();
 const { providers, defaultId } = storeToRefs(providerStore);
 
@@ -393,15 +401,20 @@ function onOverlayMouseUp(e: MouseEvent) {
 </script>
 
 <template>
-  <!-- 遮罩层：mousedown/mouseup 都在蒙层本身时才关闭，避免选中文本拖出松开误触发 -->
+  <!--
+    容器：embedded 模式为普通 div（嵌入 SettingsModal tab），独立模式为居中遮罩模态。
+    mousedown/mouseup 都在蒙层本身时才关闭，避免选中文本拖出松开误触发。
+  -->
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-    @mousedown="onOverlayMouseDown"
-    @mouseup="onOverlayMouseUp"
+    :class="embedded ? 'flex h-full flex-col' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'"
+    @mousedown="embedded ? undefined : onOverlayMouseDown"
+    @mouseup="embedded ? undefined : onOverlayMouseUp"
   >
     <!-- 面板主体 -->
     <div
-      class="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-soft shadow-2xl"
+      :class="embedded
+        ? 'flex h-full w-full flex-col overflow-hidden bg-white'
+        : 'flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-soft shadow-2xl'"
     >
       <!-- 头部 -->
       <div

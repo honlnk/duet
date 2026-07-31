@@ -89,6 +89,12 @@ export const useSessionStore = defineStore('session', () => {
   /** 错误信息（最近一次） */
   const errorMessage = ref<string | null>(null)
 
+  /**
+   * 待启动标记：新建会话后置为 true，由 SessionView 加载该会话后
+   * 据此建立 WS 并发送 start（避免 NewChatModal 与 SessionView 双重管理 WS）。
+   */
+  const pendingStart = ref(false)
+
   // --- 流式状态（非响应式，避免每个 chunk 触发大量依赖） ---
   let streamingAgentId: AgentId | null = null
 
@@ -314,6 +320,18 @@ export const useSessionStore = defineStore('session', () => {
     return s.id
   }
 
+  /**
+   * 按 id 加载已有会话（从路由 param 恢复 / 切换历史会话）。
+   * 会重置运行态并重放该会话的消息。返回是否加载成功。
+   */
+  async function load(id: string): Promise<boolean> {
+    const s = await getSession(id)
+    if (!s) return false
+    resetRuntime()
+    renderSession(s)
+    return true
+  }
+
   /** 重置：清空当前会话与运行态 */
   function clearSession() {
     session.value = null
@@ -338,6 +356,7 @@ export const useSessionStore = defineStore('session', () => {
     durationSec,
     eventLog,
     errorMessage,
+    pendingStart,
     // computed
     isRunning,
     canStop,
@@ -345,6 +364,7 @@ export const useSessionStore = defineStore('session', () => {
     handleEvent,
     syncFinalStatus,
     create,
+    load,
     clearSession,
     resetRuntime,
     log,

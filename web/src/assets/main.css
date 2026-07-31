@@ -1,34 +1,47 @@
 @import 'tailwindcss';
 
 /*
- * Duet 暗色主题设计 token（Tailwind v4 CSS-first 配置）
- * 颜色命名沿用旧版 styles.css 的设计变量，便于直观对照。
+ * Duet 设计 token（Tailwind v4 CSS-first 配置）
+ *
+ * 设计语言：深色侧栏 + 亮色主区 + 近黑主按钮
+ * （参考 gpt-image-studio / NovAI 的 VS Code 式明暗强对比）。
+ * 颜色命名沿用语义化变量，组件用 bg-bg / text-text-main 等引用，
+ * 改主题只需调整这里的取值，组件 class 无需逐个改动。
  */
 @theme {
   /* 背景层 */
-  --color-bg: #0f1115;
-  --color-bg-soft: #171a21;
-  --color-bg-card: #1e222b;
-  --color-bg-hover: #262b36;
+  --color-bg: #ffffff; /* 主工作区（亮） */
+  --color-bg-soft: #171717; /* 侧栏 / 顶栏（深近黑，视觉签名） */
+  --color-bg-card: #f9fafb; /* 卡片 / 气泡（gray-50） */
+  --color-bg-hover: #f3f4f6; /* hover 底色（gray-100） */
 
   /* 边框 / 文本 */
-  --color-border-subtle: #2c3340;
-  --color-text-main: #e6e9ef;
-  --color-text-dim: #8b94a7;
-  --color-text-muted: #5c6477;
+  --color-border-subtle: #e5e7eb; /* gray-200 */
+  --color-text-main: #111827; /* gray-900，主文字 */
+  --color-text-dim: #6b7280; /* gray-500，次文字 */
+  --color-text-muted: #9ca3af; /* gray-400，弱文字 */
 
-  /* 主题色 */
-  --color-accent: #7c5cff;
-  --color-accent-soft: rgba(124, 92, 255, 0.15);
+  /*
+   * 主题色：近黑实心主按钮（替代旧紫色）。
+   * accent-soft 仅用于深色面板内的半透明强调叠层。
+   */
+  --color-accent: #111827; /* gray-900，主按钮填充 */
+  --color-accent-hover: #1f2937; /* gray-800，主按钮 hover */
+  --color-accent-soft: rgba(255, 255, 255, 0.1); /* 深色面板内 hover/active 叠层 */
 
-  /* 智能体配色 */
-  --color-agent-a: #4f9dff;
-  --color-agent-b: #ff7a9c;
+  /* focus 强调（保留少量蓝色交互反馈） */
+  --color-focus: #3b82f6; /* blue-500 */
+
+  /* 智能体配色（保留） */
+  --color-agent-a: #2563eb; /* blue-600，气泡填充用 */
+  --color-agent-a-soft: #dbeafe; /* blue-100，浅底 */
+  --color-agent-b: #db2777; /* pink-600 */
+  --color-agent-b-soft: #fce7f3; /* pink-100 */
 
   /* 语义色 */
-  --color-warn: #ffb454;
-  --color-danger: #ff5470;
-  --color-ok: #4ade80;
+  --color-warn: #d97706; /* amber-600 */
+  --color-danger: #dc2626; /* red-600 */
+  --color-ok: #16a34a; /* green-600 */
 
   /* 流式光标动画 */
   --animate-blink: blink 1s step-end infinite;
@@ -44,7 +57,7 @@
   }
 }
 
-/* 全局基础样式：暗色 + 全高度 + 中文字体 */
+/* 全局基础样式：全高度 + 中文字体 */
 html,
 body,
 #app {
@@ -62,15 +75,26 @@ body {
   line-height: 1.6;
 }
 
-/* 自定义滚动条（与旧版一致） */
+/*
+ * 自定义滚动条：浅色主题下用低对比的细滚动条，
+ * hover 才微微加深，不抢视觉。
+ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-subtle);
+  background: rgba(156, 163, 175, 0.4); /* gray-400/40 */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: rgba(156, 163, 175, 0.7); /* gray-400/70 */
+}
+
+/* 深色侧栏内的滚动条用浅色半透明（white/20） */
+.bg-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+.bg-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
