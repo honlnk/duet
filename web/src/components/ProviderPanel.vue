@@ -70,6 +70,20 @@ function onProtocolChange() {
 const modelsLoading = ref(false)
 const modelsList = ref<string[]>([])
 const modelsError = ref('')
+/** 模型下拉是否展开 */
+const modelsDropdownOpen = ref(false)
+/** 输入框值过滤后的模型选项 */
+const filteredModels = computed(() => {
+  const q = form.model.trim().toLowerCase()
+  if (!q) return modelsList.value
+  return modelsList.value.filter((m) => m.toLowerCase().includes(q))
+})
+
+/** 选中某个模型 */
+function pickModel(m: string) {
+  form.model = m
+  modelsDropdownOpen.value = false
+}
 
 /** 拉取模型列表：编辑态用已保存 id，新增态用临时凭证 */
 async function loadModels() {
@@ -422,16 +436,30 @@ function onOverlayMouseUp(e: MouseEvent) {
                   {{ modelsLoading ? '获取中…' : '获取列表' }}
                 </button>
               </div>
-              <input
-                v-model="form.model"
-                type="text"
-                list="provider-models-datalist"
-                placeholder="deepseek-v4-flash"
-                class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-              />
-              <datalist id="provider-models-datalist">
-                <option v-for="m in modelsList" :key="m" :value="m" />
-              </datalist>
+              <div class="relative">
+                <input
+                  v-model="form.model"
+                  type="text"
+                  placeholder="deepseek-v4-flash"
+                  class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  @focus="modelsDropdownOpen = modelsList.length > 0"
+                  @blur="modelsDropdownOpen = false"
+                />
+                <!-- 模型下拉列表（正经的浮层，非原生 datalist 气泡） -->
+                <ul
+                  v-if="modelsDropdownOpen && filteredModels.length"
+                  class="absolute z-10 mt-1 max-h-52 w-full overflow-y-auto rounded-md border border-border-subtle bg-bg-card py-1 shadow-lg"
+                >
+                  <li
+                    v-for="m in filteredModels"
+                    :key="m"
+                    class="cursor-pointer truncate px-2.5 py-1.5 text-sm text-text-main hover:bg-bg-hover"
+                    @mousedown.prevent="pickModel(m)"
+                  >
+                    {{ m }}
+                  </li>
+                </ul>
+              </div>
               <span v-if="modelsError" class="text-xs text-danger">{{ modelsError }}</span>
               <span v-else-if="modelsList.length" class="text-xs text-text-muted">
                 已获取 {{ modelsList.length }} 个模型，可从下拉选择或手动输入
