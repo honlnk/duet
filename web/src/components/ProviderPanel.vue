@@ -416,8 +416,9 @@ function onOverlayMouseUp(e: MouseEvent) {
         ? 'flex h-full w-full flex-col overflow-hidden bg-white'
         : 'flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border-subtle bg-bg-soft shadow-2xl'"
     >
-      <!-- 头部 -->
+      <!-- 头部（仅独立模态模式渲染；embedded 时由外层 SettingsModal 提供统一 header） -->
       <div
+        v-if="!embedded"
         class="flex items-center justify-between border-b border-border-subtle px-5 py-3"
       >
         <h2 class="text-sm font-semibold text-text-main">Provider 管理</h2>

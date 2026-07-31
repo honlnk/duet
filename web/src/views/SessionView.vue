@@ -118,7 +118,7 @@ onUnmounted(() => {
     <div class="flex min-w-0 flex-1 flex-col">
       <!-- 主区 header -->
       <header
-        class="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3"
+        class="flex h-14 shrink-0 items-center justify-between border-b border-border-subtle px-4"
       >
         <div class="flex min-w-0 items-center gap-2">
           <!-- 移动端：汉堡打开侧栏抽屉 -->

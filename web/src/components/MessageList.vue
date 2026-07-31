@@ -3,6 +3,7 @@ import { nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import MessageBubble from './MessageBubble.vue'
+import AppLogo from './AppLogo.vue'
 
 const session = useSessionStore()
 const { messages } = storeToRefs(session)
@@ -53,8 +54,10 @@ watch(
       v-if="messages.length === 0"
       class="flex h-full flex-col items-center justify-center text-text-muted"
     >
-      <div class="mb-2 text-4xl">♪</div>
-      <p class="text-sm">还没有消息，点击顶部「新建对话」开始</p>
+      <div class="mb-2">
+        <AppLogo :size="40" />
+      </div>
+      <p class="text-sm">还没有消息，点击左侧「新建会话」开始</p>
     </div>
 
     <!-- 消息流 -->

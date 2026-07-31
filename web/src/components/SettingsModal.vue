@@ -31,7 +31,7 @@ type Tab = 'provider' | 'agent' | 'topic' | 'history'
 const tab = ref<Tab>('provider')
 
 const tabs: Array<{ key: Tab; label: string }> = [
-  { key: 'provider', label: 'Provider' },
+  { key: 'provider', label: 'API 配置' },
   { key: 'agent', label: '智能体模板' },
   { key: 'topic', label: '话题模板' },
   { key: 'history', label: '历史预设' },
@@ -106,45 +106,51 @@ const hasHistory = computed(() => history.value.length > 0)
   >
     <!-- 模态卡片 -->
     <div
-      class="flex h-[min(88vh,44rem)] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl"
+      class="flex h-[min(88vh,44rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
     >
-      <!-- 左：tab 导航 -->
-      <nav class="flex w-44 shrink-0 flex-col gap-0.5 border-r border-border-subtle bg-bg-card p-2">
-        <button
-          v-for="t in tabs"
-          :key="t.key"
-          type="button"
-          class="rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors"
-          :class="tab === t.key
-            ? 'bg-bg-hover text-text-main'
-            : 'text-text-dim hover:bg-bg-hover hover:text-text-main'"
-          @click="tab = t.key"
-        >
-          {{ t.label }}
-        </button>
-      </nav>
-
-      <!-- 右：内容区 -->
-      <div class="flex min-w-0 flex-1 flex-col">
-        <!-- 头部 -->
-        <div class="flex shrink-0 items-center justify-between border-b border-border-subtle px-5 py-3.5">
-          <h2 class="text-base font-semibold text-text-main">
+      <!-- header：标题 + 当前分类标签 + 关闭 -->
+      <header
+        class="flex shrink-0 items-center justify-between border-b border-border-subtle px-5 py-4"
+      >
+        <div class="flex items-center gap-2.5">
+          <h2 class="text-base font-semibold text-text-main">设置</h2>
+          <span class="text-text-muted">/</span>
+          <span class="text-sm text-text-dim">
             {{ tabs.find((t) => t.key === tab)?.label }}
-          </h2>
-          <button
-            type="button"
-            class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-main"
-            aria-label="关闭"
-            @click="emit('close')"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          </span>
         </div>
+        <button
+          type="button"
+          class="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-hover hover:text-text-main"
+          aria-label="关闭"
+          @click="emit('close')"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </header>
 
-        <!-- tab 内容（可滚动） -->
+      <!-- 主体：左 tab 导航 + 右内容 -->
+      <div class="flex min-h-0 flex-1">
+        <!-- 左：tab 导航 -->
+        <nav class="flex w-44 shrink-0 flex-col gap-0.5 border-r border-border-subtle bg-bg-card p-2">
+          <button
+            v-for="t in tabs"
+            :key="t.key"
+            type="button"
+            class="rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors"
+            :class="tab === t.key
+              ? 'bg-bg-hover text-text-main'
+              : 'text-text-dim hover:bg-bg-hover hover:text-text-main'"
+            @click="tab = t.key"
+          >
+            {{ t.label }}
+          </button>
+        </nav>
+
+        <!-- 右：内容区（可滚动） -->
         <div class="min-h-0 flex-1 overflow-y-auto">
           <!-- Provider tab：内嵌 ProviderPanel -->
           <div v-if="tab === 'provider'" class="h-full">
@@ -289,6 +295,17 @@ const hasHistory = computed(() => history.value.length > 0)
           </div>
         </div>
       </div>
+
+      <!-- footer：关闭按钮 -->
+      <footer class="flex shrink-0 justify-end border-t border-border-subtle px-5 py-3">
+        <button
+          type="button"
+          class="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+          @click="emit('close')"
+        >
+          关闭
+        </button>
+      </footer>
     </div>
   </div>
 </template>

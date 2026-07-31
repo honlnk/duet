@@ -2,12 +2,13 @@
 /**
  * 会话列表项（深色侧栏内）
  *
- * 展示：话题（截断）、智能体 A vs B、状态圆点、消息数、相对时间。
- * 当前会话高亮（bg-white/15）；hover 显示删除按钮。
- * 点击 → 路由跳转；删除 → 确认后调用 store.remove。
+ * 极简风格（参照 gpt-image-studio ConversationSidebar）：
+ * 仅展示话题标题（truncate），hover 时右侧浮现「删除」文字按钮。
+ * 当前会话高亮（bg-white/10）；空话题回退「（无话题）」。
+ * 点击 → 路由跳转；删除 → 二次确认。
  */
-import { computed, ref } from 'vue'
-import type { SessionSummary, SessionStatus } from '@/types/api'
+import { ref } from 'vue'
+import type { SessionSummary } from '@/types/api'
 
 const props = defineProps<{
   summary: SessionSummary
@@ -35,93 +36,55 @@ function onDeleteClick(e?: MouseEvent | KeyboardEvent) {
     confirmTimer = setTimeout(() => (confirming.value = false), 3000)
   }
 }
-
-/** 话题截断展示 */
-const topic = computed(() => {
-  const t = props.summary.topic.trim()
-  return t.length > 0 ? t : '（无话题）'
-})
-
-/** 智能体展示：A vs B */
-const agentsText = computed(() => {
-  const [a, b] = props.summary.agents
-  if (a && b) return `${a} vs ${b}`
-  return a || b || ''
-})
-
-/** 状态圆点颜色 */
-const statusDotClass = computed(() => {
-  const map: Record<SessionStatus, string> = {
-    running: 'bg-green-400',
-    finished: 'bg-gray-400',
-    stopped: 'bg-amber-400',
-    error: 'bg-red-400',
-    idle: 'bg-gray-500',
-  }
-  return map[props.summary.status]
-})
-
-/** 相对时间 */
-const timeAgo = computed(() => {
-  const diff = Date.now() - props.summary.updatedAt
-  const min = Math.floor(diff / 60000)
-  if (min < 1) return '刚刚'
-  if (min < 60) return `${min} 分钟前`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} 小时前`
-  const day = Math.floor(hr / 24)
-  if (day < 30) return `${day} 天前`
-  return new Date(props.summary.updatedAt).toLocaleDateString()
-})
 </script>
 
 <template>
-  <button
-    type="button"
-    class="group relative w-full rounded-lg px-3 py-2.5 text-left transition-colors"
-    :class="active ? 'bg-white/15 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white'"
-    @click="emit('navigate', summary.id)"
+  <div
+    :class="[
+      'group mb-0.5 flex items-center gap-1 rounded-lg pr-1 transition-colors',
+      active
+        ? 'bg-white/10 text-white'
+        : 'text-gray-400 hover:bg-white/5 hover:text-gray-200',
+    ]"
   >
-    <!-- 状态圆点 + 话题 -->
-    <div class="flex items-center gap-2">
-      <span class="inline-block h-2 w-2 shrink-0 rounded-full" :class="statusDotClass" />
-      <span class="flex-1 truncate text-sm font-medium">{{ topic }}</span>
-    </div>
-
-    <!-- 智能体 -->
-    <p v-if="agentsText" class="mt-0.5 truncate pl-4 text-xs text-gray-400">
-      {{ agentsText }}
-    </p>
-
-    <!-- 元信息 -->
-    <div class="mt-1 flex items-center gap-2 pl-4 text-[11px] text-gray-500">
-      <span>{{ summary.messageCount }} 条</span>
-      <span>·</span>
-      <span>{{ timeAgo }}</span>
-    </div>
-
-    <!-- 删除按钮（hover 显示） -->
-    <span
-      v-if="!confirming"
-      class="absolute right-2 top-2 hidden h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-red-500/20 hover:text-red-300 group-hover:flex"
-      role="button"
-      tabindex="0"
-      aria-label="删除会话"
-      @click="onDeleteClick"
-      @keydown.enter="onDeleteClick"
+    <!-- 标题（点击跳转） -->
+    <button
+      type="button"
+      class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm"
+      @click="emit('navigate', summary.id)"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <!-- 进行中：旋转加载图标 -->
+      <svg
+        v-if="summary.status === 'running'"
+        class="h-3.5 w-3.5 shrink-0 animate-spin text-blue-400"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" stroke-opacity="0.25" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
       </svg>
-    </span>
-    <!-- 删除确认态 -->
-    <span
-      v-else
-      class="absolute right-2 top-2 flex h-6 items-center rounded-md bg-red-500/20 px-2 text-[11px] text-red-300"
-      @click="onDeleteClick"
+      <span class="truncate">{{ summary.topic.trim() || '（无话题）' }}</span>
+    </button>
+
+    <!-- 删除按钮（hover 显示，二次确认） -->
+    <button
+      v-if="!confirming"
+      type="button"
+      class="hidden shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300 group-hover:block focus:block"
+      aria-label="删除会话"
+      title="删除会话"
+      @click.stop="onDeleteClick"
     >
-      删除？
-    </span>
-  </button>
+      删除
+    </button>
+    <button
+      v-else
+      type="button"
+      class="shrink-0 rounded-md bg-red-500/20 px-2 py-1 text-xs text-red-300"
+      @click.stop="onDeleteClick"
+    >
+      确认？
+    </button>
+  </div>
 </template>

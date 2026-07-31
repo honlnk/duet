@@ -15,6 +15,7 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '@/stores/sessions'
 import SessionListItem from './SessionListItem.vue'
+import AppLogo from './AppLogo.vue'
 
 const props = defineProps<{
   /** 平板/桌面：侧栏是否收起（内联模式） */
@@ -81,14 +82,12 @@ async function removeSession(id: string) {
     <!-- 左上角品牌区：logo + 主副标题 + 设置 -->
     <div class="flex shrink-0 items-center justify-between px-3 pb-1 pt-3">
       <div class="flex min-w-0 items-center gap-2 px-2 py-2">
-        <span
-          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-lg text-white"
-        >
-          ♪
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white">
+          <AppLogo :size="20" />
         </span>
         <div class="min-w-0">
           <div class="truncate text-sm font-semibold text-white">Duet</div>
-          <div class="truncate text-xs text-gray-500">双 AI 对话聊天室</div>
+          <div class="truncate text-xs text-gray-500">多智能体自主对话</div>
         </div>
       </div>
       <button
@@ -167,6 +166,14 @@ async function removeSession(id: string) {
         @navigate="navigate"
         @remove="removeSession"
       />
+    </div>
+
+    <!-- footer：品牌署名 -->
+    <div class="flex shrink-0 items-center gap-2 border-t border-white/10 p-3">
+      <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/10 text-white">
+        <AppLogo :size="13" />
+      </span>
+      <span class="text-xs text-gray-500">Duet · 多智能体对话 · honlnk</span>
     </div>
   </aside>
 </template>

@@ -7,6 +7,7 @@
  */
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
+import AppLogo from '@/components/AppLogo.vue'
 
 defineEmits<{ 'new-chat': [] }>()
 
@@ -63,13 +64,13 @@ const { sidebarCollapsed } = storeToRefs(session)
       <div class="flex max-w-md flex-col items-center text-center">
         <!-- 品牌标识 -->
         <div
-          class="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-soft text-3xl text-white shadow-sm"
+          class="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-soft text-white shadow-sm"
         >
-          ♪
+          <AppLogo :size="40" />
         </div>
-        <h2 class="text-lg font-semibold text-text-main">Duet · 双 AI 对话聊天室</h2>
+        <h2 class="text-lg font-semibold text-text-main">Duet · 多智能体自主对话</h2>
         <p class="mt-2 text-sm leading-relaxed text-text-dim">
-          给两个 AI 一个话题与身份，让它们自己聊起来。<br />
+          给多个 AI 一个话题与身份，让它们自主对话。<br />
           从左侧选择历史会话，或新建一段对话开始。
         </p>
 

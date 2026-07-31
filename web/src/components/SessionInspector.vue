@@ -12,6 +12,7 @@
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
+import { useProviderStore } from '@/stores/provider'
 import { useDurationTracker } from '@/composables/useDurationTracker'
 import StatusBadge from './StatusBadge.vue'
 import type { AgentId } from '@/types/api'
@@ -32,6 +33,7 @@ const emit = defineEmits<{
 }>()
 
 const session = useSessionStore()
+const provider = useProviderStore()
 const {
   session: current,
   status,
@@ -69,6 +71,23 @@ const topic = computed(() => current.value?.topic ?? '（未设定话题）')
 
 /** 智能体列表（A/B），带颜色 dot */
 const agents = computed(() => current.value?.agents ?? [])
+
+/**
+ * 各智能体使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
+ * 通过 session.config.providerA/B（Provider id）反查 provider store；
+ * 找不到则回退默认 Provider，仍找不到显示占位。
+ */
+const agentProviders = computed<Record<AgentId, string>>(() => {
+  const cfg = current.value?.config
+  const resolve = (pid: string | undefined) => {
+    const p = provider.find(pid) ?? provider.find(provider.defaultId)
+    return p?.name || '—'
+  }
+  return {
+    A: resolve(cfg?.providerA),
+    B: resolve(cfg?.providerB),
+  }
+})
 
 /** A/B 颜色：与 AgentForm/MessageBubble 的 agent-a/b token 对齐 */
 function agentDotClass(id: AgentId) {
@@ -142,7 +161,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
   >
     <!-- 头部 -->
     <div
-      class="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3"
+      class="flex h-14 shrink-0 items-center justify-between border-b border-border-subtle px-4"
     >
       <h2 class="text-sm font-semibold text-text-main">会话详情</h2>
       <!-- 关闭按钮：仅移动端显示（PC 端由主区 header 的箭头 toggle 控制） -->
@@ -169,41 +188,40 @@ const hasEvents = computed(() => eventLog.value.length > 0)
 
     <!-- 内容区（纵向滚动） -->
     <div class="flex-1 overflow-y-auto p-4">
-      <!-- ① 运行状态 + 控制 -->
+      <!-- ① 运行状态 -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           运行状态
         </h3>
-        <div class="flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <StatusBadge :status="status" />
-            <span class="text-xs text-text-dim">{{ durationDisplay }}</span>
-          </div>
-          <div class="text-xs text-text-dim">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <StatusBadge :status="status" />
+          <span class="text-xs text-text-dim">{{ durationDisplay }}</span>
+          <span class="text-xs text-text-dim">·</span>
+          <span class="text-xs text-text-dim">
             轮次 <span class="font-medium text-text-main">{{ roundText }}</span>
-          </div>
-          <!-- 控制按钮 -->
-          <div class="mt-1 flex gap-2">
-            <button
-              v-if="isRunning"
-              type="button"
-              class="rounded-lg border border-danger px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
-              @click="emit('stop')"
-            >
-              停止
-            </button>
-            <button
-              type="button"
-              class="rounded-lg border border-border-subtle px-3 py-1.5 text-xs text-text-dim hover:bg-bg-hover"
-              @click="emit('reset')"
-            >
-              返回首页
-            </button>
+          </span>
+        </div>
+      </section>
+
+      <!-- ② 使用的 Provider -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          使用的 Provider
+        </h3>
+        <div class="flex flex-col gap-1.5">
+          <div
+            v-for="agent in agents"
+            :key="agent.id"
+            class="flex items-center gap-2 text-xs"
+          >
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="agentDotClass(agent.id)" />
+            <span class="shrink-0 text-text-dim">{{ agent.name }}</span>
+            <span class="truncate text-text-main">{{ agentProviders[agent.id] }}</span>
           </div>
         </div>
       </section>
 
-      <!-- ② 统计 -->
+      <!-- ③ 统计（成本/token 等） -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           统计
@@ -225,7 +243,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </dl>
       </section>
 
-      <!-- ③ 智能体 persona -->
+      <!-- ④ 智能体 persona -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           智能体
@@ -256,7 +274,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </div>
       </section>
 
-      <!-- ④ 事件日志 -->
+      <!-- ⑤ 事件日志 -->
       <section>
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           事件日志
@@ -280,6 +298,27 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </div>
         <p v-else class="text-xs text-text-muted">暂无事件</p>
       </section>
+    </div>
+
+    <!-- footer：控制按钮（固定在右侧面板底部，不随内容滚动） -->
+    <div
+      class="flex h-14 shrink-0 items-center justify-end gap-2 border-t border-border-subtle px-4"
+    >
+      <button
+        v-if="isRunning"
+        type="button"
+        class="rounded-lg border border-danger px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
+        @click="emit('stop')"
+      >
+        停止
+      </button>
+      <button
+        type="button"
+        class="rounded-lg border border-border-subtle px-3 py-1.5 text-xs text-text-dim hover:bg-bg-hover"
+        @click="emit('reset')"
+      >
+        返回首页
+      </button>
     </div>
   </aside>
 </template>

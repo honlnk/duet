@@ -1,5 +1,5 @@
 /**
- * 会话 Store —— 双 AI 对话的核心状态机
+ * 会话 Store —— 多智能体自主对话的核心状态机
  *
  * 管理：当前会话、状态、消息流、流式累积、统计、事件日志。
  * WS 消息 reducer（handleEvent）忠实移植自旧版 main.js handleWsMessage。
