@@ -201,6 +201,26 @@ export interface ModelsResponse {
   models: string[]
 }
 
+/** GET /api/pricing/:modelId 返回 */
+export interface PricingResponse {
+  found: boolean
+  matchedId?: string
+  pricing?: {
+    inputPerMTok: number
+    outputPerMTok: number
+    cacheHitPerMTok: number
+    cacheWritePerMTok: number
+    hasCacheHit: boolean
+    hasCacheWrite: boolean
+  }
+}
+
+/** GET /api/exchange-rates 返回（各货币对 base 的汇率） */
+export interface ExchangeRatesResponse {
+  base: string
+  rates: Record<string, number>
+}
+
 /** GET /api/providers 返回 */
 export interface ProviderListResponse {
   providers: ProviderListItem[]

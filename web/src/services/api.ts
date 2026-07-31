@@ -8,7 +8,9 @@ import type {
   ApiProtocol,
   ConfigLimits,
   CreateSessionPayload,
+  ExchangeRatesResponse,
   ModelsResponse,
+  PricingResponse,
   ProviderFormData,
   ProviderListResponse,
   Session,
@@ -120,6 +122,19 @@ export function fetchModelsByCred(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ baseUrl, apiKey, protocol }),
   })
+}
+
+/**
+ * 查询模型价格：后端代理 OpenRouter，按 modelId 模糊匹配后返回美元/百万 token 价格。
+ * 仅作参考，用户可手动修改。
+ */
+export function fetchModelPricing(modelId: string): Promise<PricingResponse> {
+  return request<PricingResponse>(`/api/pricing/${encodeURIComponent(modelId)}`)
+}
+
+/** 获取汇率（各货币对 USD） */
+export function fetchExchangeRates(): Promise<ExchangeRatesResponse> {
+  return request<ExchangeRatesResponse>('/api/exchange-rates')
 }
 
 /** 构造 WebSocket 地址 */
