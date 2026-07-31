@@ -1,8 +1,11 @@
 # Duet — Docker Compose 一键部署
 # 用法：
-#   1. 复制 .env.example 为 .env 并填入 DEEPSEEK_API_KEY
-#   2. docker compose up -d --build
-#   3. 浏览器访问 http://localhost:3000
+#   1. docker compose up -d --build
+#   2. 浏览器访问 http://localhost:3000
+#   3. 在页面右上角「Provider」中配置 API Key / 模型 / 协议（支持 OpenAI 兼容 / Responses / Anthropic / Gemini）
+#
+# 说明：API Key、模型、价格等凭证全部通过页面 Provider 管理维护，
+# 落盘到 DATA_DIR 下的 providers.json，无需在环境变量中配置。
 services:
   duet:
     build:
@@ -14,15 +17,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # 必填：DeepSeek API Key（也可用下方 env_file 从 .env 读取）
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?请在 .env 中设置 DEEPSEEK_API_KEY}
       # 可选：覆盖默认配置（见 .env.example）
-      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
       PORT: "3000"
       DATA_DIR: /data
+      ABSOLUTE_MAX_ROUNDS: ${ABSOLUTE_MAX_ROUNDS:-200}
+      ABSOLUTE_MAX_DURATION_SEC: ${ABSOLUTE_MAX_DURATION_SEC:-7200}
+      REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:-30000}
     volumes:
-      # 会话数据持久化（容器删除后仍在）
+      # 会话数据与 providers.json 持久化（容器删除后仍在）
       - duet-data:/data
     # 健康检查（可选，依赖 /api/health 端点）
     healthcheck:

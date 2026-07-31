@@ -4,12 +4,16 @@
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
 > 两个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
-![status](https://img.shields.io/badge/status-v2.0%20ready-green) ![model](https://img.shields.io/badge/model-deepseek--v4--flash-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
+![status](https://img.shields.io/badge/status-v3.0%20ready-green) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
 
 ## ✨ 功能特性
 
 - **一键启动双 AI 对话**：输入话题 + 两个智能体身份设定，点击开始即自动轮流对话。
 - **流式输出**：逐字打字效果，实时看到 AI 的发言。
+- **多 Provider / 多协议模型管理**：
+  - 支持 **OpenAI 兼容 / Responses / Anthropic / Gemini** 四种协议，两个 AI 可各自绑定不同 Provider 与模型；
+  - 在页面内可视化维护 API Key、模型、价格，按需「获取列表」拉取上游模型；
+  - 单价 / 缓存命中 / 缓存写入分维度计费，支持 CNY/USD/EUR 并按实时汇率换算。
 - **灵活的停止条件**：
   - 设置「对话轮数上限」按轮停止；
   - 设置「持续时间上限」到点停止；
@@ -32,29 +36,32 @@
 pnpm install
 ```
 
-### 2. 配置 API Key
-
-复制环境变量模板并填入你的 DeepSeek API Key：
-
-```bash
-cp .env.example .env
-# 编辑 .env，设置 DEEPSEEK_API_KEY=sk-xxxx
-```
-
-### 3. 本地开发启动
+### 2. 启动服务
 
 ```bash
 pnpm dev
 ```
 
 开发模式采用前后端分离：后端跑在 `http://localhost:3000`（仅提供 API/WebSocket），前端由 vite 独立托管在 `http://localhost:5174`（支持热更新）。
-请用浏览器访问 **`http://localhost:5174`**，在左侧填写话题和两个智能体的身份设定，点击「开始对话」即可。
+请用浏览器访问 **`http://localhost:5174`**。
 
 > 开发模式下后端不会自动打开浏览器（前端由 vite 托管）。自动打开浏览器的行为仅在生产模式（`pnpm start`）下发生。
 
+### 3. 配置 Provider（API Key / 模型）
+
+启动后首次访问，页面会提示尚未配置 Provider。点击右上角「Provider」按钮打开管理面板，添加你的第一个 Provider：
+
+- 选择**协议**：OpenAI 兼容（含 DeepSeek）/ Responses / Anthropic / Gemini；
+- 填写 **API Key、Base URL、模型名**，可点「获取列表」从上游拉取可用模型；
+- 可选填**价格**（输入 / 输出 / 缓存命中 / 缓存写入，支持 CNY/USD/EUR 并按实时汇率换算），留空则用内置兜底单价估算成本。
+
+第一条 Provider 会自动成为默认。之后在「高级设置」里可给智能体 A / B 各自绑定不同 Provider。配置落盘到 `data/providers.json`。
+
+> API Key 仅存在后端，前端不直接调用任何模型 API。
+
 ### 4. 生产部署
 
-提供三种生产部署形态，按需选择。无论哪种形态，都需要配置 `DEEPSEEK_API_KEY` 环境变量。
+提供三种生产部署形态，按需选择。各形态的环境变量均为**可选**（见下表），API Key / 模型 / 价格等凭证一律通过页面 Provider 面板维护。
 
 #### 形态 A：源码部署（本地或服务器）
 
@@ -76,12 +83,12 @@ npx @honlnk/duet
 
 # 或全局安装后使用
 npm i -g @honlnk/duet
-DEEPSEEK_API_KEY=sk-xxxx DATA_DIR=~/.duet duet-chat
+DATA_DIR=~/.duet duet-chat
 ```
 
 - 包内已内置前端构建产物，开箱即用。
 - 建议用 `DATA_DIR` 指定数据持久化目录（如 `~/.duet`），避免会话数据写到包目录。
-- 其余配置通过环境变量传入（见 `.env.example`）。
+- 启动后在页面 Provider 面板配置 API Key / 模型。其余配置通过环境变量传入（见 `.env.example`）。
 
 #### 形态 C：Docker（容器化部署）
 
@@ -89,29 +96,29 @@ DEEPSEEK_API_KEY=sk-xxxx DATA_DIR=~/.duet duet-chat
 # 方式一：docker run
 docker build -t duet .
 docker run -d -p 3000:3000 \
-  -e DEEPSEEK_API_KEY=sk-xxxx \
   -v duet-data:/data \
   duet
 
 # 方式二：docker compose（推荐，配置已写在 docker-compose.yml）
-cp .env.example .env   # 编辑填入 DEEPSEEK_API_KEY
 docker compose up -d --build
 ```
 
 - 多阶段构建（alpine），运行镜像仅含编译产物 + 生产依赖，体积小。
-- 会话数据通过卷（`/data`）持久化，容器删除重建后仍在。
+- 会话数据与 `providers.json` 通过卷（`/data`）持久化，容器删除重建后仍在。
 - 以非 root 用户运行，内置健康检查（`/api/health`）。
+- 容器启动后，在页面 Provider 面板配置 API Key / 模型（无需在环境变量中传入）。
 
 #### 配置项
 
-| 环境变量 | 必填 | 默认 | 说明 |
-|---|:---:|---|---|
-| `DEEPSEEK_API_KEY` | ✅ | — | DeepSeek API 密钥 |
-| `PORT` | | `3000` | 服务端口（`0` = 自动分配） |
-| `DATA_DIR` | | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定） |
-| `DEEPSEEK_MODEL` | | `deepseek-v4-flash` | 模型名 |
-| `ABSOLUTE_MAX_ROUNDS` | | `200` | 全局硬熔断轮数 |
-| `ABSOLUTE_MAX_DURATION_SEC` | | `7200` | 全局硬熔断时长（秒） |
+环境变量均为**可选**（无必填项）。API Key / 模型 / 价格等凭证不在环境变量中配置，启动后通过页面 Provider 面板维护。
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PORT` | `3000` | 服务端口（`0` = 自动分配） |
+| `DATA_DIR` | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定；`providers.json` 落盘到其父目录） |
+| `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
+| `ABSOLUTE_MAX_DURATION_SEC` | `7200` | 全局硬熔断时长（秒） |
+| `REQUEST_TIMEOUT_MS` | `30000` | 单次 AI 调用超时（毫秒） |
 
 完整配置见 [`.env.example`](./.env.example)。
 
@@ -131,12 +138,15 @@ docker compose up -d --build
 
 | 参数 | 说明 | 默认值 |
 |---|---|---|
-| 模型 | DeepSeek 模型 | `deepseek-v4-flash` |
+| 智能体 A 模型 | 绑定智能体 A 使用的 Provider | 默认 Provider |
+| 智能体 B 模型 | 绑定智能体 B 使用的 Provider | 默认 Provider |
 | 温度 | 生成多样性 | `0.7` |
 | 对话轮数上限 | 留空=无限（仍受全局熔断） | 空（无限）|
 | 持续时间上限(秒) | 留空=无限 | 空（无限）|
 | 每 N 轮触发摘要 | 摘要压缩频率 | `10` |
 | 压缩后保留最近消息数 | 滑动窗口大小 | `8` |
+
+> Provider（含 API Key、协议、模型、价格）在页面右上角「Provider」面板统一管理，详见上文「配置 Provider」。
 
 ### 顶部状态栏
 
@@ -150,9 +160,9 @@ docker compose up -d --build
 | 层 | 选型 |
 |---|---|
 | 后端 | **TypeScript** + Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
-| AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖）|
+| AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖），内建 OpenAI 兼容 / Responses / Anthropic / Gemini 多协议适配器 |
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
-| 持久化 | JSON 文件（每条消息同步落盘，原子替换）|
+| 持久化 | JSON 文件（每条消息同步落盘，原子替换）；Provider 凭证存 `providers.json` |
 | 包管理 | **pnpm workspace**（`server` + `web` 两个工作区）|
 
 ### 双 AI 独立记忆设计（核心）
@@ -181,11 +191,11 @@ AI-A 的视角：                 AI-B 的视角：
 ```
 duet/
 ├── docs/                  # 文档（开发计划、调研笔记、审核记录）
-├── server/                # 后端（Fastify 5 + WS + DeepSeek 客户端）
+├── server/                # 后端（Fastify 5 + WS + 多协议 AI 客户端）
 │   └── src/
-│       ├── ai/            # DeepSeek 流式客户端 + prompt 模板
+│       ├── ai/            # 多协议流式适配器 + prompt 模板
 │       ├── memory/        # 上下文管理 + 摘要器
-│       ├── store/         # 会话持久化
+│       ├── store/         # 会话 + Provider 凭证持久化
 │       ├── ws/            # WebSocket 双 AI 调度
 │       └── routes/        # REST 路由
 ├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
@@ -202,23 +212,22 @@ duet/
 
 ## 🔧 环境变量
 
+环境变量均为**可选**，用于调整服务端口、数据目录与全局熔断参数。模型凭证（API Key、Base URL、模型、价格）不再通过环境变量配置，统一在页面「Provider」面板维护。
+
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（必填）| - |
-| `DEEPSEEK_BASE_URL` | API 地址 | `https://api.deepseek.com/v1` |
-| `DEEPSEEK_MODEL` | 默认模型 | `deepseek-v4-flash` |
 | `PORT` | 服务端口（0=自动）| `3000` |
+| `DATA_DIR` | 会话数据持久化目录（`providers.json` 落盘到其父目录）| `项目根/data/sessions` |
 | `ABSOLUTE_MAX_ROUNDS` | 全局最大轮数熔断 | `200` |
 | `ABSOLUTE_MAX_DURATION_SEC` | 全局最大时长熔断(秒) | `7200` |
 | `REQUEST_TIMEOUT_MS` | 单次 AI 调用超时(毫秒) | `30000` |
-| `COST_INPUT_PER_MTOK` | 输入 token 单价($/百万) | `0.27` |
-| `COST_OUTPUT_PER_MTOK` | 输出 token 单价($/百万) | `1.10` |
+| `NODE_ENV` | 运行环境（production / development）| 自动推断 |
 
 ## ⚠️ 注意事项
 
 - **无限对话会产生持续 API 费用**，请留意顶部 token 与成本统计，及时停止。
 - 全局熔断默认 200 轮 / 2 小时，可通过环境变量调整。
-- API Key 仅存在后端 `.env`，前端不直接调用 DeepSeek。
+- API Key 仅存在后端（落盘到 `providers.json`），前端不直接调用任何模型 API。
 - 模型返回的 `reasoning_content`（思维链）仅用于后端调试，不会展示给前端，也不会进入对方 AI 的上下文。
 
 ## 📚 文档
