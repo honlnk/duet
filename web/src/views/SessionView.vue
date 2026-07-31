@@ -2,11 +2,13 @@
 /**
  * 会话工作区视图（路由 /sessions/:id）
  *
- * 职责：按路由 :id 加载会话 → 渲染消息列表 + 事件日志 + 控制条（停止/重置）。
+ * 布局：中间主区（上下结构：header + 消息列表）+ 右侧 SessionInspector。
  * 持有 WS 连接：
  *  - 新建对话场景：session.pendingStart=true，加载后建立 WS 并发送 start；
  *  - 历史/刷新场景：若会话仍在 running，建立 WS 监听后续流式；
  *  - 否则不连接 WS（查看历史）。
+ *
+ * 主区 header 承载：左侧栏 toggle（移动端汉堡/桌面收起箭头）+ 会话标题 + inspector toggle。
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -14,24 +16,30 @@ import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useBreakpoint } from '@/composables/useBreakpoint'
 import MessageList from '@/components/MessageList.vue'
-import EventLog from '@/components/EventLog.vue'
-import StatsBar from '@/components/StatsBar.vue'
+import SessionInspector from '@/components/SessionInspector.vue'
 import type { ServerEvent } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
 const session = useSessionStore()
 const sessions = useSessionsStore()
-const { status, eventLog, pendingStart } = storeToRefs(session)
+const {
+  status,
+  pendingStart,
+  inspectorOpen,
+  sidebarCollapsed,
+} = storeToRefs(session)
+const { isMobile } = useBreakpoint()
 
 const { open: openWs, send: sendWs, close: closeWs } = useWebSocket()
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
-/** 当前会话是否处于运行态 */
-const isRunning = computed(() => status.value === 'running')
+/** 主区 header 标题：会话话题，缺省回退品牌名 */
+const headerTitle = computed(() => session.session?.topic ?? 'Duet')
 
 /** WS 事件分发器 */
 function onEvent(msg: ServerEvent) {
@@ -105,64 +113,106 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="flex min-w-0 flex-1 flex-col bg-bg">
-    <!-- 加载态 -->
-    <div
-      v-if="loading"
-      class="flex flex-1 items-center justify-center text-text-muted"
-    >
-      <span class="text-sm">加载会话…</span>
-    </div>
-
-    <!-- 错误态 -->
-    <div
-      v-else-if="loadError"
-      class="flex flex-1 flex-col items-center justify-center gap-3 text-text-muted"
-    >
-      <div class="text-3xl">∅</div>
-      <p class="text-sm">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-lg border border-border-subtle px-3 py-1.5 text-sm text-text-dim hover:bg-bg-hover"
-        @click="router.push('/')"
+  <section class="flex min-w-0 flex-1 bg-bg">
+    <!-- 中间主区：上下结构（header + 内容） -->
+    <div class="flex min-w-0 flex-1 flex-col">
+      <!-- 主区 header -->
+      <header
+        class="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3"
       >
-        返回首页
-      </button>
-    </div>
+        <div class="flex min-w-0 items-center gap-2">
+          <!-- 移动端：汉堡打开侧栏抽屉 -->
+          <button
+            type="button"
+            class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main lg:hidden"
+            aria-label="打开侧栏"
+            @click="session.toggleSidebar(true)"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+            </svg>
+          </button>
+          <!-- 桌面：侧栏收起/展开 toggle -->
+          <button
+            type="button"
+            class="hidden rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main lg:block"
+            :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+            @click="session.toggleSidebar(false)"
+          >
+            <!-- 收起态：汉堡（暗示可展开） -->
+            <svg v-if="sidebarCollapsed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+            </svg>
+            <!-- 展开态：左指箭头（收起侧栏） -->
+            <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 class="truncate text-base font-semibold text-text-main">
+            {{ headerTitle }}
+          </h1>
+        </div>
+        <div class="flex items-center gap-1">
+          <!-- inspector toggle（> 箭头，收起时水平翻转） -->
+          <button
+            type="button"
+            class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main"
+            aria-label="会话详情"
+            title="会话详情"
+            @click="session.toggleInspector()"
+          >
+            <svg
+              width="20" height="20"
+              class="transition-transform duration-200"
+              :class="inspectorOpen ? '' : 'rotate-180'"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            >
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </header>
 
-    <!-- 正常：消息流 + 事件日志 + 控制条 -->
-    <template v-else>
-      <MessageList />
-
-      <!-- 运行统计栏（亮色底，有会话时显示） -->
-      <StatsBar
-        v-if="session.session"
-        class="shrink-0 border-t border-border-subtle bg-bg-card px-3 py-2 md:px-4"
-      />
-
-      <!-- 运行中/有会话时的控制条 -->
+      <!-- 加载态 -->
       <div
-        v-if="session.session"
-        class="flex shrink-0 items-center gap-2 border-t border-border-subtle px-3 py-2 md:px-4"
+        v-if="loading"
+        class="flex flex-1 items-center justify-center text-text-muted"
       >
+        <span class="text-sm">加载会话…</span>
+      </div>
+
+      <!-- 错误态 -->
+      <div
+        v-else-if="loadError"
+        class="flex flex-1 flex-col items-center justify-center gap-3 text-text-muted"
+      >
+        <div class="text-3xl">∅</div>
+        <p class="text-sm">{{ loadError }}</p>
         <button
-          v-if="isRunning"
           type="button"
-          class="rounded-lg border border-danger px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
-          @click="handleStop"
+          class="rounded-lg border border-border-subtle px-3 py-1.5 text-sm text-text-dim hover:bg-bg-hover"
+          @click="router.push('/')"
         >
-          停止
-        </button>
-        <button
-          type="button"
-          class="rounded-lg border border-border-subtle px-3 py-1.5 text-xs text-text-dim hover:bg-bg-hover"
-          @click="handleReset"
-        >
-          返回
+          返回首页
         </button>
       </div>
 
-      <EventLog :items="eventLog" />
-    </template>
+      <!-- 正常态：消息流 -->
+      <MessageList v-else />
+    </div>
+
+    <!-- 右：会话详情（横向并排，仅正常态有意义但始终挂载以保持过渡） -->
+    <SessionInspector
+      v-if="!loading && !loadError"
+      :open="inspectorOpen"
+      :is-mobile="isMobile"
+      @close="inspectorOpen = false"
+      @stop="handleStop"
+      @reset="handleReset"
+    />
   </section>
 </template>

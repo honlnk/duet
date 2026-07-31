@@ -95,6 +95,31 @@ export const useSessionStore = defineStore('session', () => {
    */
   const pendingStart = ref(false)
 
+  /**
+   * 会话详情右侧栏开关（UI 状态）。
+   * 放进 store 是为了跨越 router-view 边界：主区 header 的 toggle 按钮
+   * 与 SessionView 内的 SessionInspector 都能读写同一份状态。
+   */
+  const inspectorOpen = ref(false)
+
+  function toggleInspector() {
+    inspectorOpen.value = !inspectorOpen.value
+  }
+
+  /**
+   * 左侧会话栏开关（UI 状态）。
+   * - 桌面：sidebarCollapsed 控制内联收起/展开；
+   * - 移动：drawerOpen 控制覆盖抽屉滑入/滑出。
+   * 与 inspectorOpen 同理，放进 store 让各 View 的 header 按钮跨边界共享。
+   */
+  const sidebarCollapsed = ref(false)
+  const drawerOpen = ref(false)
+
+  function toggleSidebar(isMobile: boolean) {
+    if (isMobile) drawerOpen.value = !drawerOpen.value
+    else sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+
   // --- 流式状态（非响应式，避免每个 chunk 触发大量依赖） ---
   let streamingAgentId: AgentId | null = null
 
@@ -357,6 +382,9 @@ export const useSessionStore = defineStore('session', () => {
     eventLog,
     errorMessage,
     pendingStart,
+    inspectorOpen,
+    sidebarCollapsed,
+    drawerOpen,
     // computed
     isRunning,
     canStop,
@@ -369,5 +397,7 @@ export const useSessionStore = defineStore('session', () => {
     resetRuntime,
     log,
     agentName,
+    toggleInspector,
+    toggleSidebar,
   }
 })
