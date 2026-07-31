@@ -100,7 +100,7 @@ export const useSessionStore = defineStore('session', () => {
    * 放进 store 是为了跨越 router-view 边界：主区 header 的 toggle 按钮
    * 与 SessionView 内的 SessionInspector 都能读写同一份状态。
    */
-  const inspectorOpen = ref(false)
+  const inspectorOpen = ref(true)
 
   function toggleInspector() {
     inspectorOpen.value = !inspectorOpen.value
