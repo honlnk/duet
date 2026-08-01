@@ -21,6 +21,7 @@ import { useFormStore } from '@/stores/form'
 import { useDraftStore } from '@/stores/draft'
 import { useConfigStore } from '@/stores/config'
 import { useProviderStore } from '@/stores/provider'
+import { useTemplateStore } from '@/stores/template'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import NewChatModal from '@/components/NewChatModal.vue'
@@ -33,9 +34,11 @@ const form = useFormStore()
 const draft = useDraftStore()
 const config = useConfigStore()
 const provider = useProviderStore()
+const template = useTemplateStore()
 
 const { isMobile } = useBreakpoint()
 const { sidebarCollapsed, drawerOpen } = storeToRefs(session)
+const { pendingNewChat } = storeToRefs(template)
 
 /** 新建对话模态 */
 const showNewChat = ref(false)
@@ -58,9 +61,25 @@ watch(isMobile, (mobile) => {
   if (!mobile) drawerOpen.value = false
 })
 
-/** 打开新建对话模态前，确保 Provider 已加载（新建表单依赖它） */
+/** 监听设置页发出的「新建会话」请求：关设置、开新建对话 */
+watch(pendingNewChat, (v) => {
+  if (v) {
+    showSettings.value = false
+    showNewChat.value = true
+    pendingNewChat.value = false
+  }
+})
+
+/** 打开新建对话模态前，刷新模板缓存（确保能看到最新模板） */
 function openNewChat() {
+  template.refresh()
   showNewChat.value = true
+}
+
+/** 关闭设置模态时刷新模板缓存（用户可能在设置里增删了智能体/话题模板） */
+function onSettingsClose() {
+  template.refresh()
+  showSettings.value = false
 }
 
 /** 草稿自动保存：监听表单字段变化，防抖存盘 */
@@ -105,9 +124,13 @@ onMounted(async () => {
     <router-view @new-chat="openNewChat" />
 
     <!-- 新建对话模态 -->
-    <NewChatModal v-if="showNewChat" @close="showNewChat = false" />
+    <NewChatModal
+      v-if="showNewChat"
+      @close="showNewChat = false"
+      @open-settings="showNewChat = false; showSettings = true"
+    />
 
     <!-- 综合设置模态 -->
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <SettingsModal v-if="showSettings" @close="onSettingsClose" />
   </div>
 </template>

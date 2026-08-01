@@ -1,19 +1,23 @@
 /**
  * 会话 Store —— 多智能体自主对话的核心状态机
  *
- * 管理：当前会话、状态、消息流、流式累积、统计、事件日志。
- * WS 消息 reducer（handleEvent）忠实移植自旧版 main.js handleWsMessage。
+ * 管理：当前会话、状态、消息流、流式累积、统计、事件日志、视角。
  *
  * 关键契约（务必遵守）：
  * 1. chunk 事件无消息 id，需用 streamingAgentId 追踪当前发言者。
  * 2. message_done 时若存在同 agentId 的流式气泡，替换其内容而非新增（去重）。
  * 3. stats 事件字段在顶层展开（msg.totalTokens），非嵌套。
  * 4. finished 后需重拉 GET /api/sessions/:id 取权威终态。
+ *
+ * 视角（viewSide）：用户在右侧面板选择的「右侧显示」智能体 id。
+ *   - 选中的智能体消息靠右对齐（强调条在右），其余靠左（强调条在左）。
+ *   - 默认为会话的第二个智能体（B）。
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { createSession, getSession } from '@/services/api'
 import type {
+  Agent,
   AgentId,
   ChatMessage,
   ServerEvent,
@@ -120,6 +124,17 @@ export const useSessionStore = defineStore('session', () => {
     else sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
+  /**
+   * 智能体视角：选中的智能体 id，其消息靠右显示，其余靠左。
+   * 默认为会话第二个智能体（B）；加载会话时按 agents 重置。
+   */
+  const viewSide = ref<AgentId>('B')
+
+  /** 切换视角（右侧面板的智能体选择器调用） */
+  function setViewSide(id: AgentId) {
+    viewSide.value = id
+  }
+
   // --- 流式状态（非响应式，避免每个 chunk 触发大量依赖） ---
   let streamingAgentId: AgentId | null = null
 
@@ -152,6 +167,16 @@ export const useSessionStore = defineStore('session', () => {
   function agentName(agentId: AgentId): string {
     const a = session.value?.agents.find((x) => x.id === agentId)
     return a?.name ?? agentId
+  }
+
+  /** 查找智能体对象 */
+  function findAgent(agentId: AgentId): Agent | undefined {
+    return session.value?.agents.find((x) => x.id === agentId)
+  }
+
+  /** 判断某智能体消息是否靠右显示（即是否为当前视角） */
+  function isRightSide(agentId: AgentId): boolean {
+    return agentId === viewSide.value
   }
 
   /* --------------------------- 重置/渲染 --------------------------- */
@@ -189,6 +214,11 @@ export const useSessionStore = defineStore('session', () => {
     stoppedAt.value = s.stoppedAt
     stats.value = { ...s.stats }
     streamingAgentId = null
+    // 视角默认为第二个智能体（B）；若会话已切换视角且仍有效则保留
+    const validIds = s.agents.map((a) => a.id)
+    if (!validIds.includes(viewSide.value)) {
+      viewSide.value = s.agents[1]?.id ?? s.agents[0]!.id
+    }
     // 重放历史消息
     messages.value = s.messages.map<ViewMessage>((m) => ({
       uid: nextUid(),
@@ -197,7 +227,9 @@ export const useSessionStore = defineStore('session', () => {
       truncated: m.truncated,
       streaming: false,
     }))
-    round.value = Math.floor(s.messageCount / 2)
+    // round = 所有智能体各说一句算 1 轮
+    const n = s.agents.length || 2
+    round.value = Math.floor(s.messageCount / n)
     if (s.error) errorMessage.value = s.error
   }
 
@@ -329,7 +361,8 @@ export const useSessionStore = defineStore('session', () => {
           streaming: false,
         }))
       }
-      round.value = Math.floor(fresh.messageCount / 2)
+      const n = fresh.agents.length || 2
+      round.value = Math.floor(fresh.messageCount / n)
       stats.value = { ...fresh.stats }
     } else {
       status.value = 'stopped'
@@ -385,6 +418,7 @@ export const useSessionStore = defineStore('session', () => {
     inspectorOpen,
     sidebarCollapsed,
     drawerOpen,
+    viewSide,
     // computed
     isRunning,
     canStop,
@@ -397,6 +431,9 @@ export const useSessionStore = defineStore('session', () => {
     resetRuntime,
     log,
     agentName,
+    findAgent,
+    isRightSide,
+    setViewSide,
     toggleInspector,
     toggleSidebar,
   }

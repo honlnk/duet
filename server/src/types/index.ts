@@ -7,8 +7,40 @@
 
 /* ============================== 基础枚举 ============================== */
 
-/** 智能体 ID（固定两个） */
-export type AgentId = 'A' | 'B'
+/**
+ * 智能体 ID。支持 2~10 个智能体：A、B 为必选，C~J 按需追加。
+ */
+export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+
+/** 所有可能的智能体 ID */
+export const ALL_AGENT_IDS: readonly AgentId[] = [
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+] as const
+
+/**
+ * 预设颜色 key（与前端 CSS 设计 token 一一对应）。
+ * 自定义颜色用 hex 字符串（如 '#ff5533'），后端不校验具体值，仅透传存储。
+ */
+export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
+
+/** 智能体颜色值：预设 key 或自定义 hex 字符串 */
+export type AgentColor = AgentPresetColor | string
+
+/** 前端调色板（label 供 UI 展示，key 与 CSS token 对应） */
+export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: string }> = [
+  { key: 'blue', label: '蓝色' },
+  { key: 'pink', label: '粉色' },
+  { key: 'green', label: '绿色' },
+  { key: 'amber', label: '琥珀' },
+  { key: 'purple', label: '紫色' },
+  { key: 'teal', label: '青色' },
+]
+
+/** 判断颜色值是否为预设 key */
+export function isPresetColor(c: string): c is AgentPresetColor {
+  return c === 'blue' || c === 'pink' || c === 'green' ||
+    c === 'amber' || c === 'purple' || c === 'teal'
+}
 
 /** 消息角色（发给 LLM 的完整消息） */
 export type MessageRole = 'system' | 'user' | 'assistant'
@@ -43,6 +75,8 @@ export interface AgentRef {
   id: AgentId
   name: string
   persona: string
+  /** 颜色标识（与前端 CSS token 对应），缺省时由 createSession 按顺序分配 */
+  color?: AgentColor
 }
 
 /** 记忆内部消息（无 agentId / ts，仅 role + content） */
@@ -57,10 +91,13 @@ export interface ApiMessage {
   content: string
 }
 
-/** AgentMemory.toJSON() 的持久化形态 */
+/**
+ * AgentMemory.toJSON() 的持久化形态。
+ * others 为本会话中除自己外的所有其他智能体（2 智能体场景含 1 个，3 智能体含 2 个）。
+ */
 export interface AgentMemoryData {
   agent: AgentRef
-  other: AgentRef
+  others: AgentRef[]
   topic: string
   messages: MemoryMessage[]
   summary: string
@@ -101,6 +138,13 @@ export interface SessionConfig {
   providerA?: string
   /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
   providerB?: string
+  /** 智能体 C 使用的 Provider id（空 = 默认 Provider） */
+  providerC?: string
+  /**
+   * 智能体 → Provider id 映射（D~J 等超出 A/B/C 的智能体用此字段）。
+   * 优先级：agentProviders[id] > providerA/B/C > 默认。
+   */
+  agentProviders?: Record<string, string>
 }
 
 /** 累计成本统计 */
@@ -121,11 +165,15 @@ export interface SessionStats {
   totalChars: number
 }
 
-/** 完整会话对象（写盘 JSON 形状） */
+/**
+ * 完整会话对象（写盘 JSON 形状）。
+ * - agents：AgentRef[]（长度 2~10），按 A,B,C... 顺序。
+ * - memory：每个智能体各一份；至少含 A/B，其余按实际智能体数动态存在。
+ */
 export interface Session {
   id: string
   topic: string
-  agents: [AgentRef, AgentRef]
+  agents: AgentRef[]
   config: SessionConfig
   status: SessionStatus
   finishedReason: FinishedReason | null
@@ -134,7 +182,8 @@ export interface Session {
   messageCount: number
   currentAgentId: AgentId
   messages: PersistedMessage[]
-  memory: { A: AgentMemoryData; B: AgentMemoryData }
+  /** 每个智能体的独立记忆，key 为 AgentId */
+  memory: Record<AgentId, AgentMemoryData>
   stats: SessionStats
   error: string | null
   createdAt: number
@@ -156,12 +205,15 @@ export interface SessionListItem {
 export interface AgentInput {
   name: string
   persona?: string
+  /** 颜色标识（缺省则按顺序分配默认色） */
+  color?: AgentColor
 }
 
-/** createSession 入参 */
+/** createSession 入参（支持 2~10 个智能体） */
 export interface CreateSessionInput {
   topic: string
-  agents: [AgentInput, AgentInput]
+  /** 至少 2 个，最多 MAX_AGENTS 个；前两个恒为 A/B */
+  agents: AgentInput[]
   config?: Partial<SessionConfig>
 }
 

@@ -5,7 +5,10 @@ import config from '../config.js'
 import { AgentMemory } from '../memory/context.js'
 import { estimateStepCost, round6 } from '../utils/cost.js'
 import type { CostRates } from '../utils/cost.js'
+import { DEFAULT_AGENT_COLORS, agentColorOf } from '../ai/prompts.js'
 import type {
+  AgentId,
+  AgentRef,
   CreateSessionInput,
   Session,
   SessionConfig,
@@ -13,6 +16,28 @@ import type {
   SessionStats,
 } from '../types/index.js'
 import type { NormalizedUsage } from '../ai/providers/types.js'
+
+/** 会话允许的智能体数量区间 */
+export const MIN_AGENTS = 2
+export const MAX_AGENTS = 10
+
+/**
+ * 把 AgentId 与其在 agents 数组中的索引互转。
+ * A→0, B→1, ..., J→9。
+ */
+export const AGENT_ORDER: readonly AgentId[] = [
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+]
+
+/** AgentId → 索引 */
+export function agentIndex(id: AgentId): number {
+  return AGENT_ORDER.indexOf(id)
+}
+
+/** 索引 → AgentId */
+export function agentIdAt(index: number): AgentId {
+  return AGENT_ORDER[index] ?? 'A'
+}
 
 /** 默认会话配置 */
 export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionConfig {
@@ -28,18 +53,39 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
   }
 }
 
-/** 创建新会话对象 */
+/**
+ * 创建新会话对象。
+ * 支持 2~3 个智能体：agents[0/1/2] 对应 A/B/C。
+ * 颜色缺省时按 A/B/C 顺序分配默认色（蓝/粉/绿），避免相邻智能体撞色。
+ */
 export function createSession({ topic, agents, config: cfg }: CreateSessionInput): Session {
   const now = Date.now()
-  const a = agents[0]
-  const b = agents[1]
+  // 规范化智能体列表：补 id/name/persona/color，截断到 MAX_AGENTS。
+  // 过滤掉可能存在的 undefined（三元组第三个元素可选），保证 map 元素非空。
+  const inputs = agents.slice(0, MAX_AGENTS).filter(
+    (a): a is NonNullable<typeof a> => a != null,
+  )
+  const refs: AgentRef[] = inputs.map((a, i) => ({
+    id: agentIdAt(i),
+    name: a.name?.trim() || `智能体 ${agentIdAt(i)}`,
+    persona: a.persona?.trim() || '',
+    color: (a.color?.trim() as AgentRef['color']) || DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue',
+  }))
+
+  // 每个智能体的「其他人」列表（排除自己）
+  const othersOf = (selfIdx: number): AgentRef[] =>
+    refs.filter((_, i) => i !== selfIdx)
+
+  // 为每个智能体构建独立记忆（动态，支持 2~10 个）
+  const memory = {} as Session['memory']
+  refs.forEach((ref, i) => {
+    memory[ref.id] = new AgentMemory(ref, othersOf(i), topic).toJSON()
+  })
+
   const session: Session = {
     id: 'sess_' + randomUUID(),
     topic,
-    agents: [
-      { id: 'A', name: a.name || 'A', persona: a.persona || '' },
-      { id: 'B', name: b.name || 'B', persona: b.persona || '' },
-    ],
+    agents: refs,
     config: defaultConfig(cfg),
     status: 'idle',
     finishedReason: null,
@@ -48,18 +94,7 @@ export function createSession({ topic, agents, config: cfg }: CreateSessionInput
     messageCount: 0,
     currentAgentId: 'A',
     messages: [],
-    memory: {
-      A: new AgentMemory(
-        { id: 'A', name: a.name || 'A', persona: a.persona || '' },
-        { id: 'B', name: b.name || 'B', persona: b.persona || '' },
-        topic
-      ).toJSON(),
-      B: new AgentMemory(
-        { id: 'B', name: b.name || 'B', persona: b.persona || '' },
-        { id: 'A', name: a.name || 'A', persona: a.persona || '' },
-        topic
-      ).toJSON(),
-    },
+    memory,
     stats: {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
@@ -89,16 +124,43 @@ export function saveSession(session: Session): void {
   fs.renameSync(tmp, file) // 原子替换
 }
 
-/** 读取单个会话 */
+/** 读取单个会话（含旧数据兼容归一化） */
 export function loadSession(id: string): Session | null {
   const file = path.join(config.dataDir, `${id}.json`)
   if (!fs.existsSync(file)) return null
   const raw = fs.readFileSync(file, 'utf8')
   try {
-    return JSON.parse(raw) as Session
+    const s = JSON.parse(raw) as Session
+    normalizeLegacySession(s)
+    return s
   } catch (e) {
     console.error('[store] 会话文件损坏:', id, e instanceof Error ? e.message : e)
     return null
+  }
+}
+
+/**
+ * 旧数据归一化（向后兼容）：
+ * 1. memory.X 旧字段 `other`（单个 AgentRef）→ `others`（数组）。
+ * 2. agents 缺 color → 按索引补默认色。
+ * 3. agents 第二项 id 校正为 'B'（旧数据恒为 [A,B]，无需改）。
+ * 不写盘，仅修正内存对象；下次 saveSession 时自然持久化为新格式。
+ */
+function normalizeLegacySession(s: Session): void {
+  if (Array.isArray(s.agents)) {
+    s.agents.forEach((a, i) => {
+      if (!a.color) a.color = DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue'
+    })
+  }
+  for (const key of ['A', 'B', 'C'] as const) {
+    const m = s.memory?.[key]
+    if (!m) continue
+    // 旧格式：other（单个）→ others（数组）
+    if (!Array.isArray(m.others)) {
+      const legacyOther = (m as { other?: AgentRef }).other
+      m.others = legacyOther ? [legacyOther] : []
+      delete (m as { other?: AgentRef }).other
+    }
   }
 }
 
@@ -202,7 +264,21 @@ export function addStats(
   return session.stats
 }
 
-/** 计算当前 round（1 round = A+B 两条 message） */
+/**
+ * 计算当前 round。
+ * 1 round = 所有智能体各发言一次（2 人场景 = 2 条 message/轮，3 人场景 = 3 条/轮）。
+ */
 export function currentRound(session: Session): number {
-  return Math.floor(session.messageCount / 2)
+  const n = session.agents.length || MIN_AGENTS
+  return Math.floor(session.messageCount / n)
+}
+
+/**
+ * 计算会话的下一个发言者：按 A→B→C→A… 的固定顺序循环。
+ */
+export function nextAgentId(session: Session): AgentId {
+  const n = session.agents.length
+  const curIdx = agentIndex(session.currentAgentId)
+  const nextIdx = (curIdx + 1) % n
+  return session.agents[nextIdx]?.id ?? 'A'
 }

@@ -2,30 +2,40 @@
 /**
  * 新建对话模态框
  *
- * 把原侧边栏的「新建对话表单」（话题 + 智能体 A/B + 高级设置）搬进居中模态。
- * 提交：创建会话 → 保存草稿/历史 → 设置 pendingStart → 路由跳转（SessionView 据此启动 WS）。
+ * 话题 + 智能体（2~3 个，从模板中选择）+ 高级设置。
+ * 智能体不再手填，而是从「设置」中预配置的智能体模板里点选。
+ * 提交：创建会话 → 保存草稿/历史 → 设置 pendingStart → 路由跳转。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useSessionsStore } from '@/stores/sessions'
 import { useFormStore } from '@/stores/form'
 import { useDraftStore } from '@/stores/draft'
+import { useTemplateStore } from '@/stores/template'
+import { MAX_AGENTS } from '@/types/api'
 import AgentForm from './AgentForm.vue'
 import AdvancedSettings from './AdvancedSettings.vue'
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; 'open-settings': [] }>()
 
 const router = useRouter()
 const session = useSessionStore()
 const sessions = useSessionsStore()
 const form = useFormStore()
 const draft = useDraftStore()
+const template = useTemplateStore()
 const { values } = storeToRefs(form)
 
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
+
+/** 是否还能再添加智能体 */
+const canAddAgent = computed(() => values.value.agents.length < MAX_AGENTS)
+
+/** 是否完全没有智能体模板（引导用户去设置） */
+const hasNoTemplates = computed(() => template.agents.length === 0)
 
 /** 点遮罩关闭（防误触：按下和松开都在遮罩才关） */
 let mouseDownOnOverlay = false
@@ -39,8 +49,12 @@ function onOverlayClick(e: MouseEvent) {
 
 /** 提交：创建会话并跳转 */
 async function handleSubmit() {
-  if (!form.hasTopic) {
-    errorMsg.value = '请先填写话题'
+  if (!form.canSubmit) {
+    if (!form.hasTopic) {
+      errorMsg.value = '请先填写话题'
+    } else if (!form.allAgentsSelected) {
+      errorMsg.value = '请为每个智能体选择一个模板'
+    }
     return
   }
   submitting.value = true
@@ -103,9 +117,39 @@ async function handleSubmit() {
           />
         </div>
 
-        <!-- 智能体 A / B -->
-        <AgentForm agent-id="A" />
-        <AgentForm agent-id="B" />
+        <!-- 智能体列表（2~3 个） -->
+        <div class="flex flex-col gap-4">
+          <!-- 无模板引导 -->
+          <div
+            v-if="hasNoTemplates"
+            class="flex flex-col gap-2 rounded-lg border border-dashed border-border-subtle bg-bg-card px-3 py-3 text-center"
+          >
+            <p class="text-sm text-text-dim">还没有智能体模板</p>
+            <p class="text-xs text-text-muted">先去设置添加几个智能体，才能在这里选择</p>
+            <button
+              type="button"
+              class="self-center rounded-lg border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
+              @click="emit('open-settings')"
+            >
+              去设置添加智能体
+            </button>
+          </div>
+          <AgentForm
+            v-for="(agent, idx) in values.agents"
+            :key="idx"
+            :index="idx"
+          />
+        </div>
+
+        <!-- 添加智能体按钮 -->
+        <button
+          v-if="canAddAgent"
+          type="button"
+          class="self-start rounded-lg border border-dashed border-border-subtle px-3 py-1.5 text-sm text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main"
+          @click="form.addAgent()"
+        >
+          + 添加智能体（最多 {{ MAX_AGENTS }} 个）
+        </button>
 
         <!-- 高级设置（折叠） -->
         <AdvancedSettings />
@@ -127,7 +171,7 @@ async function handleSubmit() {
         </button>
         <button
           type="button"
-          :disabled="!form.hasTopic || submitting"
+          :disabled="!form.canSubmit || submitting"
           class="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
           @click="handleSubmit"
         >

@@ -1,6 +1,7 @@
 import { getAdapter } from '../ai/providers/index.js'
 import type { ConnectionConfig } from '../types/index.js'
 import type { NormalizedUsage } from '../ai/providers/types.js'
+import type { CostRates } from '../utils/cost.js'
 import {
   buildOpeningPrompt,
   wrapOtherMessage,
@@ -11,11 +12,13 @@ import {
   saveSession,
   addStats,
   currentRound,
+  nextAgentId,
 } from '../store/sessionStore.js'
 import { resolveProvider } from '../store/providerStore.js'
 import config from '../config.js'
 import type {
   AgentId,
+  AgentRef,
   BroadcastFn,
   PersistedMessage,
   Session,
@@ -107,8 +110,18 @@ function errorMessage(e: unknown): string {
   return String(e)
 }
 
+/** 每个 Agent 的连接配置 + 单价缓存（运行期一次性解析） */
+interface AgentRuntime {
+  id: AgentId
+  ref: AgentRef
+  mem: AgentMemory
+  conn: ConnectionConfig
+  rates: CostRates
+  provName: string
+}
+
 /**
- * 主循环：让两个 AI 自动对话。
+ * 主循环：让多个 AI 按固定顺序（A→B→C→A…）轮流自主对话。
  * @param session  会话对象（会被原地修改）
  */
 export async function runLoop(session: Session): Promise<void> {
@@ -135,55 +148,59 @@ export async function runLoop(session: Session): Promise<void> {
   broadcast(session.id, { type: 'started' })
 
   // 把 JSON 形态的 memory 还原成 AgentMemory 实例（操作内存，结束时再写回）
-  const memA = AgentMemory.fromJSON(session.memory.A)
-  const memB = AgentMemory.fromJSON(session.memory.B)
+  const memMap = new Map<AgentId, AgentMemory>()
+  for (const a of session.agents) {
+    const data = session.memory[a.id]
+    memMap.set(a.id, data ? AgentMemory.fromJSON(data) : new AgentMemory(a, [], session.topic))
+  }
 
-  // 解析两个 Agent 各自使用的 Provider 连接配置。
-  // providerA/B 为空或找不到时，resolveProvider 会回落到默认 Provider。
-  const provA = resolveProvider(session.config.providerA)
-  const provB = resolveProvider(session.config.providerB)
-  if (!provA || !provB) {
-    broadcast(session.id, {
-      type: 'error',
-      message: '无可用的 Provider。请在设置中配置至少一个模型连接。',
+  // 为每个 Agent 解析 Provider 连接配置。
+  // 优先 agentProviders[id]（D~J 等），其次 providerA/B/C（兼容旧字段），再次默认。
+  const providerIdOf = (id: AgentId): string | undefined => {
+    if (id === 'A') return session.config.providerA
+    if (id === 'B') return session.config.providerB
+    if (id === 'C') return session.config.providerC
+    return session.config.agentProviders?.[id]
+  }
+
+  const runtimes2: AgentRuntime[] = []
+  for (const a of session.agents) {
+    const prov = resolveProvider(providerIdOf(a.id))
+    if (!prov) {
+      broadcast(session.id, {
+        type: 'error',
+        message: '无可用的 Provider。请在设置中配置至少一个模型连接。',
+      })
+      session.status = 'error'
+      session.error = '无可用的 Provider'
+      session.finishedReason = 'error'
+      saveSession(session)
+      rt.running = false
+      return
+    }
+    const conn: ConnectionConfig = {
+      baseUrl: prov.baseUrl,
+      apiKey: prov.apiKey,
+      model: prov.model,
+      protocol: prov.protocol,
+    }
+    const rates: CostRates = {
+      currency: prov.pricing.currency,
+      inputPerMTok: prov.pricing.inputPerMTok,
+      outputPerMTok: prov.pricing.outputPerMTok,
+      cacheHitEnabled: prov.pricing.cacheHitEnabled,
+      cacheHitPerMTok: prov.pricing.cacheHitPerMTok,
+      cacheWriteEnabled: prov.pricing.cacheWriteEnabled,
+      cacheWritePerMTok: prov.pricing.cacheWritePerMTok,
+    }
+    runtimes2.push({
+      id: a.id,
+      ref: a,
+      mem: memMap.get(a.id)!,
+      conn,
+      rates,
+      provName: prov.name,
     })
-    session.status = 'error'
-    session.error = '无可用的 Provider'
-    session.finishedReason = 'error'
-    saveSession(session)
-    rt.running = false
-    return
-  }
-  const connA: ConnectionConfig = {
-    baseUrl: provA.baseUrl,
-    apiKey: provA.apiKey,
-    model: provA.model,
-    protocol: provA.protocol,
-  }
-  const connB: ConnectionConfig = {
-    baseUrl: provB.baseUrl,
-    apiKey: provB.apiKey,
-    model: provB.model,
-    protocol: provB.protocol,
-  }
-  // 缓存单价（含货币与缓存维度），供 addStats 增量累加成本用
-  const ratesA = {
-    currency: provA.pricing.currency,
-    inputPerMTok: provA.pricing.inputPerMTok,
-    outputPerMTok: provA.pricing.outputPerMTok,
-    cacheHitEnabled: provA.pricing.cacheHitEnabled,
-    cacheHitPerMTok: provA.pricing.cacheHitPerMTok,
-    cacheWriteEnabled: provA.pricing.cacheWriteEnabled,
-    cacheWritePerMTok: provA.pricing.cacheWritePerMTok,
-  }
-  const ratesB = {
-    currency: provB.pricing.currency,
-    inputPerMTok: provB.pricing.inputPerMTok,
-    outputPerMTok: provB.pricing.outputPerMTok,
-    cacheHitEnabled: provB.pricing.cacheHitEnabled,
-    cacheHitPerMTok: provB.pricing.cacheHitPerMTok,
-    cacheWriteEnabled: provB.pricing.cacheWriteEnabled,
-    cacheWritePerMTok: provB.pricing.cacheWritePerMTok,
   }
 
   try {
@@ -226,20 +243,14 @@ export async function runLoop(session: Session): Promise<void> {
 
       // === 2. 决定当前发言者 ===
       const agentId: AgentId = session.currentAgentId
-      const myMem = agentId === 'A' ? memA : memB
-      const otherMem = agentId === 'A' ? memB : memA
-      const me = session.agents.find((a) => a.id === agentId) ?? session.agents[0]
-      const other = session.agents.find((a) => a.id !== agentId) ?? session.agents[1]
+      const cur = runtimes2.find((r) => r.id === agentId) ?? runtimes2[0]!
+      const others = runtimes2.filter((r) => r.id !== agentId)
 
       // === 3. 触发摘要？ ===
-      const roundsSinceSummary = round - myMem.lastSummarizedRound
+      const roundsSinceSummary = round - cur.mem.lastSummarizedRound
       const shouldSummarize =
-        myMem.messages.length > session.config.keepRecent &&
+        cur.mem.messages.length > session.config.keepRecent &&
         roundsSinceSummary >= session.config.summaryEveryN
-      // 当前发言者的连接配置与单价（摘要跟 Agent 走）
-      const myConn = agentId === 'A' ? connA : connB
-      const myRates = agentId === 'A' ? ratesA : ratesB
-      const myProvName = agentId === 'A' ? provA.name : provB.name
       if (shouldSummarize) {
         broadcast(session.id, {
           type: 'summary',
@@ -248,16 +259,16 @@ export async function runLoop(session: Session): Promise<void> {
         })
         try {
           const summary = await summarizeConversation({
-            agentName: me.name,
-            otherName: other.name,
-            messages: myMem.messages,
-            oldSummary: myMem.summary,
+            agentName: cur.ref.name,
+            others: cur.mem.others,
+            messages: cur.mem.messages,
+            oldSummary: cur.mem.summary,
             words: 200,
-            conn: myConn,
+            conn: cur.conn,
           })
           if (summary) {
-            myMem.applySummary(summary, round)
-            myMem.trimToRecent(session.config.keepRecent)
+            cur.mem.applySummary(summary, round)
+            cur.mem.trimToRecent(session.config.keepRecent)
             broadcast(session.id, {
               type: 'summary',
               agentId,
@@ -277,25 +288,25 @@ export async function runLoop(session: Session): Promise<void> {
       }
 
       // === 4. 组装 messages（首条加开场提示）===
-      if (session.messageCount === 0 && agentId === 'A' && myMem.messages.length === 0) {
-        myMem.pushOther(
+      if (session.messageCount === 0 && agentId === 'A' && cur.mem.messages.length === 0) {
+        cur.mem.pushOther(
           buildOpeningPrompt({
-            name: me.name,
-            otherName: other.name,
+            name: cur.ref.name,
+            otherNames: cur.mem.others.map((o) => o.name),
             topic: session.topic,
           })
         )
       }
 
-      const apiMessages = myMem.buildApiMessages(session.config.keepRecent)
+      const apiMessages = cur.mem.buildApiMessages(session.config.keepRecent)
 
-      // === 5. 调 DeepSeek 流式 ===
+      // === 5. 调模型流式 ===
       rt.abortCtrl = new AbortController()
       let content = ''
       try {
-        const result = await getAdapter(myConn.protocol).chatCompletion({
+        const result = await getAdapter(cur.conn.protocol).chatCompletion({
           messages: apiMessages,
-          conn: myConn,
+          conn: cur.conn,
           temperature: session.config.temperature,
           maxTokens: 1024,
           signal: rt.abortCtrl.signal,
@@ -316,7 +327,7 @@ export async function runLoop(session: Session): Promise<void> {
         }
 
         const usage: NormalizedUsage = result.usage
-        addStats(session, usage, myRates)
+        addStats(session, usage, cur.rates)
         // 累计发言字符数（用于右上角统计展示）
         session.stats.totalChars += content.length
 
@@ -328,7 +339,7 @@ export async function runLoop(session: Session): Promise<void> {
           const completion = usage.completion_tokens ?? 0
           const hitRate = prompt > 0 ? ((hit / prompt) * 100).toFixed(1) : '0.0'
           console.log(
-            `[cache] 轮${round} ${agentId} [${myProvName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion}`
+            `[cache] 轮${round} ${agentId} [${cur.provName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion}`
           )
         }
 
@@ -347,12 +358,14 @@ export async function runLoop(session: Session): Promise<void> {
         session.messages.push(msg)
 
         // 自己视角：assistant
-        myMem.pushSelf(content)
-        // 对方视角：user（加前缀，content-only）
-        otherMem.pushOther(wrapOtherMessage(me.name, content))
+        cur.mem.pushSelf(content)
+        // 所有其他人视角：user（加发言者名前缀，content-only）
+        for (const o of others) {
+          o.mem.pushOther(wrapOtherMessage(cur.ref.name, content))
+        }
 
         session.messageCount += 1
-        session.currentAgentId = other.id
+        session.currentAgentId = nextAgentId(session)
         session.updatedAt = ts
         saveSession(session)
 
@@ -392,8 +405,10 @@ export async function runLoop(session: Session): Promise<void> {
               truncated: true,
             }
             session.messages.push(msg)
-            myMem.pushSelf(content.trim())
-            otherMem.pushOther(wrapOtherMessage(me.name, content.trim()))
+            cur.mem.pushSelf(content.trim())
+            for (const o of others) {
+              o.mem.pushOther(wrapOtherMessage(cur.ref.name, content.trim()))
+            }
             session.messageCount += 1
             saveSession(session)
             broadcast(session.id, { type: 'message_done', agentId, message: msg })
@@ -418,8 +433,10 @@ export async function runLoop(session: Session): Promise<void> {
     }
     if (!session.stoppedAt) session.stoppedAt = Date.now()
     // 写回 memory 实例
-    session.memory.A = memA.toJSON()
-    session.memory.B = memB.toJSON()
+    for (const a of session.agents) {
+      const m = memMap.get(a.id)
+      if (m) session.memory[a.id] = m.toJSON()
+    }
     saveSession(session)
     broadcast(session.id, {
       type: 'finished',

@@ -32,11 +32,30 @@
   /* focus 强调（保留少量蓝色交互反馈） */
   --color-focus: #3b82f6; /* blue-500 */
 
-  /* 智能体配色（保留） */
-  --color-agent-a: #2563eb; /* blue-600，气泡填充用 */
-  --color-agent-a-soft: #dbeafe; /* blue-100，浅底 */
-  --color-agent-b: #db2777; /* pink-600 */
-  --color-agent-b-soft: #fce7f3; /* pink-100 */
+  /*
+   * 智能体配色（调色板）。
+   * 每个智能体在创建会话时从预设颜色中选择一个 key，
+   * 前端按 key 映射到对应 token：text-agent-<key> / bg-agent-<key> / border-...。
+   * agent-a / agent-b 保留为旧别名（蓝/粉），向后兼容。
+   */
+  --color-agent-blue: #2563eb; /* blue-600 */
+  --color-agent-blue-soft: #dbeafe; /* blue-100 */
+  --color-agent-pink: #db2777; /* pink-600 */
+  --color-agent-pink-soft: #fce7f3; /* pink-100 */
+  --color-agent-green: #16a34a; /* green-600 */
+  --color-agent-green-soft: #dcfce7; /* green-100 */
+  --color-agent-amber: #d97706; /* amber-600 */
+  --color-agent-amber-soft: #fef3c7; /* amber-100 */
+  --color-agent-purple: #9333ea; /* purple-600 */
+  --color-agent-purple-soft: #f3e8ff; /* purple-100 */
+  --color-agent-teal: #0d9488; /* teal-600 */
+  --color-agent-teal-soft: #ccfbf1; /* teal-100 */
+
+  /* 旧别名：agent-a = 蓝，agent-b = 粉（向后兼容，内部不再新增引用） */
+  --color-agent-a: var(--color-agent-blue);
+  --color-agent-a-soft: var(--color-agent-blue-soft);
+  --color-agent-b: var(--color-agent-pink);
+  --color-agent-b-soft: var(--color-agent-pink-soft);
 
   /* 语义色 */
   --color-warn: #d97706; /* amber-600 */

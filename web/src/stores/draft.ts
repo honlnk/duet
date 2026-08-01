@@ -7,7 +7,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
-  FIELD_KEYS,
   addHistory,
   clearDraft as clearDraftStorage,
   clearHistory as clearHistoryStorage,
@@ -58,7 +57,6 @@ export const useDraftStore = defineStore('draft', () => {
   }
 
   return {
-    FIELD_KEYS,
     history,
     draftRestored,
     readDraft,

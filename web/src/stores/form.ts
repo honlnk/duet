@@ -1,62 +1,97 @@
 /**
  * 表单 Store —— 设置区单一数据源
  *
- * 消除旧版 FIELD_KEYS（storage.js）与 fieldEls（ui.js）的双份维护。
- * 所有字段以字符串形式存储（与 <input> 一致），提交时再转换。
+ * v2：智能体从固定 A/B 改为动态数组（2~3 个，每个含 name/persona/color/provider）。
+ * 标量字段（temperature 等）仍以字符串存储，提交时再转换。
  */
 import { defineStore } from 'pinia'
 import { computed, reactive } from 'vue'
 import type { CreateSessionPayload, SessionConfig } from '@/types/api'
-import type { FormValues } from '@/services/storage'
-
-/** 默认表单值（空字符串代表无限/使用默认） */
-function defaultValues(): FormValues {
-  return {
-    topic: '',
-    agentAName: '',
-    agentAPersona: '',
-    agentBName: '',
-    agentBPersona: '',
-    model: 'deepseek-v4-flash',
-    temperature: '0.7',
-    maxRounds: '',
-    durationSec: '',
-    summaryEveryN: '10',
-    keepRecent: '8',
-    // 空 = 使用默认 Provider
-    providerA: '',
-    providerB: '',
-  }
-}
+import { MAX_AGENTS, MIN_AGENTS } from '@/types/api'
+import {
+  defaultValues,
+  makeAgent,
+  normalizeValues,
+  type AgentFormValues,
+  type FormValues,
+} from '@/services/storage'
 
 export const useFormStore = defineStore('form', () => {
   const values = reactive<FormValues>(defaultValues())
 
-  /** 用任意值对象覆盖部分字段 */
+  /** 更新第 idx 个智能体的部分字段（如颜色、provider） */
+  function patchAgent(idx: number, patch: Partial<AgentFormValues>) {
+    const a = values.agents[idx]
+    if (a) Object.assign(a, patch)
+  }
+
+  /**
+   * 为第 idx 个智能体选择一个模板：把模板的 name/persona 填入，
+   * 记录 templateId。颜色保留当前选择（用户可在下方单独调）。
+   */
+  function selectTemplate(idx: number, templateId: string, name: string, persona: string) {
+    const a = values.agents[idx]
+    if (!a) return
+    a.templateId = templateId
+    a.name = name
+    a.persona = persona
+  }
+
+  /** 清空第 idx 个智能体的模板选择（回到未选占位） */
+  function clearTemplate(idx: number) {
+    const a = values.agents[idx]
+    if (!a) return
+    a.templateId = ''
+    a.name = ''
+    a.persona = ''
+  }
+
+  /** 追加一个空智能体（不超过 MAX_AGENTS） */
+  function addAgent() {
+    if (values.agents.length >= MAX_AGENTS) return
+    values.agents.push(makeAgent(values.agents.length))
+  }
+
+  /** 移除指定位置智能体（不少于 MIN_AGENTS） */
+  function removeAgent(idx: number) {
+    if (values.agents.length <= MIN_AGENTS) return
+    values.agents.splice(idx, 1)
+  }
+
+  /** 用任意值对象覆盖部分字段（标量） */
   function setValues(patch: Partial<FormValues>) {
     Object.assign(values, patch)
   }
 
-  /** 整体替换（加载预设/草稿时），强制归一化为字符串 */
+  /** 整体替换（加载预设/草稿时），强制归一化 */
   function replace(next: FormValues) {
-    const merged = { ...defaultValues(), ...next }
-    // 确保所有字段都是字符串（历史草稿可能残留数字类型）
-    for (const k of Object.keys(merged) as (keyof FormValues)[]) {
-      const v = merged[k]
-      merged[k] = v == null ? '' : String(v)
-    }
-    Object.assign(values, merged)
+    const normalized = normalizeValues(next)
+    values.topic = normalized.topic
+    values.model = normalized.model
+    values.temperature = normalized.temperature
+    values.maxRounds = normalized.maxRounds
+    values.durationSec = normalized.durationSec
+    values.summaryEveryN = normalized.summaryEveryN
+    values.keepRecent = normalized.keepRecent
+    values.agents.splice(0, values.agents.length, ...normalized.agents)
   }
 
   /** 清空为默认值 */
   function reset() {
-    Object.assign(values, defaultValues())
+    const def = defaultValues()
+    values.topic = def.topic
+    values.model = def.model
+    values.temperature = def.temperature
+    values.maxRounds = def.maxRounds
+    values.durationSec = def.durationSec
+    values.summaryEveryN = def.summaryEveryN
+    values.keepRecent = def.keepRecent
+    values.agents.splice(0, values.agents.length, ...def.agents)
   }
 
   /** 提取数字字段（空串/非法 → 0 = 无限） */
   function num(key: keyof FormValues): number {
     const v = values[key]
-    // 统一转字符串再解析，兼容历史草稿中残留的数字类型
     const s = typeof v === 'string' ? v : String(v ?? '')
     if (s.trim() === '') return 0
     const n = Number.parseFloat(s)
@@ -64,32 +99,64 @@ export const useFormStore = defineStore('form', () => {
   }
 
   /** 转为后端 POST 请求体 */
-  const payload = computed<CreateSessionPayload>(() => ({
-    topic: values.topic.trim(),
-    agents: [
-      {
-        name: values.agentAName.trim() || '智能体 A',
-        persona: values.agentAPersona.trim(),
-      },
-      {
-        name: values.agentBName.trim() || '智能体 B',
-        persona: values.agentBPersona.trim(),
-      },
-    ],
-    config: {
-      model: values.model,
-      temperature: num('temperature') || 0.7,
-      maxRounds: num('maxRounds'),
-      durationSec: num('durationSec'),
-      summaryEveryN: num('summaryEveryN') || 10,
-      keepRecent: num('keepRecent') || 8,
-      providerA: values.providerA || undefined,
-      providerB: values.providerB || undefined,
-    } satisfies SessionConfig,
-  }))
+  const payload = computed<CreateSessionPayload>(() => {
+    // A/B/C 走专用字段，D~J 走 agentProviders 映射
+    const providerA = values.agents[0]?.provider || undefined
+    const providerB = values.agents[1]?.provider || undefined
+    const providerC = values.agents[2]?.provider || undefined
+    const agentProviders: Record<string, string> = {}
+    const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
+    for (let i = 3; i < values.agents.length; i++) {
+      const p = values.agents[i]?.provider
+      if (p) agentProviders[ids[i]!] = p
+    }
+    return {
+      topic: values.topic.trim(),
+      agents: values.agents.map((a, i) => ({
+        name: a.name.trim() || `智能体 ${i + 1}`,
+        persona: a.persona.trim(),
+        color: a.color,
+      })),
+      config: {
+        model: values.model,
+        temperature: num('temperature') || 0.7,
+        maxRounds: num('maxRounds'),
+        durationSec: num('durationSec'),
+        summaryEveryN: num('summaryEveryN') || 10,
+        keepRecent: num('keepRecent') || 8,
+        providerA,
+        providerB,
+        providerC,
+        agentProviders: Object.keys(agentProviders).length > 0 ? agentProviders : undefined,
+      } satisfies SessionConfig,
+    }
+  })
 
   /** 话题是否非空（校验用） */
   const hasTopic = computed(() => values.topic.trim().length > 0)
 
-  return { values, setValues, replace, reset, payload, hasTopic }
+  /** 所有智能体是否都已选择模板（校验用） */
+  const allAgentsSelected = computed(() =>
+    values.agents.every((a) => a.templateId !== '' && a.name.trim() !== ''),
+  )
+
+  /** 是否可提交：话题非空且所有智能体都已选择 */
+  const canSubmit = computed(() => hasTopic.value && allAgentsSelected.value)
+
+  return {
+    values,
+    patchAgent,
+    selectTemplate,
+    clearTemplate,
+    addAgent,
+    removeAgent,
+    setValues,
+    replace,
+    reset,
+    num,
+    payload,
+    hasTopic,
+    allAgentsSelected,
+    canSubmit,
+  }
 })

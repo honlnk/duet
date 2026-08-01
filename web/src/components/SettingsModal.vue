@@ -4,26 +4,17 @@
  *
  * 四个 tab：
  *  1. Provider —— 内嵌 ProviderPanel（embedded 模式，多协议模型连接管理）
- *  2. 智能体模板 —— 可复用的 persona 模板（localStorage），供新建对话一键填充
- *  3. 话题模板 —— 常用话题（localStorage）
- *  4. 历史预设 —— 历史表单预设管理（localStorage，迁自旧 PresetSelector）
+ *  2. 智能体模板 —— 可复用的 persona 模板，供新建对话点选；含「新建会话」快速入口
+ *  3. 话题模板 —— 常用话题
+ *  4. 历史预设 —— 历史表单预设管理
  */
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProviderPanel from './ProviderPanel.vue'
 import { useDraftStore } from '@/stores/draft'
 import { useFormStore } from '@/stores/form'
+import { useTemplateStore } from '@/stores/template'
 import { labelOf } from '@/services/storage'
-import {
-  addAgentTemplate,
-  addTopicTemplate,
-  loadAgentTemplates,
-  loadTopicTemplates,
-  removeAgentTemplate,
-  removeTopicTemplate,
-  type AgentTemplate,
-  type TopicTemplate,
-} from '@/services/templates'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -47,35 +38,39 @@ function onOverlayClick(e: MouseEvent) {
   mouseDownOnOverlay = false
 }
 
+/* --------------------------- 模板（store 统一管理） --------------------------- */
+const template = useTemplateStore()
+const { agents: agentTemplates, topics: topicTemplates } = storeToRefs(template)
+
 /* --------------------------- 智能体模板 tab --------------------------- */
-const agentTemplates = ref<AgentTemplate[]>(loadAgentTemplates())
 const agentDraft = ref({ name: '', persona: '' })
 
 function addAgent() {
   if (!agentDraft.value.name.trim() && !agentDraft.value.persona.trim()) return
-  agentTemplates.value = addAgentTemplate(
-    agentDraft.value.name,
-    agentDraft.value.persona,
-  )
+  template.addAgent(agentDraft.value.name, agentDraft.value.persona)
   agentDraft.value = { name: '', persona: '' }
 }
 
 function delAgent(id: string) {
-  agentTemplates.value = removeAgentTemplate(id)
+  template.removeAgent(id)
+}
+
+/** 智能体模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
+function startNewChat() {
+  template.requestNewChat()
 }
 
 /* --------------------------- 话题模板 tab --------------------------- */
-const topicTemplates = ref<TopicTemplate[]>(loadTopicTemplates())
 const topicDraft = ref('')
 
 function addTopic() {
   if (!topicDraft.value.trim()) return
-  topicTemplates.value = addTopicTemplate(topicDraft.value)
+  template.addTopic(topicDraft.value)
   topicDraft.value = ''
 }
 
 function delTopic(id: string) {
-  topicTemplates.value = removeTopicTemplate(id)
+  template.removeTopic(id)
 }
 
 /* --------------------------- 历史预设 tab --------------------------- */
@@ -159,9 +154,21 @@ const hasHistory = computed(() => history.value.length > 0)
 
           <!-- 智能体模板 tab -->
           <div v-else-if="tab === 'agent'" class="flex flex-col gap-4 p-5">
-            <p class="text-xs text-text-dim">
-              保存常用的智能体身份设定，新建对话时可在「智能体」输入框手动套用。
-            </p>
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-text-dim">
+                保存常用的智能体身份设定，新建对话时直接点选使用。
+              </p>
+              <!-- 新建会话快速入口 -->
+              <button
+                type="button"
+                class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40"
+                :disabled="agentTemplates.length < 2"
+                :title="agentTemplates.length < 2 ? '至少需要 2 个智能体模板' : ''"
+                @click="startNewChat"
+              >
+                + 新建会话
+              </button>
+            </div>
             <!-- 新增表单 -->
             <div class="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-card p-3">
               <input

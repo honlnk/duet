@@ -62,6 +62,11 @@ function labelOf(id: string): string {
   const star = id === defaultId.value ? ' ★' : ''
   return `${p.name}（${p.model}）${star}`
 }
+
+/** 智能体字母标签（A/B/C…） */
+function agentLabel(idx: number): string {
+  return String.fromCharCode(65 + idx)
+}
 </script>
 
 <template>
@@ -73,26 +78,17 @@ function labelOf(id: string): string {
       <span class="transition-transform group-open:rotate-90">▸</span>
     </summary>
     <div class="flex flex-col gap-3 px-3 pb-3 pt-1">
-      <!-- 智能体 A 的模型 -->
-      <div class="flex flex-col gap-1">
-        <label class="text-xs text-text-dim">智能体 A 模型</label>
+      <!-- 每个智能体的 Provider 选择（动态） -->
+      <div
+        v-for="(agent, idx) in values.agents"
+        :key="idx"
+        class="flex flex-col gap-1"
+      >
+        <label class="text-xs text-text-dim">智能体 {{ agentLabel(idx) }} 模型</label>
         <select
-          v-model="values.providerA"
+          :value="agent.provider"
           class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
-        >
-          <option value="">默认（{{ labelOf(defaultId) }}）</option>
-          <option v-for="p in providers" :key="p.id" :value="p.id">
-            {{ labelOf(p.id) }}
-          </option>
-        </select>
-      </div>
-
-      <!-- 智能体 B 的模型 -->
-      <div class="flex flex-col gap-1">
-        <label class="text-xs text-text-dim">智能体 B 模型</label>
-        <select
-          v-model="values.providerB"
-          class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+          @change="form.patchAgent(idx, { provider: ($event.target as HTMLSelectElement).value })"
         >
           <option value="">默认（{{ labelOf(defaultId) }}）</option>
           <option v-for="p in providers" :key="p.id" :value="p.id">

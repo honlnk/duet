@@ -14,6 +14,7 @@ import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useProviderStore } from '@/stores/provider'
 import { useDurationTracker } from '@/composables/useDurationTracker'
+import { bgColor, textColor, resolveColor } from '@/utils/agentColor'
 import StatusBadge from './StatusBadge.vue'
 import type { AgentId } from '@/types/api'
 
@@ -44,6 +45,7 @@ const {
   stoppedAt,
   durationSec,
   eventLog,
+  viewSide,
 } = storeToRefs(session)
 
 const { display: durationDisplay, start, stop: stopTimer } = useDurationTracker()
@@ -69,29 +71,41 @@ const isRunning = computed(() => status.value === 'running')
 
 const topic = computed(() => current.value?.topic ?? '（未设定话题）')
 
-/** 智能体列表（A/B），带颜色 dot */
+/** 智能体列表（2~3 个），带颜色 dot */
 const agents = computed(() => current.value?.agents ?? [])
 
 /**
  * 各智能体使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
- * 通过 session.config.providerA/B（Provider id）反查 provider store；
+ * 通过 session.config.providerA/B/C（Provider id）反查 provider store；
  * 找不到则回退默认 Provider，仍找不到显示占位。
  */
-const agentProviders = computed<Record<AgentId, string>>(() => {
+const agentProviders = computed<Record<string, string>>(() => {
   const cfg = current.value?.config
   const resolve = (pid: string | undefined) => {
     const p = provider.find(pid) ?? provider.find(provider.defaultId)
     return p?.name || '—'
   }
-  return {
-    A: resolve(cfg?.providerA),
-    B: resolve(cfg?.providerB),
+  const out: Record<string, string> = {}
+  for (const a of agents.value) {
+    if (a.id === 'A') out[a.id] = resolve(cfg?.providerA)
+    else if (a.id === 'B') out[a.id] = resolve(cfg?.providerB)
+    else out[a.id] = resolve(cfg?.providerC)
   }
+  return out
 })
 
-/** A/B 颜色：与 AgentForm/MessageBubble 的 agent-a/b token 对齐 */
-function agentDotClass(id: AgentId) {
-  return id === 'A' ? 'bg-agent-a' : 'bg-agent-b'
+/** 智能体颜色 dot（按 agent.color 解析，预设→class / 自定义→style） */
+function agentDot(id: AgentId) {
+  const idx = agents.value.findIndex((a) => a.id === id)
+  const color = resolveColor(agents.value[idx]?.color, idx)
+  return bgColor(color)
+}
+
+/** 智能体名称颜色 */
+function agentText(id: AgentId) {
+  const idx = agents.value.findIndex((a) => a.id === id)
+  const color = resolveColor(agents.value[idx]?.color, idx)
+  return textColor(color)
 }
 
 /** 轮次展示：次数模式或无限模式 */
@@ -214,7 +228,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
             :key="agent.id"
             class="flex items-center gap-2 text-xs"
           >
-            <span class="h-2 w-2 shrink-0 rounded-full" :class="agentDotClass(agent.id)" />
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
             <span class="shrink-0 text-text-dim">{{ agent.name }}</span>
             <span class="truncate text-text-main">{{ agentProviders[agent.id] }}</span>
           </div>
@@ -243,7 +257,34 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </dl>
       </section>
 
-      <!-- ④ 智能体 persona -->
+      <!-- ④ 智能体视角（选择哪个智能体消息靠右显示） -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          智能体视角
+        </h3>
+        <p class="mb-2 text-xs text-text-muted">选中智能体的消息靠右显示</p>
+        <div class="flex flex-col gap-1.5">
+          <button
+            v-for="agent in agents"
+            :key="agent.id"
+            type="button"
+            class="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+            :class="viewSide === agent.id
+              ? 'border-focus bg-bg-hover text-text-main'
+              : 'border-border-subtle text-text-dim hover:bg-bg-hover'"
+            @click="session.setViewSide(agent.id)"
+          >
+            <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
+            <span class="flex-1 truncate">{{ agent.name }}</span>
+            <span
+              v-if="viewSide === agent.id"
+              class="text-xs text-focus"
+            >右侧</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ⑤ 智能体 persona -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           智能体
@@ -260,8 +301,8 @@ const hasEvents = computed(() => eventLog.value.length > 0)
           class="mb-2 rounded-lg border border-border-subtle p-3"
         >
           <div class="mb-1.5 flex items-center gap-2">
-            <span class="h-2 w-2 rounded-full" :class="agentDotClass(agent.id)" />
-            <span class="text-sm font-medium text-text-main">{{ agent.name }}</span>
+            <span class="h-2 w-2 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
+            <span class="text-sm font-medium" :class="agentText(agent.id).class" :style="agentText(agent.id).style">{{ agent.name }}</span>
             <span class="text-xs text-text-muted">智能体 {{ agent.id }}</span>
           </div>
           <p

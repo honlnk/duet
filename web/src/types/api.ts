@@ -6,8 +6,59 @@
  * 详见 docs/DEVELOPMENT_PLAN.md §5.1 数据模型。
  */
 
-/** 智能体 ID（固定两个） */
-export type AgentId = 'A' | 'B'
+/**
+ * 智能体 ID。支持 2~10 个智能体：A、B 为必选，C~J 按需追加。
+ */
+export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+
+/** 所有可能的智能体 ID */
+export const ALL_AGENT_IDS: readonly AgentId[] = [
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+] as const
+
+/**
+ * 预设颜色 key（与前端 CSS 设计 token 一一对应）。
+ * 自定义颜色用 hex 字符串，见 AgentColorValue。
+ */
+export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
+
+/**
+ * 智能体颜色值：预设 key 或自定义 hex（如 '#ff5533'）。
+ * - 预设色走 Tailwind class（text-agent-blue 等）
+ * - 自定义色走 inline style + CSS 变量（运行时注入，非构建期）
+ */
+export type AgentColorValue = AgentPresetColor | string
+
+/** 向后兼容别名 */
+export type AgentColor = AgentColorValue
+
+/** 前端预设调色板（label 供 UI 展示，key 与 CSS token 对应） */
+export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: string }> = [
+  { key: 'blue', label: '蓝色' },
+  { key: 'pink', label: '粉色' },
+  { key: 'green', label: '绿色' },
+  { key: 'amber', label: '琥珀' },
+  { key: 'purple', label: '紫色' },
+  { key: 'teal', label: '青色' },
+]
+
+/** 判断颜色值是否为预设 key */
+export function isPresetColor(c: string): c is AgentPresetColor {
+  return c === 'blue' || c === 'pink' || c === 'green' ||
+    c === 'amber' || c === 'purple' || c === 'teal'
+}
+
+/**
+ * 智能体默认颜色顺序（按 A/B/C... 依次循环分配）。
+ * 超出预设数量时从头部循环复用。
+ */
+export const DEFAULT_AGENT_COLORS: AgentPresetColor[] = [
+  'blue', 'pink', 'green', 'amber', 'purple', 'teal',
+]
+
+/** 会话允许的智能体数量区间 */
+export const MIN_AGENTS = 2
+export const MAX_AGENTS = 10
 
 /** 会话状态 */
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'finished' | 'error'
@@ -27,6 +78,8 @@ export interface Agent {
   id: AgentId
   name: string
   persona: string
+  /** 颜色标识（与前端 CSS token 对应） */
+  color?: AgentColor
 }
 
 /** 会话配置 */
@@ -47,6 +100,10 @@ export interface SessionConfig {
   providerA?: string
   /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
   providerB?: string
+  /** 智能体 C 使用的 Provider id（空 = 默认 Provider） */
+  providerC?: string
+  /** D~J 等智能体的 Provider 映射（优先级高于默认） */
+  agentProviders?: Record<string, string>
 }
 
 /** 单条消息的 token 用量 */
@@ -87,6 +144,8 @@ export interface SessionStats {
 /**
  * 完整的会话对象
  * 对应 createSession() 的返回，以及 GET /api/sessions/:id 和 WS sync 事件。
+ * - agents：长度 2 或 3（第 0 个恒为 A、第 1 个为 B，第 2 个（可选）为 C）
+ * - memory：A/B 必有；C 仅在三智能体会话时存在
  */
 export interface Session {
   id: string
@@ -119,10 +178,10 @@ export interface SessionSummary {
   agents: string[]
 }
 
-/** POST /api/sessions 请求体 */
+/** POST /api/sessions 请求体（支持 2~3 个智能体，每个可带颜色） */
 export interface CreateSessionPayload {
   topic: string
-  agents: Array<{ name: string; persona?: string }>
+  agents: Array<{ name: string; persona?: string; color?: AgentColor }>
   config: Partial<SessionConfig>
 }
 
