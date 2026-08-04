@@ -222,7 +222,7 @@ const hasHistory = computed(() => history.value.length > 0)
           <!-- 话题模板 tab -->
           <div v-else-if="tab === 'topic'" class="flex flex-col gap-4 p-5">
             <p class="text-xs text-text-dim">
-              保存常用话题，新建对话时可手动套用。
+              保存常用话题，新建对话时点选使用。
             </p>
             <div class="flex gap-2">
               <input

@@ -16,6 +16,7 @@ import { useDraftStore } from '@/stores/draft'
 import { useTemplateStore } from '@/stores/template'
 import { MAX_AGENTS } from '@/types/api'
 import AgentForm from './AgentForm.vue'
+import TopicPicker from './TopicPicker.vue'
 import AdvancedSettings from './AdvancedSettings.vue'
 
 const emit = defineEmits<{ close: []; 'open-settings': [] }>()
@@ -51,7 +52,7 @@ function onOverlayClick(e: MouseEvent) {
 async function handleSubmit() {
   if (!form.canSubmit) {
     if (!form.hasTopic) {
-      errorMsg.value = '请先填写话题'
+      errorMsg.value = '请选择一个话题'
     } else if (!form.allAgentsSelected) {
       errorMsg.value = '请为每个智能体选择一个模板'
     }
@@ -106,16 +107,8 @@ async function handleSubmit() {
 
       <!-- 表单主体（可滚动） -->
       <div class="flex flex-col gap-4 overflow-y-auto px-5 py-4">
-        <!-- 话题 -->
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-text-dim">话题</label>
-          <textarea
-            v-model="values.topic"
-            rows="3"
-            placeholder="想让两个 AI 讨论什么？"
-            class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
-          />
-        </div>
+        <!-- 话题（从模板选择） -->
+        <TopicPicker @open-settings="emit('open-settings')" />
 
         <!-- 智能体列表（2~3 个） -->
         <div class="flex flex-col gap-4">

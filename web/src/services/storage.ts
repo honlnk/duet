@@ -23,6 +23,8 @@ export interface AgentFormValues {
 /** 表单值对象 */
 export interface FormValues {
   topic: string
+  /** 所选话题模板 id（空串 = 未选择模板） */
+  topicTemplateId: string
   model: string
   temperature: string
   maxRounds: string
@@ -82,6 +84,7 @@ export function makeAgent(index: number, over?: Partial<AgentFormValues>): Agent
 export function defaultValues(): FormValues {
   return {
     topic: '',
+    topicTemplateId: '',
     model: 'deepseek-v4-flash',
     temperature: '0.7',
     maxRounds: '',
@@ -200,6 +203,7 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
   const def = defaultValues()
   const out: FormValues = {
     topic: str(anyInput.topic, def.topic),
+    topicTemplateId: str(anyInput.topicTemplateId, def.topicTemplateId),
     model: str(anyInput.model, def.model),
     temperature: str(anyInput.temperature, def.temperature),
     maxRounds: str(anyInput.maxRounds, def.maxRounds),

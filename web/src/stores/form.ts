@@ -25,6 +25,18 @@ export const useFormStore = defineStore('form', () => {
     if (a) Object.assign(a, patch)
   }
 
+  /** 选择一个话题模板：写入话题文本，记录模板 id */
+  function selectTopic(templateId: string, content: string) {
+    values.topicTemplateId = templateId
+    values.topic = content
+  }
+
+  /** 清空话题选择（回到未选占位） */
+  function clearTopic() {
+    values.topicTemplateId = ''
+    values.topic = ''
+  }
+
   /**
    * 为第 idx 个智能体选择一个模板：把模板的 name/persona 填入，
    * 记录 templateId。颜色保留当前选择（用户可在下方单独调）。
@@ -67,6 +79,7 @@ export const useFormStore = defineStore('form', () => {
   function replace(next: FormValues) {
     const normalized = normalizeValues(next)
     values.topic = normalized.topic
+    values.topicTemplateId = normalized.topicTemplateId
     values.model = normalized.model
     values.temperature = normalized.temperature
     values.maxRounds = normalized.maxRounds
@@ -80,6 +93,7 @@ export const useFormStore = defineStore('form', () => {
   function reset() {
     const def = defaultValues()
     values.topic = def.topic
+    values.topicTemplateId = def.topicTemplateId
     values.model = def.model
     values.temperature = def.temperature
     values.maxRounds = def.maxRounds
@@ -146,6 +160,8 @@ export const useFormStore = defineStore('form', () => {
   return {
     values,
     patchAgent,
+    selectTopic,
+    clearTopic,
     selectTemplate,
     clearTemplate,
     addAgent,
