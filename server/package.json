@@ -1,7 +1,7 @@
 {
   "name": "@honlnk/duet",
   "version": "1.0.0",
-  "description": "Duet — 双 AI 自主对话聊天室（终端用户可 npx 运行）",
+  "description": "Duet — 多智能体自主对话聊天室（终端用户可 npx 运行）",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -26,7 +26,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test"
+    "test": "node --import tsx --test",
+    "prepublishOnly": "pnpm -w build"
   },
   "dependencies": {
     "fastify": "^5.10.0",

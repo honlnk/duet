@@ -54,5 +54,9 @@ EXPOSE 3000
 
 USER app
 
+# 健康检查（alpine 自带 wget，探测 /api/health）
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:${PORT}/api/health || exit 1
+
 # 入口：直接运行编译产物（已带 shebang）
 CMD ["node", "dist/index.js"]

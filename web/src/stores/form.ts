@@ -1,7 +1,7 @@
 /**
  * 表单 Store —— 设置区单一数据源
  *
- * v2：智能体从固定 A/B 改为动态数组（2~3 个，每个含 name/persona/color/provider）。
+ * v2：智能体从固定 A/B 改为动态数组（2~10 个，每个含 name/persona/color/provider）。
  * 标量字段（temperature 等）仍以字符串存储，提交时再转换。
  */
 import { defineStore } from 'pinia'
