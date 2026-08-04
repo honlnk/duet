@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import {
-  fetchExchangeRates,
   fetchModelPricing,
   fetchModelsByCred,
   fetchProviderModels,
 } from "@/services/api";
 import { useProviderStore } from "@/stores/provider";
+import { getRates, convertCurrency } from "@/utils/exchange";
 import type {
   ApiProtocol,
   ProviderListItem,
@@ -209,46 +209,21 @@ function currencySymbol(code: string): string {
 }
 
 /* ----------------------- 货币切换汇率换算 ----------------------- */
-/** 汇率缓存：各货币对 USD 的比率（懒加载） */
-const exchangeRates = ref<Record<string, number> | null>(null);
-const rateLoading = ref(false);
-
-/** 懒加载汇率（首次切换货币时拉取，之后复用） */
-async function ensureRates(): Promise<Record<string, number> | null> {
-  if (exchangeRates.value) return exchangeRates.value;
-  rateLoading.value = true;
-  try {
-    const res = await fetchExchangeRates();
-    exchangeRates.value = res.rates;
-    return res.rates;
-  } catch {
-    return null;
-  } finally {
-    rateLoading.value = false;
-  }
-}
-
 /** 记录货币切换前的旧值，供换算用 */
 const prevCurrency = ref(form.currency);
 
-/** 货币切换：按汇率把四个价格从旧货币换算到新货币 */
+/** 货币切换：按汇率把四个价格从旧货币换算到新货币（三层降级，永不失败） */
 async function onCurrencyChange() {
   const from = prevCurrency.value;
   const to = form.currency;
   if (from === to) return;
   prevCurrency.value = to;
 
-  const rates = await ensureRates();
-  if (!rates) return; // 汇率获取失败则不换算，保留原值
-
-  // 换算公式：to 金额 = from 金额 / fromRate * toRate（rate 均为对 USD 的比率）
-  const fromRate = rates[from] ?? 1;
-  const toRate = rates[to] ?? 1;
-  const ratio = toRate / fromRate;
-  form.inputPerMTok = round4p(form.inputPerMTok * ratio);
-  form.outputPerMTok = round4p(form.outputPerMTok * ratio);
-  form.cacheHitPerMTok = round4p(form.cacheHitPerMTok * ratio);
-  form.cacheWritePerMTok = round4p(form.cacheWritePerMTok * ratio);
+  const rates = await getRates();
+  form.inputPerMTok = round4p(convertCurrency(form.inputPerMTok, rates, from, to));
+  form.outputPerMTok = round4p(convertCurrency(form.outputPerMTok, rates, from, to));
+  form.cacheHitPerMTok = round4p(convertCurrency(form.cacheHitPerMTok, rates, from, to));
+  form.cacheWritePerMTok = round4p(convertCurrency(form.cacheWritePerMTok, rates, from, to));
 }
 
 /** 保留 4 位小数 */
