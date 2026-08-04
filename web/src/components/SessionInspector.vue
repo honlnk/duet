@@ -76,8 +76,8 @@ const agents = computed(() => current.value?.agents ?? [])
 
 /**
  * 各智能体使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
- * 通过 session.config.providerA/B/C（Provider id）反查 provider store；
- * 找不到则回退默认 Provider，仍找不到显示占位。
+ * 解析优先级与后端 chatHandler.providerIdOf 保持一致：
+ *   A/B/C → providerA/B/C；D~J → agentProviders[id]；均缺省回退默认 Provider。
  */
 const agentProviders = computed<Record<string, string>>(() => {
   const cfg = current.value?.config
@@ -87,9 +87,12 @@ const agentProviders = computed<Record<string, string>>(() => {
   }
   const out: Record<string, string> = {}
   for (const a of agents.value) {
-    if (a.id === 'A') out[a.id] = resolve(cfg?.providerA)
-    else if (a.id === 'B') out[a.id] = resolve(cfg?.providerB)
-    else out[a.id] = resolve(cfg?.providerC)
+    let pid: string | undefined
+    if (a.id === 'A') pid = cfg?.providerA
+    else if (a.id === 'B') pid = cfg?.providerB
+    else if (a.id === 'C') pid = cfg?.providerC
+    else pid = cfg?.agentProviders?.[a.id]
+    out[a.id] = resolve(pid)
   }
   return out
 })
