@@ -5,6 +5,7 @@ import config from '../config.js'
 import { AgentMemory } from '../memory/context.js'
 import { estimateStepCost, round6 } from '../utils/cost.js'
 import type { CostRates } from '../utils/cost.js'
+import { convertCurrency } from '../utils/currency.js'
 import { DEFAULT_AGENT_COLORS, agentColorOf } from '../ai/prompts.js'
 import type {
   AgentId,
@@ -237,12 +238,16 @@ export function recoverSessions(): number {
  *
  * @param session 当前会话
  * @param usage 该次调用返回的 usage（含缓存拆分字段）
- * @param rates 该次调用所用 Provider 的完整单价（含缓存维度）
+ * @param rates       该次调用所用 Provider 的完整单价（含缓存维度）
+ * @param displayCurrency  展示货币代码（成本统一折算到此币种）
+ * @param exchangeRates    各货币对 USD 的汇率表（用于跨币种换算）
  */
 export function addStats(
   session: Session,
   usage: NormalizedUsage,
-  rates: CostRates
+  rates: CostRates,
+  displayCurrency: string,
+  exchangeRates: Record<string, number>,
 ): SessionStats {
   const pt = usage.prompt_tokens || 0
   const ct = usage.completion_tokens || 0
@@ -257,10 +262,14 @@ export function addStats(
   session.stats.totalCacheWriteTokens += write
   session.stats.totalTokens =
     session.stats.totalPromptTokens + session.stats.totalCompletionTokens
-  // 记录货币（取首个调用方 / 后续以实际为准），供前端展示符号
-  session.stats.costCurrency = rates.currency || session.stats.costCurrency
-  // 增量累加成本，不再重算全量
-  session.stats.estCost = round6(session.stats.estCost + estimateStepCost(usage, rates))
+  // 展示货币固定（会话启动时选举得出）
+  session.stats.costCurrency = displayCurrency
+  // 先按本币算出本次成本，再折算到展示货币后累加（避免跨币种裸加）
+  const stepCostLocal = estimateStepCost(usage, rates)
+  const stepCostDisplay = convertCurrency(
+    stepCostLocal, exchangeRates, rates.currency || displayCurrency, displayCurrency,
+  )
+  session.stats.estCost = round6(session.stats.estCost + stepCostDisplay)
   return session.stats
 }
 

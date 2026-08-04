@@ -15,6 +15,7 @@ import {
   nextAgentId,
 } from '../store/sessionStore.js'
 import { resolveProvider } from '../store/providerStore.js'
+import { pickDisplayCurrency, getRatesWithFallback } from '../utils/currency.js'
 import config from '../config.js'
 import type {
   AgentId,
@@ -203,6 +204,10 @@ export async function runLoop(session: Session): Promise<void> {
     })
   }
 
+  // 选举展示货币（按各 Provider 货币数量多数决定，平票用 CNY）+ 拉取汇率
+  const displayCurrency = pickDisplayCurrency(runtimes2.map((r) => r.rates.currency))
+  const exchangeRates = await getRatesWithFallback()
+
   try {
     while (true) {
       // === 1. 顶部检查停止条件 ===
@@ -258,7 +263,7 @@ export async function runLoop(session: Session): Promise<void> {
           phase: 'start',
         })
         try {
-          const summary = await summarizeConversation({
+          const { content: summary, usage: summaryUsage } = await summarizeConversation({
             agentName: cur.ref.name,
             others: cur.mem.others,
             messages: cur.mem.messages,
@@ -267,6 +272,8 @@ export async function runLoop(session: Session): Promise<void> {
             conn: cur.conn,
           })
           if (summary) {
+            // 摘要调用成本也计入会话总成本（按该 Agent 的 Provider 单价 + 展示货币换算）
+            addStats(session, summaryUsage, cur.rates, displayCurrency, exchangeRates)
             cur.mem.applySummary(summary, round)
             cur.mem.trimToRecent(session.config.keepRecent)
             broadcast(session.id, {
@@ -327,7 +334,7 @@ export async function runLoop(session: Session): Promise<void> {
         }
 
         const usage: NormalizedUsage = result.usage
-        addStats(session, usage, cur.rates)
+        addStats(session, usage, cur.rates, displayCurrency, exchangeRates)
         // 累计发言字符数（用于右上角统计展示）
         session.stats.totalChars += content.length
 

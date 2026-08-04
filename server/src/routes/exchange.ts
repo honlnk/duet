@@ -3,6 +3,9 @@
  *
  * 代理调用 open.er-api.com（免费、无需 key），返回各货币对 USD 的汇率。
  * 带 6 小时内存缓存（该数据源每日更新一次，无需频繁刷新）。
+ *
+ * fetchRates 同时被后端成本核算（utils/currency.ts）复用，
+ * 用于多 Provider 混合货币场景下的统一换算。
  */
 import type { FastifyInstance } from 'fastify'
 
@@ -18,7 +21,11 @@ interface ErApiResponse {
 
 let cache: { rates: Record<string, number>; fetchedAt: number } | null = null
 
-async function fetchRates(): Promise<Record<string, number>> {
+/**
+ * 获取汇率表（各货币对 USD 的比率），带 6h 内存缓存。
+ * 同时供后端成本核算复用。
+ */
+export async function fetchRates(): Promise<Record<string, number>> {
   if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.rates
   }

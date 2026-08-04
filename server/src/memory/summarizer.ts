@@ -1,4 +1,5 @@
 import { getAdapter } from '../ai/providers/index.js'
+import type { NormalizedUsage } from '../ai/providers/types.js'
 import type { ConnectionConfig } from '../types/index.js'
 import { buildSummaryPrompt } from '../ai/prompts.js'
 import type { AgentRef, MemoryMessage } from '../types/index.js'
@@ -16,11 +17,17 @@ interface SummarizeOpts {
   signal?: AbortSignal
 }
 
+/** 摘要结果（含 usage 供成本统计） */
+export interface SummaryResult {
+  content: string
+  usage: NormalizedUsage
+}
+
 /**
  * 摘要生成器。
  *
  * 输入：该 AI 视角的最近 messages（assistant/user 翻转过的）+ 旧摘要。
- * 输出：新摘要文本（第一人称视角）。
+ * 输出：新摘要文本（第一人称视角）+ 本次调用 usage（供成本统计）。
  *
  * 多智能体下，user 角色的消息已带「[名字]:」前缀；这里按 messages 的 role
  * 区分：assistant 标注为本智能体名，user 标注为「（其他参与者）」。
@@ -35,7 +42,7 @@ export async function summarizeConversation({
   words = 200,
   conn,
   signal,
-}: SummarizeOpts): Promise<string> {
+}: SummarizeOpts): Promise<SummaryResult> {
   const otherNames = others.map((o) => o.name)
 
   // 把 messages 格式化为可读对话
@@ -69,5 +76,5 @@ export async function summarizeConversation({
     signal,
   })
 
-  return (result.content || '').trim()
+  return { content: (result.content || '').trim(), usage: result.usage }
 }
