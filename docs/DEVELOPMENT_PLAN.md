@@ -4,6 +4,26 @@
 > 状态：**APPROVED_WITH_MINOR_ISSUES — 进入实施**
 > 审核记录见 `docs/REVIEW.md`
 
+> ---
+> ## ⚠️ 历史文档声明
+>
+> **本文档为 v1 初始设计，仅描述「双 AI（A/B）」场景，保留作为设计溯源与决策记录。**
+> 项目已在后续迭代中显著演进，与本文不符之处以代码与 `README.md` 为准：
+>
+> | 本文档（v1） | 现状（v3） |
+> |---|---|
+> | 仅 DeepSeek 单模型 | **多协议**：OpenAI 兼容 / Responses / Anthropic / Gemini，任意 Provider |
+> | `ai/deepseek.ts` | 已重构为 `ai/providers/`（openai / openai-responses / anthropic / gemini）适配器 |
+> | 仅 2 个 AI（A/B） | **2~10 个智能体**（A~J），按 A→B→C→…→A 轮流 |
+> | `round = floor(msgCount / 2)` | `round = floor(msgCount / agents.length)` |
+> | `DEEPSEEK_API_KEY` 环境变量 + fail-fast 校验 | API Key 全部走页面「Provider」面板，环境变量无必填项 |
+> | 固定模型/温度配置 | 每个智能体可独立绑定 Provider、独立颜色 |
+> | — | 新增模板系统（智能体 / 话题模板复用） |
+>
+> 阅读建议：§2（调研）、§5.1（数据模型与 role 翻转）、§5.2（调度循环）、§5.3（摘要 prompt）
+> 的核心设计思路仍然适用且有价值；涉及具体文件名、协议数量、智能体数量的描述请以上表为准。
+> ---
+
 ## 1. 项目目标
 
 构建一个「双 AI 自主对话聊天室」工具：

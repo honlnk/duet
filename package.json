@@ -2,7 +2,7 @@
   "name": "duet",
   "version": "1.0.0",
   "private": true,
-  "description": "Duet — 双 AI 自主对话聊天室",
+  "description": "Duet — 多智能体自主对话聊天室",
   "type": "module",
   "scripts": {
     "dev": "run-p -l dev:web dev:server",

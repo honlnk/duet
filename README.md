@@ -1,25 +1,27 @@
-# Duet ♪ 双 AI 自主对话聊天室
+# Duet ♪ 多智能体自主对话聊天室
 
-> 给两个 AI 一个话题与身份，让它们自己聊起来。
+> 给 2~10 个 AI 一个话题与各自的身份，让它们自己聊起来。
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
-> 两个 AI 各自维护独立的上下文记忆，互不混淆身份。
+> 每个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
-![status](https://img.shields.io/badge/status-v3.0%20ready-green) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
+![status](https://img.shields.io/badge/status-v3.0%20ready-green) ![agents](https://img.shields.io/badge/agents-2~10-orange) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
 
 ## ✨ 功能特性
 
-- **一键启动双 AI 对话**：输入话题 + 两个智能体身份设定，点击开始即自动轮流对话。
+- **一键启动多智能体对话**：输入话题 + 2~10 个智能体身份设定，点击开始即按 A→B→C→…→A 顺序自动轮流对话。
 - **流式输出**：逐字打字效果，实时看到 AI 的发言。
 - **多 Provider / 多协议模型管理**：
-  - 支持 **OpenAI 兼容 / Responses / Anthropic / Gemini** 四种协议，两个 AI 可各自绑定不同 Provider 与模型；
+  - 支持 **OpenAI 兼容 / Responses / Anthropic / Gemini** 四种协议，每个智能体可各自绑定不同 Provider 与模型；
   - 在页面内可视化维护 API Key、模型、价格，按需「获取列表」拉取上游模型；
   - 单价 / 缓存命中 / 缓存写入分维度计费，支持 CNY/USD/EUR 并按实时汇率换算。
+- **自定义颜色标识**：每个智能体可指定 6 种预设色（蓝/粉/绿/琥珀/紫/青）或任意 `#hex` 自定义色，气泡、头像、强调条自动着色，长对话中一眼区分发言者。
+- **模板复用**：把常用的智能体设定（名字 + persona）和话题保存为模板，新建对话时一键套用，在「设置」页集中管理。
 - **灵活的停止条件**：
   - 设置「对话轮数上限」按轮停止；
   - 设置「持续时间上限」到点停止；
   - 不设置则**无限对话**，随时点「停止」立即中断（中断当前流式请求）。
 - **独立的长记忆**（参考 SillyTavern Summarize 机制）：
-  - 两个 AI 各自维护独立的 messages 与 summary，物理隔离，身份不串；
+  - 每个智能体各自维护独立的 messages 与 summary，物理隔离，身份不串；
   - 每 N 轮自动触发**第一人称视角摘要**压缩上下文；
   - 滑动窗口保留最近若干条原始消息。
 - **成本可控**：顶部常驻显示累计 token 与估算成本；全局硬熔断兜底（默认 ≤ 200 轮 / 2 小时）。
@@ -55,7 +57,7 @@ pnpm dev
 - 填写 **API Key、Base URL、模型名**，可点「获取列表」从上游拉取可用模型；
 - 可选填**价格**（输入 / 输出 / 缓存命中 / 缓存写入，支持 CNY/USD/EUR 并按实时汇率换算），留空则用内置兜底单价估算成本。
 
-第一条 Provider 会自动成为默认。之后在「高级设置」里可给智能体 A / B 各自绑定不同 Provider。配置落盘到 `data/providers.json`。
+第一条 Provider 会自动成为默认。之后在「高级设置」里可给每个智能体各自绑定不同 Provider。配置落盘到 `data/providers.json`。
 
 > API Key 仅存在后端，前端不直接调用任何模型 API。
 
@@ -126,11 +128,9 @@ docker compose up -d --build
 
 ### 基本用法
 
-1. **话题**：在「话题」输入框写你想让两个 AI 讨论的内容。
-2. **智能体设定**：
-   - 智能体 A：名称 + 身份设定（你是谁、你的立场是什么）。
-   - 智能体 B：同上。
-3. **开始**：点击「开始对话」，A 先发言，B 接力，自动循环。
+1. **话题**：在「话题」输入框写你想让智能体们讨论的内容。
+2. **智能体设定**：每个智能体填写名称 + 身份设定（你是谁、你的立场是什么）。可添加 2~10 个。
+3. **开始**：点击「开始对话」，A 先发言，B 接力，C 继续……自动循环回到 A。
 4. **停止**：随时点「停止」立即中断（会保留已生成的部分消息）。
 5. **重置**：清空当前界面，重新开始设置。
 
@@ -138,8 +138,7 @@ docker compose up -d --build
 
 | 参数 | 说明 | 默认值 |
 |---|---|---|
-| 智能体 A 模型 | 绑定智能体 A 使用的 Provider | 默认 Provider |
-| 智能体 B 模型 | 绑定智能体 B 使用的 Provider | 默认 Provider |
+| 每个智能体的 Provider | 分别绑定各智能体使用的 Provider | 默认 Provider |
 | 温度 | 生成多样性 | `0.7` |
 | 对话轮数上限 | 留空=无限（仍受全局熔断） | 空（无限）|
 | 持续时间上限(秒) | 留空=无限 | 空（无限）|
@@ -147,6 +146,15 @@ docker compose up -d --build
 | 压缩后保留最近消息数 | 滑动窗口大小 | `8` |
 
 > Provider（含 API Key、协议、模型、价格）在页面右上角「Provider」面板统一管理，详见上文「配置 Provider」。
+
+### 模板管理
+
+在「设置」页可维护两类模板：
+
+- **智能体模板**：保存常用的名字 + persona，新建对话时一键填入，无需重复粘贴长设定。
+- **话题模板**：保存常用讨论话题，下次直接选用。
+
+模板存在浏览器 localStorage，随用随取。
 
 ### 顶部状态栏
 
@@ -160,31 +168,34 @@ docker compose up -d --build
 | 层 | 选型 |
 |---|---|
 | 后端 | **TypeScript** + Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
-| AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖），内建 OpenAI 兼容 / Responses / Anthropic / Gemini 多协议适配器 |
+| AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖），内建 OpenAI 兼容 / Responses / Anthropic / Gemini 多协议适配器（`ai/providers/`）|
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
 | 持久化 | JSON 文件（每条消息同步落盘，原子替换）；Provider 凭证存 `providers.json` |
 | 包管理 | **pnpm workspace**（`server` + `web` 两个工作区）|
 
-### 双 AI 独立记忆设计（核心）
+### 多智能体独立记忆设计（核心）
 
-每个 AI 维护**自己的视角**的 messages 数组：
+每个智能体维护**自己视角**的 messages 数组，彼此物理隔离：
 
 ```
-AI-A 的视角：                 AI-B 的视角：
-[system: A 的 persona+规则]   [system: B 的 persona+规则]
-[system: 摘要（A视角）]        [system: 摘要（B视角）]
-[user: 开场提示]               ...
-[assistant: A的发言1]          [user: [A]: A的发言1]
-[user: [B]: B的发言1]          [assistant: B的发言1]
-[assistant: A的发言2]          [user: [A]: A的发言2]
-...                            ...
+A 的视角：                 B 的视角：                 C 的视角：
+[system: A 的 persona+规则]  [system: B 的 persona+规则]  [system: C 的 persona+规则]
+[system: 摘要（A 视角）]     [system: 摘要（B 视角）]     [system: 摘要（C 视角）]
+[assistant: A 的发言]        [user: [A]: A 的发言]        [user: [A]: A 的发言]
+[user: [B]: B 的发言]        [assistant: B 的发言]        [user: [B]: B 的发言]
+[user: [C]: C 的发言]        [user: [C]: C 的发言]        [assistant: C 的发言]
+...                          ...                          ...
 ```
 
-- A 说的话，在 A 视角是 `assistant`，在 B 视角是 `user`（带 `[A名]:` 前缀）。
-- 摘要各自生成，以**第一人称**撰写（"我"、"对方"），避免身份混淆。
+- 自己说的话在自己的视角是 `assistant`，在其他人的视角是 `user`（带 `[名字]:` 前缀）。
+- 摘要各自生成，以**第一人称**撰写（"我"、"对方们"），避免身份混淆。
 - 对方的思维链（`reasoning_content`）绝不进入自己的上下文。
 
-详见 `docs/DEVELOPMENT_PLAN.md`。
+### 轮次定义（N 智能体场景）
+
+- **1 轮（round）= N 个智能体各发言一次 = N 条 message**（N = 智能体数量）。
+- `round = floor(messageCount / agents.length)`。
+- 「对话轮数上限」「摘要频率」均按 round 计。
 
 ## 📁 项目结构
 
@@ -194,18 +205,24 @@ duet/
 ├── server/                # 后端（Fastify 5 + WS + 多协议 AI 客户端）
 │   └── src/
 │       ├── ai/            # 多协议流式适配器 + prompt 模板
-│       ├── memory/        # 上下文管理 + 摘要器
+│       │   └── providers/ # openai / openai-responses / anthropic / gemini
+│       ├── memory/        # 上下文管理 + 摘要器（第一人称视角）
 │       ├── store/         # 会话 + Provider 凭证持久化
-│       ├── ws/            # WebSocket 双 AI 调度
-│       └── routes/        # REST 路由
+│       ├── ws/            # WebSocket 多智能体调度
+│       ├── routes/        # REST 路由
+│       ├── types/         # 后端类型定义
+│       └── utils/         # 成本计算等工具
 ├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
 │   └── src/
 │       ├── assets/        # Tailwind 主题（@theme 设计 token）
 │       ├── types/         # 后端 API 契约类型
-│       ├── services/      # REST 封装 + localStorage 草稿
-│       ├── composables/   # WebSocket 连接 + 计时器
-│       ├── stores/        # Pinia（session / form / draft / config）
-│       └── components/    # SFC 组件（Header/Bubble/Sidebar…）
+│       ├── services/      # REST 封装 + localStorage 草稿与模板
+│       ├── composables/   # WebSocket 连接 + 计时器 + 响应式逻辑
+│       ├── stores/        # Pinia（session / sessions / form / draft / config / provider / template）
+│       ├── utils/         # 智能体颜色映射（agentColor）
+│       ├── router/        # Vue Router 路由
+│       ├── views/         # 页面（Home / Session）
+│       └── components/    # SFC 组件（Sidebar / Bubble / Inspector / Modal…）
 ├── pnpm-workspace.yaml    # pnpm 工作区配置
 └── data/sessions/         # 运行时会话数据（gitignore）
 ```
@@ -228,11 +245,11 @@ duet/
 - **无限对话会产生持续 API 费用**，请留意顶部 token 与成本统计，及时停止。
 - 全局熔断默认 200 轮 / 2 小时，可通过环境变量调整。
 - API Key 仅存在后端（落盘到 `providers.json`），前端不直接调用任何模型 API。
-- 模型返回的 `reasoning_content`（思维链）仅用于后端调试，不会展示给前端，也不会进入对方 AI 的上下文。
+- 模型返回的 `reasoning_content`（思维链）仅用于后端调试，不会展示给前端，也不会进入其他智能体的上下文。
 
 ## 📚 文档
 
-- [开发计划](docs/DEVELOPMENT_PLAN.md) — 完整设计文档
+- [开发计划](docs/DEVELOPMENT_PLAN.md) — 初始设计文档（v1，部分已演进，见文首声明）
 - [调研笔记](docs/RESEARCH_NOTES.md) — DeepSeek API 实测数据
 - [审核记录](docs/REVIEW.md) — 计划审核与修订记录
 
