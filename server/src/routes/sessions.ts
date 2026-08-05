@@ -10,12 +10,14 @@ import {
   MAX_AGENTS,
 } from '../store/sessionStore.js'
 import { isPresetColor } from '../types/index.js'
+import { syncRelationshipsToRuntime } from '../ws/chatHandler.js'
 
 /** POST /api/sessions 请求体（与 Fastify JSON Schema 对齐） */
 interface CreateSessionBody {
   topic: string
-  agents: Array<{ name: string; persona?: string; color?: string }>
+  agents: Array<{ name: string; description?: string; personality?: string; color?: string }>
   config?: Partial<SessionConfig>
+  relationships?: Record<string, string>
 }
 
 /** 带 :id 参数的请求 */
@@ -54,7 +56,8 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                 required: ['name'],
                 properties: {
                   name: { type: 'string', minLength: 1 },
-                  persona: { type: 'string' },
+                  description: { type: 'string' },
+                  personality: { type: 'string' },
                   color: { type: 'string' },
                 },
               },
@@ -76,7 +79,13 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                   type: 'object',
                   additionalProperties: { type: 'string' },
                 },
+                scenario: { type: 'string' },
+                globalPrompt: { type: 'string' },
               },
+            },
+            relationships: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
             },
           },
         },
@@ -87,13 +96,15 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       // 校验颜色：预设 key 或合法 hex 保留，非法 → undefined（由 createSession 补默认色）
       const agentsInput = body.agents.map((a) => ({
         name: a.name,
-        persona: a.persona,
+        description: a.description,
+        personality: a.personality,
         color: validateColor(a.color),
       }))
       const session = createSession({
         topic: body.topic,
         agents: agentsInput,
         config: body.config ?? {},
+        relationships: body.relationships,
       })
       saveSession(session)
       return session
@@ -118,6 +129,56 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
     if (!ok) return reply.code(404).send({ error: '会话不存在' })
     return { ok: true }
   })
+
+  // 更新会话的关系数据（对话进行中也可修改）
+  fastify.patch<{ Params: { id: string }; Body: { relationships?: Record<string, string>; nodePositions?: Record<string, { x: number; y: number }> } }>(
+    '/api/sessions/:id/relationships',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            relationships: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
+            },
+            nodePositions: {
+              type: 'object',
+              additionalProperties: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['x', 'y'],
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const session = loadSession(req.params.id)
+      if (!session) return reply.code(404).send({ error: '会话不存在' })
+      if (req.body.relationships !== undefined) {
+        session.relationships = req.body.relationships
+        // 同步更新所有 AgentMemoryData 的 relationships（持久化形态）
+        for (const a of session.agents) {
+          if (session.memory[a.id]) {
+            session.memory[a.id]!.relationships = session.relationships
+          }
+        }
+        // 同步到正在运行的会话运行时状态（下一轮 prompt 生效）
+        syncRelationshipsToRuntime(req.params.id, session.relationships)
+      }
+      if (req.body.nodePositions !== undefined) {
+        session.nodePositions = req.body.nodePositions
+      }
+      saveSession(session)
+      return session
+    },
+  )
 }
 
 export default sessionRoutes

@@ -661,9 +661,6 @@ function onOverlayMouseUp(e: MouseEvent) {
               <div class="mb-2 flex flex-col gap-1">
                 <label class="text-xs text-text-muted">
                   货币
-                  <span v-if="rateLoading" class="text-text-muted"
-                    >（获取汇率中…）</span
-                  >
                 </label>
                 <select
                   v-model="form.currency"

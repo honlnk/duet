@@ -4,34 +4,38 @@
  *
  * 四个 tab：
  *  1. Provider —— 内嵌 ProviderPanel（embedded 模式，多协议模型连接管理）
- *  2. 智能体模板 —— 可复用的 persona 模板，供新建对话点选；含「新建会话」快速入口
+ *  2. 智能体模板 —— 可复用的角色卡模板，供新建对话点选；含「新建会话」快速入口
  *  3. 话题模板 —— 常用话题
  *  4. 历史预设 —— 历史表单预设管理
  */
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ProviderPanel from './ProviderPanel.vue'
+import RelationshipCanvas from './RelationshipCanvas.vue'
 import { useDraftStore } from '@/stores/draft'
 import { useFormStore } from '@/stores/form'
 import { useTemplateStore } from '@/stores/template'
+import { useRelationshipStore } from '@/stores/relationship'
 import { labelOf } from '@/services/storage'
 
 const emit = defineEmits<{ close: [] }>()
 
-type Tab = 'provider' | 'agent' | 'topic' | 'history'
+type Tab = 'provider' | 'agent' | 'relationship' | 'topic' | 'worldview' | 'history'
 const tab = ref<Tab>('provider')
 
 const tabs: Array<{ key: Tab; label: string }> = [
   { key: 'provider', label: 'API 配置' },
   { key: 'agent', label: '智能体模板' },
+  { key: 'relationship', label: '关系图' },
   { key: 'topic', label: '话题模板' },
+  { key: 'worldview', label: '世界观模板' },
   { key: 'history', label: '历史预设' },
 ]
 
 /** 点遮罩关闭（防误触：按下和松开都在遮罩才关） */
 let mouseDownOnOverlay = false
-function onOverlayMouseDown() {
-  mouseDownOnOverlay = true
+function onOverlayMouseDown(e: MouseEvent) {
+  mouseDownOnOverlay = e.target === e.currentTarget
 }
 function onOverlayClick(e: MouseEvent) {
   if (mouseDownOnOverlay && e.target === e.currentTarget) emit('close')
@@ -40,19 +44,30 @@ function onOverlayClick(e: MouseEvent) {
 
 /* --------------------------- 模板（store 统一管理） --------------------------- */
 const template = useTemplateStore()
-const { agents: agentTemplates, topics: topicTemplates } = storeToRefs(template)
+const { agents: agentTemplates, topics: topicTemplates, worldviews: worldviewTemplates } = storeToRefs(template)
+const relationshipStore = useRelationshipStore()
 
 /* --------------------------- 智能体模板 tab --------------------------- */
-const agentDraft = ref({ name: '', persona: '' })
+const agentDraft = ref({ name: '', description: '', personality: '' })
 
 function addAgent() {
-  if (!agentDraft.value.name.trim() && !agentDraft.value.persona.trim()) return
-  template.addAgent(agentDraft.value.name, agentDraft.value.persona)
-  agentDraft.value = { name: '', persona: '' }
+  if (
+    !agentDraft.value.name.trim() &&
+    !agentDraft.value.description.trim() &&
+    !agentDraft.value.personality.trim()
+  ) return
+  template.addAgent(
+    agentDraft.value.name,
+    agentDraft.value.description,
+    agentDraft.value.personality,
+  )
+  agentDraft.value = { name: '', description: '', personality: '' }
 }
 
 function delAgent(id: string) {
   template.removeAgent(id)
+  // 同步清理该模板在关系图中的所有关系 + 节点位置
+  relationshipStore.purgeTemplate(id)
 }
 
 /** 智能体模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
@@ -71,6 +86,23 @@ function addTopic() {
 
 function delTopic(id: string) {
   template.removeTopic(id)
+}
+
+/* --------------------------- 世界观模板 tab --------------------------- */
+const worldviewDraft = ref({ name: '', scenario: '', globalPrompt: '' })
+
+function addWorldview() {
+  if (!worldviewDraft.value.name.trim() && !worldviewDraft.value.scenario.trim()) return
+  template.addWorldview(
+    worldviewDraft.value.name,
+    worldviewDraft.value.scenario,
+    worldviewDraft.value.globalPrompt,
+  )
+  worldviewDraft.value = { name: '', scenario: '', globalPrompt: '' }
+}
+
+function delWorldview(id: string) {
+  template.removeWorldview(id)
 }
 
 /* --------------------------- 历史预设 tab --------------------------- */
@@ -178,15 +210,21 @@ const hasHistory = computed(() => history.value.length > 0)
                 class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
               />
               <textarea
-                v-model="agentDraft.persona"
-                rows="2"
-                placeholder="身份设定（你是谁、你的立场…）"
+                v-model="agentDraft.description"
+                rows="3"
+                placeholder="角色描述（你是谁、背景、外貌、核心设定…）"
                 class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+              />
+              <input
+                v-model="agentDraft.personality"
+                type="text"
+                placeholder="性格关键词（如：温和、爱反问、逻辑严密）"
+                class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
               />
               <button
                 type="button"
                 class="self-start rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
-                :disabled="!agentDraft.name.trim() && !agentDraft.persona.trim()"
+                :disabled="!agentDraft.name.trim() && !agentDraft.description.trim() && !agentDraft.personality.trim()"
                 @click="addAgent"
               >
                 + 添加模板
@@ -206,7 +244,8 @@ const hasHistory = computed(() => history.value.length > 0)
                   <p class="text-sm font-medium text-text-main">
                     {{ t.name || '（未命名）' }}
                   </p>
-                  <p class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ t.persona }}</p>
+                  <p v-if="t.description" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ t.description }}</p>
+                  <p v-if="t.personality" class="mt-0.5 text-xs text-text-muted">性格：{{ t.personality }}</p>
                 </div>
                 <button
                   type="button"
@@ -217,6 +256,11 @@ const hasHistory = computed(() => history.value.length > 0)
                 </button>
               </div>
             </div>
+          </div>
+
+          <!-- 关系图 tab -->
+          <div v-else-if="tab === 'relationship'" class="p-3">
+            <RelationshipCanvas />
           </div>
 
           <!-- 话题模板 tab -->
@@ -255,6 +299,68 @@ const hasHistory = computed(() => history.value.length > 0)
                   type="button"
                   class="shrink-0 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
                   @click="delTopic(t.id)"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 世界观模板 tab -->
+          <div v-else-if="tab === 'worldview'" class="flex flex-col gap-4 p-5">
+            <p class="text-xs text-text-dim">
+              保存常用的场景设定 + 导演指令，新建对话时一键填充。
+            </p>
+            <!-- 新增表单 -->
+            <div class="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-card p-3">
+              <input
+                v-model="worldviewDraft.name"
+                type="text"
+                placeholder="模板名（如：校园日常、赛博朋克）"
+                class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+              />
+              <textarea
+                v-model="worldviewDraft.scenario"
+                rows="3"
+                placeholder="场景设定 / 世界观（如：深夜的咖啡馆，窗外下着雨…）"
+                class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+              />
+              <textarea
+                v-model="worldviewDraft.globalPrompt"
+                rows="2"
+                placeholder="导演指令 / 全局规则（可选，如：对话基调为悬疑，角色之间暗藏秘密）"
+                class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+              />
+              <button
+                type="button"
+                class="self-start rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
+                :disabled="!worldviewDraft.name.trim() && !worldviewDraft.scenario.trim()"
+                @click="addWorldview"
+              >
+                + 添加模板
+              </button>
+            </div>
+            <!-- 模板列表 -->
+            <div v-if="worldviewTemplates.length === 0" class="py-6 text-center text-xs text-text-muted">
+              还没有世界观模板
+            </div>
+            <div v-else class="flex flex-col gap-2">
+              <div
+                v-for="w in worldviewTemplates"
+                :key="w.id"
+                class="group flex items-start justify-between gap-3 rounded-lg border border-border-subtle bg-white px-3 py-2"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-text-main">
+                    {{ w.name || '（未命名）' }}
+                  </p>
+                  <p v-if="w.scenario" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ w.scenario }}</p>
+                  <p v-if="w.globalPrompt" class="mt-0.5 line-clamp-1 text-xs text-text-muted">导演：{{ w.globalPrompt }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
+                  @click="delWorldview(w.id)"
                 >
                   删除
                 </button>

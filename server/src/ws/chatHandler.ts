@@ -66,6 +66,24 @@ export function attachClient(sessionId: string, send: BroadcastFn): () => void {
   return () => rt.wsClients.delete(send)
 }
 
+/**
+ * 同步关系数据到正在运行的会话运行时状态。
+ *
+ * PATCH /api/sessions/:id/relationships 路由调用此函数，
+ * 把新关系图同步到 runLoop 持有的内存态 Session + 各 AgentMemory，
+ * 使「对话进行中修改关系 → 下一轮 prompt 更新」生效。
+ *
+ * 若该会话当前未运行（无 activeSession），则无操作（磁盘已由路由写盘）。
+ */
+export function syncRelationshipsToRuntime(
+  sessionId: string,
+  relationships: Record<string, string>,
+): void {
+  const rt = runtimes.get(sessionId)
+  if (!rt || !rt.activeSession) return
+  rt.activeSession.relationships = relationships
+}
+
 /** 向该会话所有 WS 客户端广播 */
 function broadcast(sessionId: string, msg: ServerToClientMsg): void {
   const rt = runtimes.get(sessionId)
@@ -152,7 +170,10 @@ export async function runLoop(session: Session): Promise<void> {
   const memMap = new Map<AgentId, AgentMemory>()
   for (const a of session.agents) {
     const data = session.memory[a.id]
-    memMap.set(a.id, data ? AgentMemory.fromJSON(data) : new AgentMemory(a, [], session.topic))
+    const mem = data ? AgentMemory.fromJSON(data) : new AgentMemory(a, [], session.topic, session.relationships)
+    // 确保运行期 relationships 与 session 级一致（PATCH 可能修改过）
+    mem.relationships = session.relationships || {}
+    memMap.set(a.id, mem)
   }
 
   // 为每个 Agent 解析 Provider 连接配置。
@@ -295,6 +316,9 @@ export async function runLoop(session: Session): Promise<void> {
       }
 
       // === 4. 组装 messages（首条加开场提示）===
+      // 先同步 session 级 relationships → 当前 agent 的 memory（PATCH 运行时修改生效）
+      cur.mem.relationships = session.relationships || {}
+
       if (session.messageCount === 0 && agentId === 'A' && cur.mem.messages.length === 0) {
         cur.mem.pushOther(
           buildOpeningPrompt({
@@ -305,7 +329,11 @@ export async function runLoop(session: Session): Promise<void> {
         )
       }
 
-      const apiMessages = cur.mem.buildApiMessages(session.config.keepRecent)
+      const apiMessages = cur.mem.buildApiMessages(
+        session.config.keepRecent,
+        session.config.scenario,
+        session.config.globalPrompt,
+      )
 
       // === 5. 调模型流式 ===
       rt.abortCtrl = new AbortController()

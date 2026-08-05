@@ -15,7 +15,7 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import { createSession, getSession } from '@/services/api'
+import { createSession, getSession, updateRelationships } from '@/services/api'
 import type {
   Agent,
   AgentId,
@@ -390,6 +390,31 @@ export const useSessionStore = defineStore('session', () => {
     return true
   }
 
+  /**
+   * 更新当前会话的关系数据（关系图 + 节点位置）。
+   * 调用后端 PATCH 接口，并同步本地 session 对象。
+   */
+  async function saveRelationships(
+    id: string,
+    body: {
+      relationships?: Record<string, string>
+      nodePositions?: Record<string, { x: number; y: number }>
+    },
+  ): Promise<boolean> {
+    try {
+      const s = await updateRelationships(id, body)
+      // 同步本地 session 引用（shallowRef 需整体替换触发响应）
+      if (session.value) {
+        session.value = { ...s }
+      } else {
+        session.value = s
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
   /** 重置：清空当前会话与运行态 */
   function clearSession() {
     session.value = null
@@ -427,6 +452,7 @@ export const useSessionStore = defineStore('session', () => {
     syncFinalStatus,
     create,
     load,
+    saveRelationships,
     clearSession,
     resetRuntime,
     log,

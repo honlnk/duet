@@ -2,14 +2,14 @@
 /**
  * 会话详情右侧栏
  *
- * 聚合当前会话的「状态 + 控制 / 统计 / 智能体 persona / 事件日志」四区，
+ * 聚合当前会话的「状态 + 控制 / 统计 / 智能体设定 / 事件日志」四区，
  * 取代原 SessionView 底部那组控制条 + StatsBar + EventLog。
  *
  * 布局参考 NovAI ContentPanel：默认收起（w-0），展开为 w-80；
  * 移动端走覆盖抽屉（fixed + 遮罩）。纯展示组件，WS 控制逻辑
  * 通过 emit 上抛由 SessionView 处理，本组件不碰 WebSocket。
  */
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useProviderStore } from '@/stores/provider'
@@ -287,7 +287,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </div>
       </section>
 
-      <!-- ⑤ 智能体 persona -->
+      <!-- ⑤ 智能体设定 -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           智能体
@@ -309,12 +309,15 @@ const hasEvents = computed(() => eventLog.value.length > 0)
             <span class="text-xs text-text-muted">智能体 {{ agent.id }}</span>
           </div>
           <p
-            v-if="agent.persona"
+            v-if="agent.description"
             class="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-text-dim"
           >
-            {{ agent.persona }}
+            {{ agent.description }}
           </p>
           <p v-else class="text-xs text-text-muted">（未设定身份）</p>
+          <p v-if="agent.personality" class="mt-1 text-xs text-text-muted">
+            性格：{{ agent.personality }}
+          </p>
         </div>
       </section>
 
@@ -364,5 +367,6 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         返回首页
       </button>
     </div>
+
   </aside>
 </template>

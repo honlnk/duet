@@ -17,6 +17,7 @@ import { useTemplateStore } from '@/stores/template'
 import { MAX_AGENTS } from '@/types/api'
 import AgentForm from './AgentForm.vue'
 import TopicPicker from './TopicPicker.vue'
+import WorldviewPicker from './WorldviewPicker.vue'
 import AdvancedSettings from './AdvancedSettings.vue'
 
 const emit = defineEmits<{ close: []; 'open-settings': [] }>()
@@ -40,8 +41,8 @@ const hasNoTemplates = computed(() => template.agents.length === 0)
 
 /** 点遮罩关闭（防误触：按下和松开都在遮罩才关） */
 let mouseDownOnOverlay = false
-function onOverlayMouseDown() {
-  mouseDownOnOverlay = true
+function onOverlayMouseDown(e: MouseEvent) {
+  mouseDownOnOverlay = e.target === e.currentTarget
 }
 function onOverlayClick(e: MouseEvent) {
   if (mouseDownOnOverlay && e.target === e.currentTarget) emit('close')
@@ -109,6 +110,9 @@ async function handleSubmit() {
       <div class="flex flex-col gap-4 overflow-y-auto px-5 py-4">
         <!-- 话题（从模板选择） -->
         <TopicPicker @open-settings="emit('open-settings')" />
+
+        <!-- 世界观（从模板选择，可选） -->
+        <WorldviewPicker @open-settings="emit('open-settings')" />
 
         <!-- 智能体列表（2~3 个） -->
         <div class="flex flex-col gap-4">
