@@ -13,9 +13,10 @@ import type {
  *   - messages: 该 AI 视角的对话历史（自己是 assistant，其他人是 user）
  *   - summary:  当前摘要（第一人称视角）
  *   - others:   本会话中除自己以外的所有其他智能体（2~3 人）
+ *   - relationships: 会话级非对称关系图（Key "{fromId}->{toId}"）
  *
  * 「组装发给 LLM 的 messages」时：
- *   [system: persona + 规则（含所有对手名）]
+ *   [system: 全局设定 + 主角设定 + 在场角色 + 关系 + 规则（含所有对手名）]
  *   [system: 摘要注入（若有）]
  *   [...messages]（已按 keepRecent 裁剪）
  *
@@ -30,14 +31,17 @@ export class AgentMemory {
   messages: MemoryMessage[]
   summary: string
   lastSummarizedRound: number
+  /** 会话级非对称关系图（Key "{fromId}->{toId}"） */
+  relationships: Record<string, string>
 
-  constructor(agent: AgentRef, others: AgentRef[], topic: string) {
+  constructor(agent: AgentRef, others: AgentRef[], topic: string, relationships?: Record<string, string>) {
     this.agent = agent
     this.others = others
     this.topic = topic
     this.messages = []
     this.summary = ''
     this.lastSummarizedRound = 0
+    this.relationships = relationships || {}
   }
 
   /** 追加一条「我自己」的发言（assistant） */
@@ -51,6 +55,22 @@ export class AgentMemory {
   }
 
   /**
+   * 从会话级关系图中提取「当前 agent 视角」的关系描述。
+   * 返回格式化的条目列表，如 ["─── 我与小美的关系 ───\n小美是我的同桌……"]。
+   */
+  private extractMyRelationships(): string[] {
+    const out: string[] = []
+    for (const other of this.others) {
+      const key = `${this.agent.id}->${other.id}`
+      const rel = this.relationships[key]
+      if (rel && rel.trim()) {
+        out.push(`─── 我与${other.name}的关系 ───\n${rel.trim()}`)
+      }
+    }
+    return out
+  }
+
+  /**
    * 组装发给 LLM 的完整 messages。
    *
    * 不在此处裁剪历史——只做拼装。消息序列从对话开始起纯追加，
@@ -59,13 +79,16 @@ export class AgentMemory {
    *
    * @param _keepRecent 已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
    */
-  buildApiMessages(_keepRecent: number = 8): ApiMessage[] {
-    const otherNames = this.others.map((o) => o.name)
+  buildApiMessages(_keepRecent: number = 8, scenario?: string, globalPrompt?: string): ApiMessage[] {
     const sys = buildAgentSystem({
       name: this.agent.name,
-      persona: this.agent.persona,
-      otherNames,
+      description: this.agent.description,
+      personality: this.agent.personality,
+      others: this.others,
+      relationships: this.extractMyRelationships(),
       topic: this.topic,
+      scenario,
+      globalPrompt,
     })
     const out: ApiMessage[] = [{ role: 'system', content: sys }]
     if (this.summary) {
@@ -95,11 +118,12 @@ export class AgentMemory {
       messages: this.messages,
       summary: this.summary,
       lastSummarizedRound: this.lastSummarizedRound,
+      relationships: this.relationships,
     }
   }
 
   static fromJSON(obj: AgentMemoryData): AgentMemory {
-    const m = new AgentMemory(obj.agent, obj.others || [], obj.topic)
+    const m = new AgentMemory(obj.agent, obj.others || [], obj.topic, obj.relationships)
     m.messages = obj.messages || []
     m.summary = obj.summary || ''
     m.lastSummarizedRound = obj.lastSummarizedRound || 0

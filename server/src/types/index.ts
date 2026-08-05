@@ -74,7 +74,10 @@ export type FinishedReason =
 export interface AgentRef {
   id: AgentId
   name: string
-  persona: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description?: string
+  /** 性格关键词摘要 */
+  personality?: string
   /** 颜色标识（与前端 CSS token 对应），缺省时由 createSession 按顺序分配 */
   color?: AgentColor
 }
@@ -94,6 +97,7 @@ export interface ApiMessage {
 /**
  * AgentMemory.toJSON() 的持久化形态。
  * others 为本会话中除自己外的所有其他智能体（2 智能体场景含 1 个，3 智能体含 2 个）。
+ * relationships 为会话级关系图（Key "{fromId}->{toId}"），供每个 agent 读取自己视角的关系。
  */
 export interface AgentMemoryData {
   agent: AgentRef
@@ -102,6 +106,8 @@ export interface AgentMemoryData {
   messages: MemoryMessage[]
   summary: string
   lastSummarizedRound: number
+  /** 会话级非对称关系图（与 session.relationships 同步） */
+  relationships?: Record<string, string>
 }
 
 /** 单条消息的 token 用量（camelCase，已从 snake 转换） */
@@ -145,6 +151,10 @@ export interface SessionConfig {
    * 优先级：agentProviders[id] > providerA/B/C > 默认。
    */
   agentProviders?: Record<string, string>
+  /** 场景设定 / 世界观（与 topic 职责分离） */
+  scenario?: string
+  /** 导演指令 / 全局规则 */
+  globalPrompt?: string
 }
 
 /** 累计成本统计 */
@@ -169,6 +179,7 @@ export interface SessionStats {
  * 完整会话对象（写盘 JSON 形状）。
  * - agents：AgentRef[]（长度 2~10），按 A,B,C... 顺序。
  * - memory：每个智能体各一份；至少含 A/B，其余按实际智能体数动态存在。
+ * - relationships：非对称关系图，Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述。
  */
 export interface Session {
   id: string
@@ -188,6 +199,10 @@ export interface Session {
   error: string | null
   createdAt: number
   updatedAt: number
+  /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
+  relationships?: Record<string, string>
+  /** 关系图节点位置（XY 坐标），key 为 AgentId，用于关系图管理页布局持久化 */
+  nodePositions?: Record<string, { x: number; y: number }>
 }
 
 /** listSessions 返回的列表项（agents 是 name 数组） */
@@ -204,7 +219,10 @@ export interface SessionListItem {
 /** createSession 入参中的单个 agent */
 export interface AgentInput {
   name: string
-  persona?: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description?: string
+  /** 性格关键词摘要 */
+  personality?: string
   /** 颜色标识（缺省则按顺序分配默认色） */
   color?: AgentColor
 }
@@ -215,6 +233,8 @@ export interface CreateSessionInput {
   /** 至少 2 个，最多 MAX_AGENTS 个；前两个恒为 A/B */
   agents: AgentInput[]
   config?: Partial<SessionConfig>
+  /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
+  relationships?: Record<string, string>
 }
 
 /* ============================== DeepSeek ============================== */

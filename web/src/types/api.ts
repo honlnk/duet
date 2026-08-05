@@ -77,7 +77,10 @@ export type FinishedReason =
 export interface Agent {
   id: AgentId
   name: string
-  persona: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description?: string
+  /** 性格关键词摘要 */
+  personality?: string
   /** 颜色标识（与前端 CSS token 对应） */
   color?: AgentColor
 }
@@ -104,6 +107,10 @@ export interface SessionConfig {
   providerC?: string
   /** D~J 等智能体的 Provider 映射（优先级高于默认） */
   agentProviders?: Record<string, string>
+  /** 场景设定 / 世界观（与 topic 职责分离） */
+  scenario?: string
+  /** 导演指令 / 全局规则 */
+  globalPrompt?: string
 }
 
 /** 单条消息的 token 用量 */
@@ -165,6 +172,10 @@ export interface Session {
   error: string | null
   createdAt: number
   updatedAt: number
+  /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
+  relationships?: Record<string, string>
+  /** 关系图节点位置（XY 坐标），用于关系图管理页布局持久化 */
+  nodePositions?: Record<string, { x: number; y: number }>
 }
 
 /** GET /api/sessions 列表项（注意 agents 是字符串数组，非对象） */
@@ -181,8 +192,15 @@ export interface SessionSummary {
 /** POST /api/sessions 请求体（支持 2~3 个智能体，每个可带颜色） */
 export interface CreateSessionPayload {
   topic: string
-  agents: Array<{ name: string; persona?: string; color?: AgentColor }>
+  agents: Array<{
+    name: string
+    description?: string
+    personality?: string
+    color?: AgentColor
+  }>
   config: Partial<SessionConfig>
+  /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
+  relationships?: Record<string, string>
 }
 
 /** GET /api/config/limits 返回 */

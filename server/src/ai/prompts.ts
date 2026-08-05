@@ -7,37 +7,103 @@ import type { AgentColor, AgentRef } from '../types/index.js'
 /** buildAgentSystem 的参数 */
 interface AgentSystemParams {
   name: string
-  persona?: string
-  /** 本会话中除自己以外的所有其他智能体名 */
-  otherNames: string[]
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description?: string
+  /** 性格关键词摘要 */
+  personality?: string
+  /** 本会话中除自己以外的所有其他智能体（完整角色信息） */
+  others: AgentRef[]
+  /** 当前 agent 对所有他人的关系描述（已提取为「我与某人的关系」条目） */
+  relationships?: string[]
   topic: string
+  /** 场景设定 / 世界观 */
+  scenario?: string
+  /** 导演指令 / 全局规则 */
+  globalPrompt?: string
 }
 
 /**
- * 构建某个 AI 的 system prompt（persona + 对话规则）
- * 规则强调「按顺序轮流发言、避免复读、主动推进话题」，防多 AI 漂移。
- * 支持多人对话：列出所有其他参与者。
+ * 构建某个 AI 的 system prompt（分层注入：全局设定 → 主角设定 → 在场角色 → 关系 → 对话规则）
+ *
+ * 分层结构固化顺序，前缀只增不变，最大化命中上下文缓存。
+ * - 全局设定：场景 + 导演指令（可选）
+ * - 主角设定：description + personality
+ * - 在场角色：他人精简描述（2 人场景全量 description）
+ * - 关系：第一人称非对称关系描述
+ * - 对话规则：轮流发言、字数控制、避免复读
  */
-export function buildAgentSystem({ name, persona, otherNames, topic }: AgentSystemParams): string {
+export function buildAgentSystem({
+  name,
+  description,
+  personality,
+  others,
+  relationships,
+  topic,
+  scenario,
+  globalPrompt,
+}: AgentSystemParams): string {
+  const sections: string[] = []
+
+  // ─── 全局设定 ───
+  if (scenario || globalPrompt) {
+    sections.push('─── 全局设定 ───')
+    if (scenario) {
+      sections.push('[场景设定]')
+      sections.push(scenario)
+    }
+    if (globalPrompt) {
+      sections.push('[导演指令]')
+      sections.push(globalPrompt)
+    }
+    sections.push('')
+  }
+
+  // ─── 主角设定 ───
+  sections.push('─── 主角设定 ───')
+  sections.push(`你是「${name}」。${description || ''}`)
+  if (personality) {
+    sections.push(`性格：${personality}`)
+  }
+  sections.push('')
+
+  // ─── 在场角色 ───
+  if (others.length > 0) {
+    sections.push('─── 在场角色 ───')
+    for (const o of others) {
+      const personalityPart = o.personality ? `，性格：${o.personality}` : ''
+      sections.push(`${o.name}：${o.description || ''}${personalityPart}`)
+    }
+    sections.push('')
+  }
+
+  // ─── 关系 ───
+  if (relationships && relationships.length > 0) {
+    for (const rel of relationships) {
+      if (rel.trim()) {
+        sections.push(rel.trim())
+        sections.push('')
+      }
+    }
+  }
+
+  // ─── 对话设定 ───
   const othersText =
-    otherNames.length === 0
+    others.length === 0
       ? '（暂无其他参与者）'
-      : otherNames.length === 1
-        ? otherNames[0]
-        : otherNames.slice(0, -1).join('、') + ' 和 ' + otherNames[otherNames.length - 1]
-  return [
-    `你是「${name}」。${persona || ''}`,
-    '',
-    '## 对话设定',
-    `- 你正在参与一场关于以下话题的多方对话：`,
-    `  话题：${topic}`,
-    `- 你的对话对象（其他参与者）：${othersText}`,
-    `- 【重要】大家按固定顺序轮流发言，请只在你该发言的轮次发言，不要抢话，也不要替别人发言。`,
-    `- 每次发言控制在 50-200 字以内，自然口语化，避免长篇大论或列表罗列。`,
-    `- 【重要】不要重复别人刚刚说过的原话；如果发现对话陷入循环或离题，主动换个角度或推进到下一个子话题。`,
-    `- 保持你的身份立场一致，但可以适度回应、质疑或补充其他参与者的观点，让对话自然推进。`,
-    `- 直接输出你的发言内容，不要加「${name}:」前缀，不要输出你的思考过程。`,
-  ].join('\n')
+      : others.length === 1
+        ? others[0]!.name
+        : others.slice(0, -1).map((o) => o.name).join('、') + ' 和 ' + others[others.length - 1]!.name
+  sections.push('## 对话设定')
+  sections.push(`- 你正在参与一场关于以下话题的多方对话：`)
+  sections.push(`  话题：${topic}`)
+  sections.push(`- 你的对话对象（其他参与者）：${othersText}`)
+  sections.push(`- 【重要】大家按固定顺序轮流发言，请只在你该发言的轮次发言，不要抢话，也不要替别人发言。`)
+  sections.push(`- 每次发言控制在 50-200 字以内，自然口语化，避免长篇大论或列表罗列。`)
+  sections.push(`- 【重要】不要重复别人刚刚说过的原话；如果发现对话陷入循环或离题，主动换个角度或推进到下一个子话题。`)
+  sections.push(`- 保持你的身份立场一致，但可以适度回应、质疑或补充其他参与者的观点，让对话自然推进。`)
+  sections.push(`- 直接输出你的发言内容，不要加「${name}:」前缀，不要输出你的思考过程。`)
+
+  return sections.join('\n')
 }
 
 /** buildOpeningPrompt 的参数 */

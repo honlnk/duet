@@ -59,17 +59,17 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
  * 支持 2~3 个智能体：agents[0/1/2] 对应 A/B/C。
  * 颜色缺省时按 A/B/C 顺序分配默认色（蓝/粉/绿），避免相邻智能体撞色。
  */
-export function createSession({ topic, agents, config: cfg }: CreateSessionInput): Session {
+export function createSession({ topic, agents, config: cfg, relationships }: CreateSessionInput): Session {
   const now = Date.now()
-  // 规范化智能体列表：补 id/name/persona/color，截断到 MAX_AGENTS。
-  // 过滤掉可能存在的 undefined（三元组第三个元素可选），保证 map 元素非空。
+  // 规范化智能体列表：补 id/name/description/personality/color，截断到 MAX_AGENTS。
   const inputs = agents.slice(0, MAX_AGENTS).filter(
     (a): a is NonNullable<typeof a> => a != null,
   )
   const refs: AgentRef[] = inputs.map((a, i) => ({
     id: agentIdAt(i),
     name: a.name?.trim() || `智能体 ${agentIdAt(i)}`,
-    persona: a.persona?.trim() || '',
+    description: a.description?.trim() || undefined,
+    personality: a.personality?.trim() || undefined,
     color: (a.color?.trim() as AgentRef['color']) || DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue',
   }))
 
@@ -80,7 +80,7 @@ export function createSession({ topic, agents, config: cfg }: CreateSessionInput
   // 为每个智能体构建独立记忆（动态，支持 2~10 个）
   const memory = {} as Session['memory']
   refs.forEach((ref, i) => {
-    memory[ref.id] = new AgentMemory(ref, othersOf(i), topic).toJSON()
+    memory[ref.id] = new AgentMemory(ref, othersOf(i), topic, relationships).toJSON()
   })
 
   const session: Session = {
@@ -110,6 +110,7 @@ export function createSession({ topic, agents, config: cfg }: CreateSessionInput
     error: null,
     createdAt: now,
     updatedAt: now,
+    relationships: relationships || {},
   }
   return session
 }
@@ -125,43 +126,16 @@ export function saveSession(session: Session): void {
   fs.renameSync(tmp, file) // 原子替换
 }
 
-/** 读取单个会话（含旧数据兼容归一化） */
+/** 读取单个会话 */
 export function loadSession(id: string): Session | null {
   const file = path.join(config.dataDir, `${id}.json`)
   if (!fs.existsSync(file)) return null
   const raw = fs.readFileSync(file, 'utf8')
   try {
-    const s = JSON.parse(raw) as Session
-    normalizeLegacySession(s)
-    return s
+    return JSON.parse(raw) as Session
   } catch (e) {
     console.error('[store] 会话文件损坏:', id, e instanceof Error ? e.message : e)
     return null
-  }
-}
-
-/**
- * 旧数据归一化（向后兼容）：
- * 1. memory.X 旧字段 `other`（单个 AgentRef）→ `others`（数组）。
- * 2. agents 缺 color → 按索引补默认色。
- * 3. agents 第二项 id 校正为 'B'（旧数据恒为 [A,B]，无需改）。
- * 不写盘，仅修正内存对象；下次 saveSession 时自然持久化为新格式。
- */
-function normalizeLegacySession(s: Session): void {
-  if (Array.isArray(s.agents)) {
-    s.agents.forEach((a, i) => {
-      if (!a.color) a.color = DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue'
-    })
-  }
-  for (const key of ['A', 'B', 'C'] as const) {
-    const m = s.memory?.[key]
-    if (!m) continue
-    // 旧格式：other（单个）→ others（数组）
-    if (!Array.isArray(m.others)) {
-      const legacyOther = (m as { other?: AgentRef }).other
-      m.others = legacyOther ? [legacyOther] : []
-      delete (m as { other?: AgentRef }).other
-    }
   }
 }
 

@@ -1,7 +1,7 @@
 /**
  * 表单 Store —— 设置区单一数据源
  *
- * v2：智能体从固定 A/B 改为动态数组（2~10 个，每个含 name/persona/color/provider）。
+ * v2：智能体从固定 A/B 改为动态数组（2~10 个，每个含 name/description/color/provider）。
  * 标量字段（temperature 等）仍以字符串存储，提交时再转换。
  */
 import { defineStore } from 'pinia'
@@ -15,6 +15,7 @@ import {
   type AgentFormValues,
   type FormValues,
 } from '@/services/storage'
+import { loadRelationships, translateRelationshipsForSession } from '@/services/relationships'
 
 export const useFormStore = defineStore('form', () => {
   const values = reactive<FormValues>(defaultValues())
@@ -37,16 +38,37 @@ export const useFormStore = defineStore('form', () => {
     values.topic = ''
   }
 
+  /** 选择一个世界观模板：写入 scenario/globalPrompt，记录模板 id */
+  function selectWorldview(templateId: string, scenario: string, globalPrompt?: string) {
+    values.worldviewTemplateId = templateId
+    values.scenario = scenario
+    values.globalPrompt = globalPrompt ?? ''
+  }
+
+  /** 清空世界观选择 */
+  function clearWorldview() {
+    values.worldviewTemplateId = ''
+    values.scenario = ''
+    values.globalPrompt = ''
+  }
+
   /**
-   * 为第 idx 个智能体选择一个模板：把模板的 name/persona 填入，
+   * 为第 idx 个智能体选择一个模板：把模板的 name/description/personality 填入，
    * 记录 templateId。颜色保留当前选择（用户可在下方单独调）。
    */
-  function selectTemplate(idx: number, templateId: string, name: string, persona: string) {
+  function selectTemplate(
+    idx: number,
+    templateId: string,
+    name: string,
+    description?: string,
+    personality?: string,
+  ) {
     const a = values.agents[idx]
     if (!a) return
     a.templateId = templateId
     a.name = name
-    a.persona = persona
+    a.description = description ?? ''
+    a.personality = personality ?? ''
   }
 
   /** 清空第 idx 个智能体的模板选择（回到未选占位） */
@@ -55,7 +77,8 @@ export const useFormStore = defineStore('form', () => {
     if (!a) return
     a.templateId = ''
     a.name = ''
-    a.persona = ''
+    a.description = ''
+    a.personality = ''
   }
 
   /** 追加一个空智能体（不超过 MAX_AGENTS） */
@@ -80,6 +103,9 @@ export const useFormStore = defineStore('form', () => {
     const normalized = normalizeValues(next)
     values.topic = normalized.topic
     values.topicTemplateId = normalized.topicTemplateId
+    values.scenario = normalized.scenario
+    values.globalPrompt = normalized.globalPrompt
+    values.worldviewTemplateId = normalized.worldviewTemplateId
     values.model = normalized.model
     values.temperature = normalized.temperature
     values.maxRounds = normalized.maxRounds
@@ -87,6 +113,7 @@ export const useFormStore = defineStore('form', () => {
     values.summaryEveryN = normalized.summaryEveryN
     values.keepRecent = normalized.keepRecent
     values.agents.splice(0, values.agents.length, ...normalized.agents)
+    values.relationships = normalized.relationships
   }
 
   /** 清空为默认值 */
@@ -94,6 +121,9 @@ export const useFormStore = defineStore('form', () => {
     const def = defaultValues()
     values.topic = def.topic
     values.topicTemplateId = def.topicTemplateId
+    values.scenario = def.scenario
+    values.globalPrompt = def.globalPrompt
+    values.worldviewTemplateId = def.worldviewTemplateId
     values.model = def.model
     values.temperature = def.temperature
     values.maxRounds = def.maxRounds
@@ -101,6 +131,7 @@ export const useFormStore = defineStore('form', () => {
     values.summaryEveryN = def.summaryEveryN
     values.keepRecent = def.keepRecent
     values.agents.splice(0, values.agents.length, ...def.agents)
+    values.relationships = {}
   }
 
   /** 提取数字字段（空串/非法 → 0 = 无限） */
@@ -124,11 +155,14 @@ export const useFormStore = defineStore('form', () => {
       const p = values.agents[i]?.provider
       if (p) agentProviders[ids[i]!] = p
     }
+    const scenario = values.scenario.trim() || undefined
+    const globalPrompt = values.globalPrompt.trim() || undefined
     return {
       topic: values.topic.trim(),
       agents: values.agents.map((a, i) => ({
         name: a.name.trim() || `智能体 ${i + 1}`,
-        persona: a.persona.trim(),
+        description: a.description.trim() || undefined,
+        personality: a.personality.trim() || undefined,
         color: a.color,
       })),
       config: {
@@ -142,7 +176,21 @@ export const useFormStore = defineStore('form', () => {
         providerB,
         providerC,
         agentProviders: Object.keys(agentProviders).length > 0 ? agentProviders : undefined,
+        scenario,
+        globalPrompt,
       } satisfies SessionConfig,
+      // 从全局关系图自动注入：把基于 templateId 的关系翻译为会话内 A/B/C 关系
+      relationships: (() => {
+        // 构建 templateId → 会话 AgentId 映射
+        const idMap: Record<string, string> = {}
+        const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
+        values.agents.forEach((a, i) => {
+          if (a.templateId && ids[i]) idMap[a.templateId] = ids[i]!
+        })
+        const globalRels = loadRelationships()
+        const sessionRels = translateRelationshipsForSession(globalRels, idMap)
+        return Object.keys(sessionRels).length > 0 ? sessionRels : undefined
+      })(),
     }
   })
 
@@ -162,6 +210,8 @@ export const useFormStore = defineStore('form', () => {
     patchAgent,
     selectTopic,
     clearTopic,
+    selectWorldview,
+    clearWorldview,
     selectTemplate,
     clearTemplate,
     addAgent,

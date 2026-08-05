@@ -1,21 +1,26 @@
 /**
  * 模板持久化层（localStorage）
  *
- * 管理两类可复用模板，供「新建对话」时一键填充：
+ * 管理三类可复用模板，供「新建对话」时一键填充：
  *  - 智能体模板（AgentTemplate）：名称 + 身份设定
  *  - 话题模板（TopicTemplate）：话题文本
+ *  - 世界观模板（WorldviewTemplate）：场景 + 导演指令
  *
  * 与 storage.ts（草稿/历史）同模式：零 DOM、零网络，try/catch 容错。
  */
 
 const AGENT_TPL_KEY = 'duet:agent-templates:v1'
 const TOPIC_TPL_KEY = 'duet:topic-templates:v1'
+const WORLDVIEW_TPL_KEY = 'duet:worldview-templates:v1'
 
 /** 智能体模板 */
 export interface AgentTemplate {
   id: string
   name: string
-  persona: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description: string
+  /** 性格关键词摘要 */
+  personality: string
   createdAt: number
 }
 
@@ -23,6 +28,18 @@ export interface AgentTemplate {
 export interface TopicTemplate {
   id: string
   content: string
+  createdAt: number
+}
+
+/** 世界观模板（场景 + 导演指令） */
+export interface WorldviewTemplate {
+  id: string
+  /** 模板名（如「校园日常」「赛博朋克」） */
+  name: string
+  /** 场景设定 */
+  scenario: string
+  /** 导演指令（可选） */
+  globalPrompt?: string
   createdAt: number
 }
 
@@ -57,12 +74,17 @@ function saveAgentTemplates(list: AgentTemplate[]): void {
   }
 }
 
-export function addAgentTemplate(name: string, persona: string): AgentTemplate[] {
+export function addAgentTemplate(
+  name: string,
+  description: string = '',
+  personality: string = '',
+): AgentTemplate[] {
   const list = loadAgentTemplates()
   const item: AgentTemplate = {
     id: genId('a'),
     name: name.trim(),
-    persona: persona.trim(),
+    description: description.trim(),
+    personality: personality.trim(),
     createdAt: Date.now(),
   }
   const next = [item, ...list]
@@ -72,7 +94,7 @@ export function addAgentTemplate(name: string, persona: string): AgentTemplate[]
 
 export function updateAgentTemplate(
   id: string,
-  patch: Partial<Pick<AgentTemplate, 'name' | 'persona'>>,
+  patch: Partial<Pick<AgentTemplate, 'name' | 'description' | 'personality'>>,
 ): AgentTemplate[] {
   const list = loadAgentTemplates().map((t) =>
     t.id === id ? { ...t, ...patch } : t,
@@ -120,5 +142,47 @@ export function addTopicTemplate(content: string): TopicTemplate[] {
 export function removeTopicTemplate(id: string): TopicTemplate[] {
   const list = loadTopicTemplates().filter((t) => t.id !== id)
   saveTopicTemplates(list)
+  return list
+}
+
+/* --------------------------- 世界观模板 --------------------------- */
+
+export function loadWorldviewTemplates(): WorldviewTemplate[] {
+  try {
+    return safeParse<WorldviewTemplate[]>(localStorage.getItem(WORLDVIEW_TPL_KEY), [])
+  } catch {
+    return []
+  }
+}
+
+function saveWorldviewTemplates(list: WorldviewTemplate[]): void {
+  try {
+    localStorage.setItem(WORLDVIEW_TPL_KEY, JSON.stringify(list))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function addWorldviewTemplate(
+  name: string,
+  scenario: string,
+  globalPrompt?: string,
+): WorldviewTemplate[] {
+  const list = loadWorldviewTemplates()
+  const item: WorldviewTemplate = {
+    id: genId('w'),
+    name: name.trim(),
+    scenario: scenario.trim(),
+    globalPrompt: globalPrompt?.trim() || undefined,
+    createdAt: Date.now(),
+  }
+  const next = [item, ...list]
+  saveWorldviewTemplates(next)
+  return next
+}
+
+export function removeWorldviewTemplate(id: string): WorldviewTemplate[] {
+  const list = loadWorldviewTemplates().filter((t) => t.id !== id)
+  saveWorldviewTemplates(list)
   return list
 }

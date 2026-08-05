@@ -57,6 +57,24 @@ export async function deleteSession(id: string): Promise<void> {
   await request<{ ok: boolean }>(`/api/sessions/${id}`, { method: 'DELETE' })
 }
 
+/**
+ * 更新会话的关系数据（对话进行中也可修改）。
+ * PATCH /api/sessions/:id/relationships
+ */
+export function updateRelationships(
+  id: string,
+  body: {
+    relationships?: Record<string, string>
+    nodePositions?: Record<string, { x: number; y: number }>
+  },
+): Promise<Session> {
+  return request<Session>(`/api/sessions/${id}/relationships`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 /** 获取全局熔断限制与成本单价 */
 export function getLimits(): Promise<ConfigLimits> {
   return request<ConfigLimits>('/api/config/limits')

@@ -55,6 +55,16 @@ const AGENT_BORDER_R: Record<AgentPresetColor, string> = {
   teal: 'border-r-[3px] border-r-agent-teal',
 }
 
+/** 预设色 → 原始 hex 值（供非 Tailwind 场景如 Vue Flow edge style 使用） */
+const AGENT_HEX: Record<AgentPresetColor, string> = {
+  blue: '#2563eb',
+  pink: '#db2777',
+  green: '#16a34a',
+  amber: '#d97706',
+  purple: '#9333ea',
+  teal: '#0d9488',
+}
+
 /* ----------------------- 统一取色：预设→class / 自定义→style ----------------------- */
 
 /**
@@ -121,6 +131,15 @@ export function borderRColor(color: AgentColorValue): { class: string; style: Re
  */
 export function resolveColor(color: AgentColorValue | undefined, index: number): AgentColorValue {
   return color || DEFAULT_AGENT_COLORS[index % DEFAULT_AGENT_COLORS.length] || 'blue'
+}
+
+/**
+ * 取颜色的原始 hex 值（供非 Tailwind 场景使用，如 Vue Flow edge style）。
+ * 预设色查表，自定义色原样返回。
+ */
+export function colorHex(color: AgentColorValue): string {
+  if (isPresetColor(color)) return AGENT_HEX[color]
+  return color
 }
 
 // 向后兼容：旧代码直接引用 AGENT_BG / AGENT_TEXT 等表的导出

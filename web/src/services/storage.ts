@@ -12,7 +12,10 @@ import { DEFAULT_AGENT_COLORS, MAX_AGENTS, MIN_AGENTS } from '@/types/api'
 /** 单个智能体的表单字段（草稿/历史中的形态） */
 export interface AgentFormValues {
   name: string
-  persona: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description: string
+  /** 性格关键词摘要 */
+  personality: string
   color: AgentColor
   /** Provider id（空串 = 默认 Provider） */
   provider: string
@@ -25,6 +28,12 @@ export interface FormValues {
   topic: string
   /** 所选话题模板 id（空串 = 未选择模板） */
   topicTemplateId: string
+  /** 场景设定 / 世界观 */
+  scenario: string
+  /** 导演指令 / 全局规则 */
+  globalPrompt: string
+  /** 所选世界观模板 id（空串 = 未选择模板） */
+  worldviewTemplateId: string
   model: string
   temperature: string
   maxRounds: string
@@ -33,11 +42,15 @@ export interface FormValues {
   keepRecent: string
   /** 智能体列表（长度 2~3） */
   agents: AgentFormValues[]
+  /** 非对称关系图：Key "{fromId}->{toId}" */
+  relationships: Record<string, string>
 }
 
 /** 通用配置字段的键（不含 agents，agents 是数组单独管理） */
 export const SCALAR_FIELD_KEYS = [
   'topic',
+  'scenario',
+  'globalPrompt',
   'model',
   'temperature',
   'maxRounds',
@@ -72,7 +85,8 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 export function makeAgent(index: number, over?: Partial<AgentFormValues>): AgentFormValues {
   return {
     name: '',
-    persona: '',
+    description: '',
+    personality: '',
     color: over?.color || DEFAULT_AGENT_COLORS[index] || 'blue',
     provider: '',
     templateId: '',
@@ -85,6 +99,9 @@ export function defaultValues(): FormValues {
   return {
     topic: '',
     topicTemplateId: '',
+    scenario: '',
+    globalPrompt: '',
+    worldviewTemplateId: '',
     model: 'deepseek-v4-flash',
     temperature: '0.7',
     maxRounds: '',
@@ -92,6 +109,7 @@ export function defaultValues(): FormValues {
     summaryEveryN: '10',
     keepRecent: '8',
     agents: [makeAgent(0), makeAgent(1)],
+    relationships: {},
   }
 }
 
@@ -151,7 +169,7 @@ function genId(): string {
 
 /** 用关键字段拼接签名用于去重 */
 function signature(v: FormValues): string {
-  const agentsSig = v.agents.map((a) => `${a.name}|${a.persona}`).join('||')
+  const agentsSig = v.agents.map((a) => `${a.name}|${a.description}`).join('||')
   return `${v.topic}|${agentsSig}`.trim()
 }
 
@@ -193,10 +211,9 @@ export function clearHistory(): void {
 /**
  * 归一化表单值（容错）：
  * - 补全缺失的标量字段为字符串；
- * - agents 数组至少 MIN_AGENTS、至多 MAX_AGENTS，缺字段补默认；
- * - 兼容旧版 v1 草稿（agentAName/agentBName 扁平结构）。
+ * - agents 数组至少 MIN_AGENTS、至多 MAX_AGENTS，缺字段补默认。
  *
- * 入参用宽松类型，兼容 FormValues 与 v1 扁平结构混合输入。
+ * 入参用宽松类型，兼容 FormValues 与未知结构混合输入。
  */
 export function normalizeValues(input: FormValues | Record<string, unknown>): FormValues {
   const anyInput = input as Record<string, unknown>
@@ -204,6 +221,9 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
   const out: FormValues = {
     topic: str(anyInput.topic, def.topic),
     topicTemplateId: str(anyInput.topicTemplateId, def.topicTemplateId),
+    scenario: str(anyInput.scenario, def.scenario),
+    globalPrompt: str(anyInput.globalPrompt, def.globalPrompt),
+    worldviewTemplateId: str(anyInput.worldviewTemplateId, def.worldviewTemplateId),
     model: str(anyInput.model, def.model),
     temperature: str(anyInput.temperature, def.temperature),
     maxRounds: str(anyInput.maxRounds, def.maxRounds),
@@ -211,41 +231,20 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
     summaryEveryN: str(anyInput.summaryEveryN, def.summaryEveryN),
     keepRecent: str(anyInput.keepRecent, def.keepRecent),
     agents: [],
+    relationships: obj(anyInput.relationships) as Record<string, string>,
   }
 
-  // 兼容 v1 扁平字段
   if (Array.isArray(anyInput.agents) && anyInput.agents.length > 0) {
     out.agents = (anyInput.agents as Array<Partial<AgentFormValues>>)
       .slice(0, MAX_AGENTS)
       .map((a, i) => ({
         name: str(a?.name, ''),
-        persona: str(a?.persona, ''),
+        description: str(a?.description, ''),
+        personality: str(a?.personality, ''),
         color: (isValidColor(a?.color) ? a?.color : def.agents[i]?.color || 'blue') as AgentColor,
         provider: str(a?.provider, ''),
         templateId: str(a?.templateId, ''),
       }))
-  } else {
-    // v1 兼容：agentAName / agentBName / providerA / providerB
-    const legacy: AgentFormValues[] = []
-    for (const [suffix, idx] of [['A', 0], ['B', 1]] as const) {
-      legacy.push({
-        name: str(anyInput[`agent${suffix}Name`], ''),
-        persona: str(anyInput[`agent${suffix}Persona`], ''),
-        color: def.agents[idx]?.color || 'blue',
-        provider: str(anyInput[`provider${suffix}`], ''),
-        templateId: '',
-      })
-    }
-    if (anyInput.agentCName != null || anyInput.providerC != null) {
-      legacy.push({
-        name: str(anyInput.agentCName, ''),
-        persona: str(anyInput.agentCPersona, ''),
-        color: 'green',
-        provider: str(anyInput.providerC, ''),
-        templateId: '',
-      })
-    }
-    out.agents = legacy
   }
 
   // 保证长度合法
@@ -258,6 +257,12 @@ function str(v: unknown, fallback: string): string {
   if (v == null) return fallback
   const s = String(v)
   return s
+}
+
+/** 安全提取对象（用于 relationships 等 Record 类型字段） */
+function obj(v: unknown): Record<string, string> {
+  if (v == null || typeof v !== 'object' || Array.isArray(v)) return {}
+  return v as Record<string, string>
 }
 
 /** 合法颜色：预设 key 或 hex（#rgb / #rrggbb） */

@@ -4,7 +4,7 @@
  *
  * 两种态：
  *  - 未选择：搜索框 + 下拉列表，输入时按名字筛选，点击即选中。
- *  - 已选择：展示该智能体名 + persona 摘要 + 颜色选择器 + 更换/移除。
+ *  - 已选择：展示该智能体名 + description 摘要 + 颜色选择器 + 更换/移除。
  *
  * 通过 index 绑定 form store 的 agents 数组对应项。
  */
@@ -61,7 +61,8 @@ const filteredTemplates = computed<AgentTemplate[]>(() => {
   return list.filter(
     (t) =>
       t.name.toLowerCase().includes(kw) ||
-      t.persona.toLowerCase().includes(kw),
+      t.description.toLowerCase().includes(kw) ||
+      t.personality.toLowerCase().includes(kw),
   )
 })
 
@@ -82,7 +83,13 @@ function closeDropdown() {
 function pick(tid: string) {
   const t = template.findAgent(tid)
   if (!t) return
-  form.selectTemplate(props.index, t.id, t.name, t.persona)
+  form.selectTemplate(
+    props.index,
+    t.id,
+    t.name,
+    t.description,
+    t.personality,
+  )
   searchQuery.value = ''
   dropdownOpen.value = false
 }
@@ -136,10 +143,10 @@ function pickCustomHex(e: Event) {
         <div class="min-w-0 flex-1">
           <p class="text-sm font-medium text-text-main">{{ agent.name }}</p>
           <p
-            v-if="agent.persona"
+            v-if="agent.description"
             class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-text-dim"
           >
-            {{ agent.persona }}
+            {{ agent.description }}
           </p>
           <p v-else class="mt-0.5 text-xs text-text-muted">（未设定身份）</p>
         </div>
@@ -235,7 +242,7 @@ function pickCustomHex(e: Event) {
             @mousedown.prevent="pick(t.id)"
           >
             <span class="text-sm font-medium text-text-main">{{ t.name || '（未命名）' }}</span>
-            <span v-if="t.persona" class="line-clamp-1 text-xs text-text-dim">{{ t.persona }}</span>
+            <span v-if="t.description" class="line-clamp-1 text-xs text-text-dim">{{ t.description }}</span>
           </button>
           <p
             v-if="filteredTemplates.length === 0"
