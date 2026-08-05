@@ -64,10 +64,33 @@ function addAgent() {
   agentDraft.value = { name: '', description: '', personality: '' }
 }
 
+/** 当前编辑中的智能体模板 id（空串 = 未在编辑） */
+const editingAgentId = ref('')
+const agentEditDraft = ref({ name: '', description: '', personality: '' })
+
+function startEditAgent(id: string, name: string, description: string, personality: string) {
+  editingAgentId.value = id
+  agentEditDraft.value = { name, description, personality }
+}
+function cancelEditAgent() {
+  editingAgentId.value = ''
+}
+function saveEditAgent() {
+  if (!editingAgentId.value) return
+  template.updateAgent(editingAgentId.value, {
+    name: agentEditDraft.value.name.trim(),
+    description: agentEditDraft.value.description.trim(),
+    personality: agentEditDraft.value.personality.trim(),
+  })
+  editingAgentId.value = ''
+}
+
 function delAgent(id: string) {
   template.removeAgent(id)
   // 同步清理该模板在关系图中的所有关系 + 节点位置
   relationshipStore.purgeTemplate(id)
+  // 若正在编辑该模板，取消编辑
+  if (editingAgentId.value === id) editingAgentId.value = ''
 }
 
 /** 智能体模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
@@ -84,8 +107,26 @@ function addTopic() {
   topicDraft.value = ''
 }
 
+/** 当前编辑中的话题模板 id */
+const editingTopicId = ref('')
+const topicEditDraft = ref('')
+
+function startEditTopic(id: string, content: string) {
+  editingTopicId.value = id
+  topicEditDraft.value = content
+}
+function cancelEditTopic() {
+  editingTopicId.value = ''
+}
+function saveEditTopic() {
+  if (!editingTopicId.value || !topicEditDraft.value.trim()) return
+  template.updateTopic(editingTopicId.value, topicEditDraft.value)
+  editingTopicId.value = ''
+}
+
 function delTopic(id: string) {
   template.removeTopic(id)
+  if (editingTopicId.value === id) editingTopicId.value = ''
 }
 
 /* --------------------------- 世界观模板 tab --------------------------- */
@@ -101,8 +142,36 @@ function addWorldview() {
   worldviewDraft.value = { name: '', scenario: '', globalPrompt: '' }
 }
 
+/** 当前编辑中的世界观模板 id */
+const editingWorldviewId = ref('')
+const worldviewEditDraft = ref({ name: '', scenario: '', globalPrompt: '' })
+
+function startEditWorldview(
+  id: string,
+  name: string,
+  scenario: string,
+  globalPrompt: string,
+) {
+  editingWorldviewId.value = id
+  worldviewEditDraft.value = { name, scenario, globalPrompt }
+}
+function cancelEditWorldview() {
+  editingWorldviewId.value = ''
+}
+function saveEditWorldview() {
+  if (!editingWorldviewId.value) return
+  if (!worldviewEditDraft.value.name.trim() && !worldviewEditDraft.value.scenario.trim()) return
+  template.updateWorldview(editingWorldviewId.value, {
+    name: worldviewEditDraft.value.name.trim(),
+    scenario: worldviewEditDraft.value.scenario.trim(),
+    globalPrompt: worldviewEditDraft.value.globalPrompt.trim() || undefined,
+  })
+  editingWorldviewId.value = ''
+}
+
 function delWorldview(id: string) {
   template.removeWorldview(id)
+  if (editingWorldviewId.value === id) editingWorldviewId.value = ''
 }
 
 /* --------------------------- 历史预设 tab --------------------------- */
@@ -238,22 +307,72 @@ const hasHistory = computed(() => history.value.length > 0)
               <div
                 v-for="t in agentTemplates"
                 :key="t.id"
-                class="group flex items-start justify-between gap-3 rounded-lg border border-border-subtle bg-white px-3 py-2"
+                class="group rounded-lg border border-border-subtle bg-white px-3 py-2"
+                :class="editingAgentId === t.id && 'border-focus ring-1 ring-focus'"
               >
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-text-main">
-                    {{ t.name || '（未命名）' }}
-                  </p>
-                  <p v-if="t.description" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ t.description }}</p>
-                  <p v-if="t.personality" class="mt-0.5 text-xs text-text-muted">性格：{{ t.personality }}</p>
+                <!-- 展示态 -->
+                <div v-if="editingAgentId !== t.id" class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-text-main">
+                      {{ t.name || '（未命名）' }}
+                    </p>
+                    <p v-if="t.description" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ t.description }}</p>
+                    <p v-if="t.personality" class="mt-0.5 text-xs text-text-muted">性格：{{ t.personality }}</p>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-bg-hover hover:text-text-main"
+                      @click="startEditAgent(t.id, t.name, t.description, t.personality)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
+                      @click="delAgent(t.id)"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="shrink-0 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
-                  @click="delAgent(t.id)"
-                >
-                  删除
-                </button>
+                <!-- 编辑态 -->
+                <div v-else class="flex flex-col gap-2">
+                  <input
+                    v-model="agentEditDraft.name"
+                    type="text"
+                    placeholder="名称"
+                    class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <textarea
+                    v-model="agentEditDraft.description"
+                    rows="3"
+                    placeholder="角色描述"
+                    class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <input
+                    v-model="agentEditDraft.personality"
+                    type="text"
+                    placeholder="性格关键词"
+                    class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      class="rounded-lg border border-border-subtle bg-white px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
+                      @click="cancelEditAgent"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
+                      @click="saveEditAgent"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -292,16 +411,53 @@ const hasHistory = computed(() => history.value.length > 0)
               <div
                 v-for="t in topicTemplates"
                 :key="t.id"
-                class="group flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-white px-3 py-2"
+                class="group rounded-lg border border-border-subtle bg-white px-3 py-2"
+                :class="editingTopicId === t.id && 'border-focus ring-1 ring-focus'"
               >
-                <span class="min-w-0 flex-1 truncate text-sm text-text-main">{{ t.content }}</span>
-                <button
-                  type="button"
-                  class="shrink-0 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
-                  @click="delTopic(t.id)"
-                >
-                  删除
-                </button>
+                <!-- 展示态 -->
+                <div v-if="editingTopicId !== t.id" class="flex items-center justify-between gap-3">
+                  <span class="min-w-0 flex-1 truncate text-sm text-text-main">{{ t.content }}</span>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-bg-hover hover:text-text-main"
+                      @click="startEditTopic(t.id, t.content)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
+                      @click="delTopic(t.id)"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+                <!-- 编辑态 -->
+                <div v-else class="flex items-center gap-2">
+                  <input
+                    v-model="topicEditDraft"
+                    type="text"
+                    class="min-w-0 flex-1 rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                    @keydown.enter="saveEditTopic"
+                    @keydown.esc="cancelEditTopic"
+                  />
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-lg border border-border-subtle bg-white px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
+                    @click="cancelEditTopic"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
+                    @click="saveEditTopic"
+                  >
+                    保存
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -348,22 +504,72 @@ const hasHistory = computed(() => history.value.length > 0)
               <div
                 v-for="w in worldviewTemplates"
                 :key="w.id"
-                class="group flex items-start justify-between gap-3 rounded-lg border border-border-subtle bg-white px-3 py-2"
+                class="group rounded-lg border border-border-subtle bg-white px-3 py-2"
+                :class="editingWorldviewId === w.id && 'border-focus ring-1 ring-focus'"
               >
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-text-main">
-                    {{ w.name || '（未命名）' }}
-                  </p>
-                  <p v-if="w.scenario" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ w.scenario }}</p>
-                  <p v-if="w.globalPrompt" class="mt-0.5 line-clamp-1 text-xs text-text-muted">导演：{{ w.globalPrompt }}</p>
+                <!-- 展示态 -->
+                <div v-if="editingWorldviewId !== w.id" class="flex items-start justify-between gap-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-text-main">
+                      {{ w.name || '（未命名）' }}
+                    </p>
+                    <p v-if="w.scenario" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ w.scenario }}</p>
+                    <p v-if="w.globalPrompt" class="mt-0.5 line-clamp-1 text-xs text-text-muted">导演：{{ w.globalPrompt }}</p>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-bg-hover hover:text-text-main"
+                      @click="startEditWorldview(w.id, w.name, w.scenario, w.globalPrompt || '')"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
+                      @click="delWorldview(w.id)"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="shrink-0 rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
-                  @click="delWorldview(w.id)"
-                >
-                  删除
-                </button>
+                <!-- 编辑态 -->
+                <div v-else class="flex flex-col gap-2">
+                  <input
+                    v-model="worldviewEditDraft.name"
+                    type="text"
+                    placeholder="模板名"
+                    class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <textarea
+                    v-model="worldviewEditDraft.scenario"
+                    rows="3"
+                    placeholder="场景设定"
+                    class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <textarea
+                    v-model="worldviewEditDraft.globalPrompt"
+                    rows="2"
+                    placeholder="导演指令（可选）"
+                    class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
+                  />
+                  <div class="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      class="rounded-lg border border-border-subtle bg-white px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
+                      @click="cancelEditWorldview"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
+                      @click="saveEditWorldview"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

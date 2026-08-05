@@ -145,6 +145,14 @@ export function removeTopicTemplate(id: string): TopicTemplate[] {
   return list
 }
 
+export function updateTopicTemplate(id: string, content: string): TopicTemplate[] {
+  const list = loadTopicTemplates().map((t) =>
+    t.id === id ? { ...t, content: content.trim() } : t,
+  )
+  saveTopicTemplates(list)
+  return list
+}
+
 /* --------------------------- 世界观模板 --------------------------- */
 
 export function loadWorldviewTemplates(): WorldviewTemplate[] {
@@ -183,6 +191,17 @@ export function addWorldviewTemplate(
 
 export function removeWorldviewTemplate(id: string): WorldviewTemplate[] {
   const list = loadWorldviewTemplates().filter((t) => t.id !== id)
+  saveWorldviewTemplates(list)
+  return list
+}
+
+export function updateWorldviewTemplate(
+  id: string,
+  patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario' | 'globalPrompt'>>,
+): WorldviewTemplate[] {
+  const list = loadWorldviewTemplates().map((t) =>
+    t.id === id ? { ...t, ...patch } : t,
+  )
   saveWorldviewTemplates(list)
   return list
 }

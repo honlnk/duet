@@ -13,9 +13,11 @@ import {
   removeAgentTemplate,
   loadTopicTemplates,
   addTopicTemplate,
+  updateTopicTemplate,
   removeTopicTemplate,
   loadWorldviewTemplates,
   addWorldviewTemplate,
+  updateWorldviewTemplate,
   removeWorldviewTemplate,
   type AgentTemplate,
   type TopicTemplate,
@@ -77,6 +79,12 @@ export const useTemplateStore = defineStore('template', () => {
     return topics.value
   }
 
+  /** 更新话题模板内容 */
+  function updateTopic(id: string, content: string): TopicTemplate[] {
+    topics.value = updateTopicTemplate(id, content)
+    return topics.value
+  }
+
   /** 新增世界观模板 */
   function addWorldview(
     name: string,
@@ -90,6 +98,15 @@ export const useTemplateStore = defineStore('template', () => {
   /** 删除世界观模板 */
   function removeWorldview(id: string): WorldviewTemplate[] {
     worldviews.value = removeWorldviewTemplate(id)
+    return worldviews.value
+  }
+
+  /** 更新世界观模板 */
+  function updateWorldview(
+    id: string,
+    patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario' | 'globalPrompt'>>,
+  ): WorldviewTemplate[] {
+    worldviews.value = updateWorldviewTemplate(id, patch)
     return worldviews.value
   }
 
@@ -120,8 +137,10 @@ export const useTemplateStore = defineStore('template', () => {
     updateAgent,
     removeAgent,
     addTopic,
+    updateTopic,
     removeTopic,
     addWorldview,
+    updateWorldview,
     removeWorldview,
     findAgent,
     findWorldview,
