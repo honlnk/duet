@@ -70,8 +70,11 @@ export function buildAgentSystem({
   if (others.length > 0) {
     sections.push('─── 在场角色 ───')
     for (const o of others) {
-      const personalityPart = o.personality ? `，性格：${o.personality}` : ''
-      sections.push(`${o.name}：${o.description || ''}${personalityPart}`)
+      // description 和 personality 都有时用「，」连接；description 为空时只输出 personality，避免多余逗号
+      const desc = o.description?.trim() || ''
+      const psy = o.personality?.trim() || ''
+      const parts = [desc, psy ? `性格：${psy}` : ''].filter(Boolean)
+      sections.push(`${o.name}：${parts.join('，')}`)
     }
     sections.push('')
   }
@@ -93,7 +96,7 @@ export function buildAgentSystem({
       : others.length === 1
         ? others[0]!.name
         : others.slice(0, -1).map((o) => o.name).join('、') + ' 和 ' + others[others.length - 1]!.name
-  sections.push('## 对话设定')
+  sections.push('─── 对话设定 ───')
   sections.push(`- 你正在参与一场关于以下话题的多方对话：`)
   sections.push(`  话题：${topic}`)
   sections.push(`- 你的对话对象（其他参与者）：${othersText}`)
