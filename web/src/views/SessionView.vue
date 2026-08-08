@@ -19,6 +19,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import MessageList from '@/components/MessageList.vue'
 import SessionInspector from '@/components/SessionInspector.vue'
+import PromptHistoryModal from '@/components/PromptHistoryModal.vue'
 import type { ServerEvent, SessionStatus } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
@@ -37,6 +38,8 @@ const { open: openWs, send: sendWs, close: closeWs } = useWebSocket()
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+/** Prompt 历史模态框开关 */
+const showPromptHistory = ref(false)
 
 /** 主区 header 标题：会话话题，缺省回退品牌名 */
 const headerTitle = computed(() => session.session?.topic ?? 'Duet')
@@ -196,6 +199,21 @@ onUnmounted(() => {
           </h1>
         </div>
         <div class="flex items-center gap-1">
+          <!-- 查看 Prompt 历史 -->
+          <button
+            v-if="!loading && !loadError"
+            type="button"
+            class="rounded-lg p-1.5 text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main"
+            aria-label="查看 Prompt"
+            title="查看最近发送的 Prompt"
+            @click="showPromptHistory = true"
+          >
+            <!-- 代码/终端图标 -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          </button>
           <!-- inspector toggle（> 箭头，收起时水平翻转） -->
           <button
             type="button"
@@ -254,4 +272,12 @@ onUnmounted(() => {
       @reset="handleReset"
     />
   </section>
+
+  <!-- Prompt 历史查看模态框 -->
+  <PromptHistoryModal
+    v-if="showPromptHistory && session.session"
+    :session-id="props.id"
+    :agents="session.session.agents"
+    @close="showPromptHistory = false"
+  />
 </template>

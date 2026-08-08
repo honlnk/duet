@@ -14,6 +14,7 @@ import {
   currentRound,
   nextAgentId,
 } from '../store/sessionStore.js'
+import { recordPrompt } from '../store/promptHistory.js'
 import { resolveProvider } from '../store/providerStore.js'
 import { pickDisplayCurrency, getRatesWithFallback } from '../utils/currency.js'
 import config from '../config.js'
@@ -334,6 +335,18 @@ export async function runLoop(session: Session): Promise<void> {
         session.config.scenario,
         session.config.globalPrompt,
       )
+
+      // 捕获「即将发出的完整 Prompt」快照（所见即所发），供前端「查看最近 Prompt」查看
+      recordPrompt(session.id, {
+        agentId,
+        agentName: cur.ref.name,
+        round,
+        timestamp: Date.now(),
+        protocol: cur.conn.protocol,
+        providerName: cur.provName,
+        // 深拷贝一份，避免后续对 apiMessages 的引用被改写影响历史
+        messages: apiMessages.map((m) => ({ role: m.role, content: m.content })),
+      })
 
       // === 5. 调模型流式 ===
       rt.abortCtrl = new AbortController()

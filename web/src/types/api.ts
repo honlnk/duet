@@ -403,3 +403,30 @@ export type ServerEvent =
   | ErrorEvent
   | FinishedEvent
   | PongEvent
+
+/* ----------------------------- Prompt 历史 ----------------------------- */
+
+/** 发给 LLM 的单条消息（与后端 ApiMessage 对应） */
+export interface PromptMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * 一次「即将发给 LLM 的完整 Prompt」快照。
+ * 在后端 buildApiMessages 之后、chatCompletion 之前捕获，所见即所发。
+ */
+export interface PromptSnapshot {
+  agentId: AgentId
+  agentName: string
+  round: number
+  timestamp: number
+  protocol: string
+  providerName: string
+  messages: PromptMessage[]
+}
+
+/** GET /api/sessions/:id/prompts 响应 */
+export interface PromptHistoryResponse {
+  prompts: PromptSnapshot[]
+}

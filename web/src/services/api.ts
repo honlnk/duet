@@ -5,12 +5,14 @@
  * 对应 server/src/routes/sessions.ts 和 health.ts。
  */
 import type {
+  AgentId,
   ApiProtocol,
   ConfigLimits,
   CreateSessionPayload,
   ExchangeRatesResponse,
   ModelsResponse,
   PricingResponse,
+  PromptHistoryResponse,
   ProviderFormData,
   ProviderListResponse,
   Session,
@@ -73,6 +75,23 @@ export function updateRelationships(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+/**
+ * 查询某会话最近发给 LLM 的完整 Prompt 历史。
+ * GET /api/sessions/:id/prompts?agentId=A&limit=20
+ * 内存态，进程重启后丢失；未指定 agentId 则返回全部智能体的快照。
+ */
+export async function getRecentPrompts(
+  id: string,
+  agentId?: AgentId,
+  limit?: number,
+): Promise<PromptHistoryResponse> {
+  const params = new URLSearchParams()
+  if (agentId) params.set('agentId', agentId)
+  if (limit) params.set('limit', String(limit))
+  const qs = params.toString()
+  return request<PromptHistoryResponse>(`/api/sessions/${id}/prompts${qs ? `?${qs}` : ''}`)
 }
 
 /** 获取全局熔断限制与成本单价 */

@@ -11,6 +11,7 @@ import {
 } from '../store/sessionStore.js'
 import { isPresetColor } from '../types/index.js'
 import { syncRelationshipsToRuntime } from '../ws/chatHandler.js'
+import { getPrompts, clearPrompts } from '../store/promptHistory.js'
 
 /** POST /api/sessions 请求体（与 Fastify JSON Schema 对齐） */
 interface CreateSessionBody {
@@ -127,6 +128,7 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete('/api/sessions/:id', async (req: SessionIdRequest, reply) => {
     const ok = deleteSession(req.params.id)
     if (!ok) return reply.code(404).send({ error: '会话不存在' })
+    clearPrompts(req.params.id)
     return { ok: true }
   })
 
@@ -177,6 +179,20 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       }
       saveSession(session)
       return session
+    },
+  )
+
+  // 查看某个会话最近发给 LLM 的完整 Prompt（按 agentId 过滤；内存态，进程重启后丢失）
+  fastify.get<{ Params: { id: string }; Querystring: { agentId?: string; limit?: string } }>(
+    '/api/sessions/:id/prompts',
+    async (req, reply) => {
+      // 会话是否存在（不存在则 404，与详情接口语义一致）
+      const s = loadSession(req.params.id)
+      if (!s) return reply.code(404).send({ error: '会话不存在' })
+      const limitRaw = Number.parseInt(req.query.limit ?? '', 10)
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined
+      const snapshots = getPrompts(req.params.id, req.query.agentId as never, limit)
+      return { prompts: snapshots }
     },
   )
 }
