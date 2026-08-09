@@ -26,11 +26,11 @@ interface AgentSystemParams {
  * 构建某个 AI 的 system prompt（分层注入：全局设定 → 主角设定 → 在场角色 → 关系 → 对话规则）
  *
  * 分层结构固化顺序，前缀只增不变，最大化命中上下文缓存。
- * - 全局设定：场景 + 导演指令（可选）
+ * - 全局设定：话题 + 场景 + 导演指令（话题恒有，场景/导演指令可选）
  * - 主角设定：description + personality
  * - 在场角色：他人精简描述（2 人场景全量 description）
  * - 关系：第一人称非对称关系描述
- * - 对话规则：轮流发言、字数控制、避免复读
+ * - 对话规则：字数控制、避免复读
  */
 export function buildAgentSystem({
   name,
@@ -44,23 +44,26 @@ export function buildAgentSystem({
 }: AgentSystemParams): string {
   const sections: string[] = []
 
-  // ─── 全局设定 ───
-  if (scenario || globalPrompt) {
-    sections.push('─── 全局设定 ───')
-    if (scenario) {
-      sections.push('[场景设定]')
-      sections.push(scenario)
-    }
-    if (globalPrompt) {
-      sections.push('[导演指令]')
-      sections.push(globalPrompt)
-    }
-    sections.push('')
+  // ─── 全局设定（话题恒在最前，确保所有智能体都明确对话主题）───
+  sections.push('─── 全局设定 ───')
+  sections.push('[话题]')
+  sections.push(topic)
+  if (scenario) {
+    sections.push('[场景设定]')
+    sections.push(scenario)
   }
+  if (globalPrompt) {
+    sections.push('[导演指令]')
+    sections.push(globalPrompt)
+  }
+  sections.push('')
 
   // ─── 主角设定 ───
   sections.push('─── 主角设定 ───')
-  sections.push(`你是「${name}」。${description || ''}`)
+  sections.push(`你是「${name}」。`)
+  if (description) {
+    sections.push(description)
+  }
   if (personality) {
     sections.push(`性格：${personality}`)
   }
@@ -100,7 +103,6 @@ export function buildAgentSystem({
   sections.push(`- 你正在参与一场关于以下话题的多方对话：`)
   sections.push(`  话题：${topic}`)
   sections.push(`- 你的对话对象（其他参与者）：${othersText}`)
-  sections.push(`- 【重要】大家按固定顺序轮流发言，请只在你该发言的轮次发言，不要抢话，也不要替别人发言。`)
   sections.push(`- 每次发言控制在 50-200 字以内，自然口语化，避免长篇大论或列表罗列。`)
   sections.push(`- 【重要】不要重复别人刚刚说过的原话；如果发现对话陷入循环或离题，主动换个角度或推进到下一个子话题。`)
   sections.push(`- 保持你的身份立场一致，但可以适度回应、质疑或补充其他参与者的观点，让对话自然推进。`)

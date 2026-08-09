@@ -299,8 +299,6 @@ test('buildAgentSystem：多对手时列出所有参与者', () => {
   })
   assert.ok(sys.includes('乙'))
   assert.ok(sys.includes('丙'))
-  // 多人时应有「轮流发言」相关提示
-  assert.ok(sys.includes('轮流'))
 })
 
 /* --------------------------- 结构化角色卡 --------------------------- */
@@ -421,25 +419,31 @@ test('buildAgentSystem：scenario + globalPrompt 注入全局设定段落', () =
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
-    topic: 't',
+    topic: '测试话题',
     scenario: '深夜的咖啡馆，窗外下着雨',
     globalPrompt: '对话基调为悬疑',
   })
   assert.ok(sys.includes('全局设定'), '应有全局设定段落')
   assert.ok(sys.includes('深夜的咖啡馆'), '应含 scenario')
   assert.ok(sys.includes('悬疑'), '应含 globalPrompt')
+  assert.ok(sys.includes('测试话题'), '应含 topic')
+  // 话题应在场景设定之前（话题恒在全局设定最前）
+  assert.ok(sys.indexOf('测试话题') < sys.indexOf('深夜的咖啡馆'))
   // 全局设定应在主角设定之前（分层顺序）
   assert.ok(sys.indexOf('全局设定') < sys.indexOf('主角设定'))
 })
 
-test('buildAgentSystem：无 scenario/globalPrompt 时不出现全局设定段落', () => {
+test('buildAgentSystem：无 scenario/globalPrompt 时全局设定仍含话题', () => {
   const sys = buildAgentSystem({
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
-    topic: 't',
+    topic: '测试话题',
   })
-  assert.ok(!sys.includes('全局设定'), '不应有全局设定段落')
+  assert.ok(sys.includes('全局设定'), '应有全局设定段落（话题恒在）')
+  assert.ok(sys.includes('测试话题'), '应含 topic')
+  assert.ok(!sys.includes('场景设定'), '无 scenario 时不应有 [场景设定] 标签')
+  assert.ok(!sys.includes('导演指令'), '无 globalPrompt 时不应有 [导演指令] 标签')
 })
 
 test('buildApiMessages：scenario/globalPrompt 通过参数注入', () => {
