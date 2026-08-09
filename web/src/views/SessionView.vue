@@ -20,6 +20,7 @@ import { useBreakpoint } from '@/composables/useBreakpoint'
 import MessageList from '@/components/MessageList.vue'
 import SessionInspector from '@/components/SessionInspector.vue'
 import PromptHistoryModal from '@/components/PromptHistoryModal.vue'
+import ResumeDialog from '@/components/ResumeDialog.vue'
 import type { ServerEvent, SessionStatus } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
@@ -34,12 +35,14 @@ const {
 } = storeToRefs(session)
 const { isMobile } = useBreakpoint()
 
-const { open: openWs, send: sendWs, close: closeWs } = useWebSocket()
+const { open: openWs, send: sendWs, close: closeWs, connected } = useWebSocket()
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 /** Prompt 历史模态框开关 */
 const showPromptHistory = ref(false)
+/** 继续对话弹窗开关 */
+const showResumeDialog = ref(false)
 
 /** 主区 header 标题：会话话题，缺省回退品牌名 */
 const headerTitle = computed(() => session.session?.topic ?? 'Duet')
@@ -103,6 +106,17 @@ function startStream(id: string) {
 /** 停止当前会话 */
 function handleStop() {
   sendWs({ type: 'stop' })
+}
+
+/** 继续对话（由 ResumeDialog 确认后触发） */
+function handleResume(params: { maxRounds?: number; durationSec?: number }) {
+  showResumeDialog.value = false
+  // WS 可能已断开（查看历史会话 / 报错停止后未重连），需先确保连接
+  if (!session.session) return
+  if (!connected.value) {
+    openWs(session.session.id, { onEvent })
+  }
+  sendWs({ type: 'start', ...params })
 }
 
 /** 重置：回到首页 */
@@ -270,6 +284,7 @@ onUnmounted(() => {
       @close="inspectorOpen = false"
       @stop="handleStop"
       @reset="handleReset"
+      @resume="showResumeDialog = true"
     />
   </section>
 
@@ -279,5 +294,12 @@ onUnmounted(() => {
     :session-id="props.id"
     :agents="session.session.agents"
     @close="showPromptHistory = false"
+  />
+
+  <!-- 继续对话设置弹窗 -->
+  <ResumeDialog
+    v-if="showResumeDialog"
+    @close="showResumeDialog = false"
+    @resume="handleResume"
   />
 </template>

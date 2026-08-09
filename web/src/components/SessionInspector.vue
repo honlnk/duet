@@ -31,6 +31,8 @@ const emit = defineEmits<{
   stop: []
   /** 返回首页（关 WS + 清会话 + 跳路由） */
   reset: []
+  /** 继续对话（打开设置弹窗） */
+  resume: []
 }>()
 
 const session = useSessionStore()
@@ -46,6 +48,7 @@ const {
   durationSec,
   eventLog,
   viewSide,
+  isStopping,
 } = storeToRefs(session)
 
 const { display: durationDisplay, start, stop: stopTimer } = useDurationTracker()
@@ -354,10 +357,22 @@ const hasEvents = computed(() => eventLog.value.length > 0)
       <button
         v-if="isRunning"
         type="button"
-        class="rounded-lg border border-danger px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
+        :disabled="isStopping"
+        class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+        :class="isStopping
+          ? 'cursor-not-allowed border-border-subtle text-text-muted'
+          : 'border-danger text-danger hover:bg-danger/10'"
         @click="emit('stop')"
       >
-        停止
+        {{ isStopping ? '暂停中…' : '暂停' }}
+      </button>
+      <button
+        v-else
+        type="button"
+        class="rounded-lg bg-focus px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+        @click="emit('resume')"
+      >
+        继续对话
       </button>
       <button
         type="button"

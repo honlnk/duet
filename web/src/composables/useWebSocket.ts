@@ -23,13 +23,13 @@ export function useWebSocket() {
   let url = ''
   let handlers: WsHandlers | null = null
   // start 在连接建立前缓冲（修复竞态）
-  let pendingStart = false
+  let pendingStart: ClientMessage | null = null
 
   function open(sessionId: string, h: WsHandlers) {
     url = buildWsUrl(sessionId)
     handlers = h
     closedByUser = false
-    pendingStart = false
+    pendingStart = null
     doOpen()
   }
 
@@ -39,10 +39,10 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       connected.value = true
-      // 连接建立后发送 start（修复旧版 setTimeout 竞态）
+      // 连接建立后发送缓冲的 start（修复旧版 setTimeout 竞态）
       if (pendingStart) {
-        send({ type: 'start' })
-        pendingStart = false
+        doSend(pendingStart)
+        pendingStart = null
       }
     }
 
@@ -70,16 +70,23 @@ export function useWebSocket() {
     }
   }
 
+  /** 实际发送（不处理缓冲逻辑） */
+  function doSend(msg: ClientMessage) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg))
+    }
+  }
+
   function send(msg: ClientMessage) {
     if (msg.type === 'start') {
       // 标记需要发送 start；若已 open 立即发，否则缓冲到 onopen
-      pendingStart = true
+      pendingStart = msg
     }
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg))
-      if (msg.type === 'start') pendingStart = false
+      doSend(msg)
+      if (msg.type === 'start') pendingStart = null
     }
-    // 未 OPEN 时 start 已缓冲；stop/ ping 在未连接时丢弃
+    // 未 OPEN 时 start 已缓冲；stop/ping 在未连接时丢弃
   }
 
   function close() {

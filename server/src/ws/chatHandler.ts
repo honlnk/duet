@@ -28,6 +28,9 @@ import type {
   ServerToClientMsg,
 } from '../types/index.js'
 
+/** Runtime 内部用的停止阶段标记 */
+type StopPhase = 'idle' | 'pending'
+
 /** 单会话运行时状态（内存态，含当前 fetch 的 AbortController） */
 interface Runtime {
   abortCtrl: AbortController | null
@@ -35,6 +38,8 @@ interface Runtime {
   running: boolean
   /** 用户请求停止标志（runLoop 每轮检查） */
   stopRequested: boolean
+  /** 停止阶段：idle 未请求 / pending 已请求但等当前发言完成 */
+  stopPhase: StopPhase
   /** runLoop 当前操作的 session 内存引用 */
   activeSession: Session | null
 }
@@ -53,6 +58,7 @@ function getRuntime(sessionId: string): Runtime {
       wsClients: new Set(),
       running: false,
       stopRequested: false,
+      stopPhase: 'idle' as StopPhase,
       activeSession: null,
     }
     runtimes.set(sessionId, rt)
@@ -98,24 +104,17 @@ function broadcast(sessionId: string, msg: ServerToClientMsg): void {
   }
 }
 
-/** 用户主动停止：设置标志位 + 中断当前 fetch（runLoop 退出时统一发 finished） */
+/**
+ * 用户主动暂停：设置标志位，但**不中断正在进行的 AI 请求**。
+ * 当前发言者会完整输出，之后在下一轮间隙才真正停止。
+ * runLoop 退出时统一发送 finished。
+ */
 export function stopSession(sessionId: string): void {
   const rt = getRuntime(sessionId)
   rt.stopRequested = true
-  // 同步操作 runLoop 当前持有的 session 引用（若有）
-  if (rt.activeSession) {
-    rt.activeSession.status = 'stopped'
-    rt.activeSession.stoppedAt = Date.now()
-    rt.activeSession.finishedReason = 'stopped'
-    saveSession(rt.activeSession)
-  }
-  if (rt.abortCtrl) {
-    try {
-      rt.abortCtrl.abort()
-    } catch {
-      // abort 失败忽略
-    }
-  }
+  rt.stopPhase = 'pending'
+  // 广播暂停中状态（前端据此把按钮显示为"暂停中…"）
+  broadcast(sessionId, { type: 'stopping' })
 }
 
 /** 判断是否为 abort 类型错误 */
@@ -143,8 +142,12 @@ interface AgentRuntime {
 /**
  * 主循环：让多个 AI 按固定顺序（A→B→C→A…）轮流自主对话。
  * @param session  会话对象（会被原地修改）
+ * @param opts     启动选项（暂停后继续时可覆盖轮数/时长上限）
  */
-export async function runLoop(session: Session): Promise<void> {
+export async function runLoop(
+  session: Session,
+  opts?: { maxRounds?: number; durationSec?: number },
+): Promise<void> {
   const rt = getRuntime(session.id)
 
   // 防止重复 start
@@ -157,15 +160,31 @@ export async function runLoop(session: Session): Promise<void> {
     return
   }
 
+  // 全新启动 vs 继续（暂停/报错后恢复）
+  const wasIdle = session.status === 'idle'
+
+  // 应用继续参数（覆盖轮数/时长上限）
+  if (opts?.maxRounds !== undefined) session.config.maxRounds = opts.maxRounds
+  if (opts?.durationSec !== undefined) session.config.durationSec = opts.durationSec
+
   rt.running = true
   rt.stopRequested = false
+  rt.stopPhase = 'idle'
   rt.activeSession = session
   session.status = 'running'
   session.error = null
   session.finishedReason = null
-  if (!session.startedAt) session.startedAt = Date.now()
+
+  // 计时重置：全新启动设初始时间；继续时重置计时（暂停期间不计入时长熔断）
+  if (wasIdle) {
+    if (!session.startedAt) session.startedAt = Date.now()
+  } else {
+    session.startedAt = Date.now()
+    session.stoppedAt = null
+  }
+
   saveSession(session)
-  broadcast(session.id, { type: 'started' })
+  broadcast(session.id, { type: 'started', startedAt: session.startedAt })
 
   // 把 JSON 形态的 memory 还原成 AgentMemory 实例（操作内存，结束时再写回）
   const memMap = new Map<AgentId, AgentMemory>()
@@ -229,6 +248,10 @@ export async function runLoop(session: Session): Promise<void> {
   // 选举展示货币（按各 Provider 货币数量多数决定，平票用 CNY）+ 拉取汇率
   const displayCurrency = pickDisplayCurrency(runtimes2.map((r) => r.rates.currency))
   const exchangeRates = await getRatesWithFallback()
+
+  // 报错重试：指数退避，最多 10 次
+  let retryCount = 0
+  const MAX_RETRIES = 10
 
   try {
     while (true) {
@@ -435,37 +458,32 @@ export async function runLoop(session: Session): Promise<void> {
           round: currentRound(session),
           messageCount: session.messageCount,
         })
+        // 本轮成功完成，重置重试计数
+        retryCount = 0
       } catch (e) {
-        // === 流式中断 / API 错误 ===
-        const aborted = isAbortError(e, rt.abortCtrl)
-        // stopSession 可能在 await 期间把 status 改为 'stopped'；
-        // TS 无法追踪跨 await 的外部修改，需以宽类型重新读取实际值
-        const statusNow = session.status as SessionStatus
-        // 用户主动停止：保留已收 chunk，静默退出（不报错）
-        if (statusNow === 'stopped') {
-          if (content.trim()) {
-            const msg: PersistedMessage = {
-              agentId,
-              role: 'assistant',
-              content: content.trim(),
-              ts: Date.now(),
-              tokens: { prompt: 0, completion: 0 },
-              truncated: true,
-            }
-            session.messages.push(msg)
-            cur.mem.pushSelf(content.trim())
-            for (const o of others) {
-              o.mem.pushOther(wrapOtherMessage(cur.ref.name, content.trim()))
-            }
-            session.messageCount += 1
-            saveSession(session)
-            broadcast(session.id, { type: 'message_done', agentId, message: msg })
+        // === API 错误（用户暂停不再中断请求，故不会进入此分支的 abort 逻辑）===
+        // 其它错误（含超时）→ 指数退避重试，最多 MAX_RETRIES 次
+        retryCount++
+        if (retryCount <= MAX_RETRIES) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 60000) // 1s,2s,4s…上限 60s
+          const errMsg = errorMessage(e)
+          broadcast(session.id, {
+            type: 'retry',
+            attempt: retryCount,
+            maxAttempts: MAX_RETRIES,
+            delayMs: delay,
+            error: errMsg,
+          })
+          await new Promise((r) => setTimeout(r, delay))
+          // 等待期间用户可能点了暂停
+          if (rt.stopRequested) {
+            break
           }
-          break
+          continue // 重试同一智能体（currentAgentId 未前进）
         }
-        // 其它错误（含超时） → error 状态
+        // 重试耗尽 → error 状态
         session.status = 'error'
-        session.error = aborted ? '请求超时或被中断' : errorMessage(e)
+        session.error = `${errorMessage(e)}（已重试 ${MAX_RETRIES} 次）`
         session.finishedReason = 'error'
         saveSession(session)
         broadcast(session.id, { type: 'error', message: session.error })
@@ -494,5 +512,6 @@ export async function runLoop(session: Session): Promise<void> {
     rt.running = false
     rt.activeSession = null
     rt.stopRequested = false
+    rt.stopPhase = 'idle'
   }
 }

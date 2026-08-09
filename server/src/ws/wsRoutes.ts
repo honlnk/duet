@@ -66,7 +66,11 @@ async function wsRoutes(fastify: FastifyInstance): Promise<void> {
               return
             }
             // 异步跑循环，WS 事件通过 broadcast 回流
-            runLoop(s).catch((e: unknown) => {
+            // 透传可选的轮数/时长参数（暂停后继续时覆盖原有上限）
+            runLoop(s, {
+              maxRounds: msg.maxRounds,
+              durationSec: msg.durationSec,
+            }).catch((e: unknown) => {
               const m = e instanceof Error ? e.message : String(e)
               send({ type: 'error', message: '运行异常: ' + m })
             })

@@ -310,7 +310,7 @@ export interface ProviderListResponse {
 
 /** 客户端 → 服务器 */
 export type ClientMessage =
-  | { type: 'start' }
+  | { type: 'start'; maxRounds?: number; durationSec?: number }
   | { type: 'stop' }
   | { type: 'ping' }
 
@@ -323,6 +323,8 @@ export interface SyncEvent {
 /** 服务器 → 客户端：循环已开始 */
 export interface StartedEvent {
   type: 'started'
+  /** 本轮启动时间戳（暂停后继续时会被重置，前端据此重置计时器） */
+  startedAt: number
 }
 
 /** 服务器 → 客户端：流式片段 */
@@ -380,6 +382,11 @@ export interface ErrorEvent {
   message: string
 }
 
+/** 服务器 → 客户端：用户已请求暂停，等当前发言完成后停止 */
+export interface StoppingEvent {
+  type: 'stopping'
+}
+
 /** 服务器 → 客户端：循环结束 */
 export interface FinishedEvent {
   type: 'finished'
@@ -389,6 +396,19 @@ export interface FinishedEvent {
 /** 服务器 → 客户端：心跳回复 */
 export interface PongEvent {
   type: 'pong'
+}
+
+/** 服务器 → 客户端：LLM 请求失败，即将指数退避重试 */
+export interface RetryEvent {
+  type: 'retry'
+  /** 当前重试次数（1 基） */
+  attempt: number
+  /** 最大重试次数 */
+  maxAttempts: number
+  /** 本次退避等待毫秒数 */
+  delayMs: number
+  /** 触发重试的错误信息 */
+  error: string
 }
 
 /** 所有服务器事件联合 */
@@ -401,8 +421,10 @@ export type ServerEvent =
   | StatsEvent
   | TurnEndEvent
   | ErrorEvent
+  | StoppingEvent
   | FinishedEvent
   | PongEvent
+  | RetryEvent
 
 /* ----------------------------- Prompt 历史 ----------------------------- */
 

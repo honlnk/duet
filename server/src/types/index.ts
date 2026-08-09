@@ -381,7 +381,7 @@ export interface AppConfig {
 /** 客户端 → 服务器 */
 export type ClientToServerMsg =
   | { type: 'ping' }
-  | { type: 'start' }
+  | { type: 'start'; maxRounds?: number; durationSec?: number }
   | { type: 'stop' }
 
 /** 服务器 → 客户端：连接时全量同步 */
@@ -393,6 +393,8 @@ export interface SyncMsg {
 /** 服务器 → 客户端：循环已开始 */
 export interface StartedMsg {
   type: 'started'
+  /** 本轮启动时间戳（暂停后继续时会被重置，前端据此重置计时器） */
+  startedAt: number
 }
 
 /** 服务器 → 客户端：流式片段 */
@@ -450,6 +452,11 @@ export interface ErrorMsg {
   message: string
 }
 
+/** 服务器 → 客户端：用户已请求暂停，等当前发言完成后停止 */
+export interface StoppingMsg {
+  type: 'stopping'
+}
+
 /** 服务器 → 客户端：循环结束 */
 export interface FinishedMsg {
   type: 'finished'
@@ -459,6 +466,19 @@ export interface FinishedMsg {
 /** 服务器 → 客户端：心跳回复 */
 export interface PongMsg {
   type: 'pong'
+}
+
+/** 服务器 → 客户端：LLM 请求失败，即将指数退避重试 */
+export interface RetryMsg {
+  type: 'retry'
+  /** 当前重试次数（1 基） */
+  attempt: number
+  /** 最大重试次数 */
+  maxAttempts: number
+  /** 本次退避等待毫秒数 */
+  delayMs: number
+  /** 触发重试的错误信息 */
+  error: string
 }
 
 /** 所有服务器事件联合 */
@@ -471,8 +491,10 @@ export type ServerToClientMsg =
   | StatsMsg
   | TurnEndMsg
   | ErrorMsg
+  | StoppingMsg
   | FinishedMsg
   | PongMsg
+  | RetryMsg
 
 /** 广播函数签名 */
 export type BroadcastFn = (msg: ServerToClientMsg) => void

@@ -93,6 +93,9 @@ export const useSessionStore = defineStore('session', () => {
   /** 错误信息（最近一次） */
   const errorMessage = ref<string | null>(null)
 
+  /** 是否正在暂停中（已请求暂停，等当前发言完成） */
+  const isStopping = ref(false)
+
   /**
    * 待启动标记：新建会话后置为 true，由 SessionView 加载该会话后
    * 据此建立 WS 并发送 start（避免 NewChatModal 与 SessionView 双重管理 WS）。
@@ -188,6 +191,7 @@ export const useSessionStore = defineStore('session', () => {
     streamingAgentId = null
     round.value = 0
     errorMessage.value = null
+    isStopping.value = false
     stats.value = {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
@@ -247,7 +251,9 @@ export const useSessionStore = defineStore('session', () => {
 
       case 'started':
         status.value = 'running'
-        if (!startedAt.value) startedAt.value = Date.now()
+        startedAt.value = msg.startedAt
+        stoppedAt.value = null
+        isStopping.value = false
         return 'none'
 
       case 'chunk': {
@@ -331,11 +337,21 @@ export const useSessionStore = defineStore('session', () => {
         log('error', msg.message)
         return 'none'
 
+      case 'stopping':
+        // 已请求暂停，等当前发言完成；前端据此把按钮显示为"暂停中…"
+        isStopping.value = true
+        return 'none'
+
       case 'finished':
         // 标记但延迟设最终 status（等重拉权威数据）
+        isStopping.value = false
         return 'finished'
 
       case 'pong':
+        return 'none'
+
+      case 'retry':
+        log('info', `请求失败，${(msg.delayMs / 1000).toFixed(1)}s 后重试（第 ${msg.attempt}/${msg.maxAttempts} 次）：${msg.error}`)
         return 'none'
 
       default:
@@ -439,6 +455,7 @@ export const useSessionStore = defineStore('session', () => {
     durationSec,
     eventLog,
     errorMessage,
+    isStopping,
     pendingStart,
     inspectorOpen,
     sidebarCollapsed,
