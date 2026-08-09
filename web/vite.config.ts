@@ -20,6 +20,8 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: false,
+    // 监听 0.0.0.0，允许内网/手机访问（手机访问 http://电脑局域网IP:5174）
+    host: true,
     // 开发态：前端跑在 5174，把 /api、/ws 反代到后端 3000。
     // 业务代码用相对路径 + location.host，无需感知端口差异。
     proxy: {
