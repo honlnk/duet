@@ -11,25 +11,25 @@ const { messages } = storeToRefs(session)
 const scrollRef = ref<HTMLDivElement | null>(null)
 
 /**
- * 用户是否在滚动区底部附近。
- * 通过监听用户的手动滚动来更新，据此决定流式/新消息时是否自动跟随。
+ * 用户是否完全贴在滚动区底部。
+ * 必须无可滚动余量（distance <= 0）才为 true，向上滚任意像素即变为 false，
+ * 避免流式自动跟随与用户手动滚动冲突导致的抖动。
+ * （distance < 0 的情况：内容不足、未出现滚动条，同样视为贴底。）
  */
-const isNearBottom = ref(true)
-/** 判定为「在底部」的阈值（距底部像素数） */
-const BOTTOM_THRESHOLD = 80
+const isAtBottom = ref(true)
 
 function onScroll() {
   const el = scrollRef.value
   if (!el) return
   const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-  isNearBottom.value = distance < BOTTOM_THRESHOLD
+  isAtBottom.value = distance <= 0
   // 同步阅读状态到 store（视窗跟随节奏用）
-  session.setReadingState(isNearBottom.value)
+  session.setReadingState(isAtBottom.value)
 }
 
-/** 仅当用户已在底部时，才滚动到底部（避免打断用户浏览） */
+/** 仅当用户完全贴底时，才滚动到底部（避免打断用户浏览 / 避免抖动） */
 async function maybeScrollToBottom() {
-  if (!isNearBottom.value) return
+  if (!isAtBottom.value) return
   await nextTick()
   const el = scrollRef.value
   if (el) el.scrollTop = el.scrollHeight
