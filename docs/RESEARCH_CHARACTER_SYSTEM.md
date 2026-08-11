@@ -169,7 +169,6 @@ SillyTavern 的核心教训：**不要把关键信息放进会被压缩的滚动
 │                                                   │
 │  ┌─ system 1: 全局设定 ──────────────────────┐   │
 │  │  场景/世界观（scenario，会话级共享）        │   │
-│  │  全局导演指令（globalPrompt，可选）        │   │
 │  └─────────────────────────────────────────┘   │
 │  ┌─ system 2: 我的角色卡 ────────────────────┐   │
 │  │  你是「{name}」                             │   │
@@ -274,9 +273,9 @@ interface CharacterCard {
 }
 ```
 
-### 4.4 全局提示词方案
+### 4.4 场景设定方案
 
-#### 4.4.1 会话级全局提示词
+#### 4.4.1 会话级场景设定
 
 在 `SessionConfig` 新增可选字段：
 
@@ -286,16 +285,14 @@ interface SessionConfig {
 
   // 新增
   scenario?: string       // 场景设定（如「深夜的咖啡馆，窗外下着雨」）
-  globalPrompt?: string   // 全局导演指令（如「本场对话基调为悬疑，角色之间暗藏秘密」）
 }
 ```
 
 **与 topic 的关系**：
 - `topic` = 对话主题/引子（「讨论是否应该立法禁止 AI 生成未标注内容」）
 - `scenario` = 场景/世界观（「赛博朋克 2077 年的立法听证会」）
-- `globalPrompt` = 导演指令（「对话应逐步升级为激烈争论」）
 
-三者独立，均可选。`topic` 仍是必填（作为对话触发点），`scenario` 和 `globalPrompt` 是增强。
+两者独立，均可选。`topic` 仍是必填（作为对话触发点），`scenario` 是增强。
 
 #### 4.4.2 prompt 注入顺序
 
@@ -303,9 +300,6 @@ interface SessionConfig {
 system 1（全局层）:
   [场景设定]
   {scenario}
-
-  [全局指令]
-  {globalPrompt}
 
 system 2（角色层）:
   你是「{name}」。{description || persona}
@@ -338,7 +332,6 @@ assistant: 我的发言
 |---|---|---|---|
 | `topic` | 会话级 | 对话主题/引子（「讨论 XX 话题」） | ✅ system 1 动态重建 |
 | `scenario` | 会话级 | 场景/世界观（「赛博朋克听证会」） | ✅ system 1 动态重建 |
-| `globalPrompt` | 会话级 | 导演指令（「逐步升级为争论」） | ✅ system 1 动态重建 |
 | `description` | 角色级 | 角色综合描述 | ✅ system 2 动态重建 |
 | `personality` | 角色级 | 性格关键词 | ✅ system 2 动态重建 |
 | `firstMes` | 角色级 | 开场白（风格锚点） | ❌ 一次性注入 |
@@ -370,9 +363,9 @@ assistant: 我的发言
 
 **改动**：
 
-1. **SessionConfig** 新增 `scenario?`、`globalPrompt?`
+1. **SessionConfig** 新增 `scenario?`
 2. **prompts.ts** — buildAgentSystem 新增 system 1（全局层）
-3. **前端表单** — 高级设置加 scenario / globalPrompt 输入
+3. **前端表单** — 高级设置加 scenario 输入
 4. **AgentRef** 新增 `firstMes?`，chatHandler 在首个发言者开场时用 `firstMes` 替代硬编码 `buildOpeningPrompt`
 
 ### 第三期（可选）：深度角色卡
@@ -448,7 +441,7 @@ assistant: 我的发言
 
 1. **补上对方感知**（改 `buildAgentSystem` 注入对方描述——数据已在 `others` 里，几行改动）
 2. **结构化角色卡**（description + personality 替代单薄 persona）
-3. **加全局提示词层**（scenario + globalPrompt 作为 system 1）
+3. **加场景设定层**（scenario 作为 system 1）
 
 这三点完成后，项目就从「辩论工具」进化为「纯 AI 对话酒馆」。
 

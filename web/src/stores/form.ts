@@ -38,18 +38,16 @@ export const useFormStore = defineStore('form', () => {
     values.topic = ''
   }
 
-  /** 选择一个世界观模板：写入 scenario/globalPrompt，记录模板 id */
-  function selectWorldview(templateId: string, scenario: string, globalPrompt?: string) {
+  /** 选择一个世界观模板：写入 scenario，记录模板 id */
+  function selectWorldview(templateId: string, scenario: string) {
     values.worldviewTemplateId = templateId
     values.scenario = scenario
-    values.globalPrompt = globalPrompt ?? ''
   }
 
   /** 清空世界观选择 */
   function clearWorldview() {
     values.worldviewTemplateId = ''
     values.scenario = ''
-    values.globalPrompt = ''
   }
 
   /**
@@ -104,7 +102,6 @@ export const useFormStore = defineStore('form', () => {
     values.topic = normalized.topic
     values.topicTemplateId = normalized.topicTemplateId
     values.scenario = normalized.scenario
-    values.globalPrompt = normalized.globalPrompt
     values.worldviewTemplateId = normalized.worldviewTemplateId
     values.model = normalized.model
     values.temperature = normalized.temperature
@@ -122,7 +119,6 @@ export const useFormStore = defineStore('form', () => {
     values.topic = def.topic
     values.topicTemplateId = def.topicTemplateId
     values.scenario = def.scenario
-    values.globalPrompt = def.globalPrompt
     values.worldviewTemplateId = def.worldviewTemplateId
     values.model = def.model
     values.temperature = def.temperature
@@ -156,7 +152,6 @@ export const useFormStore = defineStore('form', () => {
       if (p) agentProviders[ids[i]!] = p
     }
     const scenario = values.scenario.trim() || undefined
-    const globalPrompt = values.globalPrompt.trim() || undefined
     return {
       topic: values.topic.trim(),
       agents: values.agents.map((a, i) => ({
@@ -177,7 +172,6 @@ export const useFormStore = defineStore('form', () => {
         providerC,
         agentProviders: Object.keys(agentProviders).length > 0 ? agentProviders : undefined,
         scenario,
-        globalPrompt,
       } satisfies SessionConfig,
       // 从全局关系图自动注入：把基于 templateId 的关系翻译为会话内 A/B/C 关系
       relationships: (() => {

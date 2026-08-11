@@ -124,8 +124,6 @@ export interface SessionConfig {
   agentProviders?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
-  /** 导演指令 / 全局规则 */
-  globalPrompt?: string
   /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
   pacingEnabled?: boolean
   /** 缓冲轮数：超出视窗多少轮后暂停生成（默认 2） */

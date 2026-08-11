@@ -18,15 +18,13 @@ interface AgentSystemParams {
   topic: string
   /** 场景设定 / 世界观 */
   scenario?: string
-  /** 导演指令 / 全局规则 */
-  globalPrompt?: string
 }
 
 /**
  * 构建某个 AI 的 system prompt（分层注入：全局设定 → 主角设定 → 在场角色 → 关系 → 对话规则）
  *
  * 分层结构固化顺序，前缀只增不变，最大化命中上下文缓存。
- * - 全局设定：话题 + 场景 + 导演指令（话题恒有，场景/导演指令可选）
+ * - 全局设定：话题 + 场景（话题恒有，场景可选）
  * - 主角设定：description + personality
  * - 在场角色：他人精简描述（2 人场景全量 description）
  * - 关系：第一人称非对称关系描述
@@ -40,7 +38,6 @@ export function buildAgentSystem({
   relationships,
   topic,
   scenario,
-  globalPrompt,
 }: AgentSystemParams): string {
   const sections: string[] = []
 
@@ -51,10 +48,6 @@ export function buildAgentSystem({
   if (scenario) {
     sections.push('[场景设定]')
     sections.push(scenario)
-  }
-  if (globalPrompt) {
-    sections.push('[导演指令]')
-    sections.push(globalPrompt)
   }
   sections.push('')
 

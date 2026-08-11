@@ -8,7 +8,7 @@
  *  - AgentMemory 多对手视角（others 数组、buildApiMessages）
  *  - 结构化角色卡（description + personality）
  *  - 非对称关系图（relationships）
- *  - 全局提示词（scenario + globalPrompt）
+ *  - 全局设定（scenario）
  *
  * 运行：node --import tsx --test server/src/multi-agent.test.ts
  */
@@ -412,20 +412,18 @@ test('AgentMemory：toJSON/fromJSON 往返保持 relationships', () => {
   assert.deepEqual(restored.relationships, rels)
 })
 
-/* --------------------------- 全局提示词 --------------------------- */
+/* --------------------------- 全局设定 --------------------------- */
 
-test('buildAgentSystem：scenario + globalPrompt 注入全局设定段落', () => {
+test('buildAgentSystem：scenario 注入全局设定段落', () => {
   const sys = buildAgentSystem({
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
     topic: '测试话题',
     scenario: '深夜的咖啡馆，窗外下着雨',
-    globalPrompt: '对话基调为悬疑',
   })
   assert.ok(sys.includes('全局设定'), '应有全局设定段落')
   assert.ok(sys.includes('深夜的咖啡馆'), '应含 scenario')
-  assert.ok(sys.includes('悬疑'), '应含 globalPrompt')
   assert.ok(sys.includes('测试话题'), '应含 topic')
   // 话题应在场景设定之前（话题恒在全局设定最前）
   assert.ok(sys.indexOf('测试话题') < sys.indexOf('深夜的咖啡馆'))
@@ -433,7 +431,7 @@ test('buildAgentSystem：scenario + globalPrompt 注入全局设定段落', () =
   assert.ok(sys.indexOf('全局设定') < sys.indexOf('主角设定'))
 })
 
-test('buildAgentSystem：无 scenario/globalPrompt 时全局设定仍含话题', () => {
+test('buildAgentSystem：无 scenario 时全局设定仍含话题', () => {
   const sys = buildAgentSystem({
     name: '甲',
     description: 'd',
@@ -443,18 +441,16 @@ test('buildAgentSystem：无 scenario/globalPrompt 时全局设定仍含话题',
   assert.ok(sys.includes('全局设定'), '应有全局设定段落（话题恒在）')
   assert.ok(sys.includes('测试话题'), '应含 topic')
   assert.ok(!sys.includes('场景设定'), '无 scenario 时不应有 [场景设定] 标签')
-  assert.ok(!sys.includes('导演指令'), '无 globalPrompt 时不应有 [导演指令] 标签')
 })
 
-test('buildApiMessages：scenario/globalPrompt 通过参数注入', () => {
+test('buildApiMessages：scenario 通过参数注入', () => {
   const mem = new AgentMemory(
     { id: 'A', name: '甲', description: 'd' },
     [{ id: 'B', name: '乙' }],
     't',
   )
-  const msgs = mem.buildApiMessages(8, '场景X', '指令Y')
+  const msgs = mem.buildApiMessages(8, '场景X')
   assert.ok(msgs[0]!.content.includes('场景X'))
-  assert.ok(msgs[0]!.content.includes('指令Y'))
 })
 
 /* --------------------------- 导演指令 --------------------------- */
@@ -514,7 +510,7 @@ test('buildApiMessages：导演指令作为独立 system 消息注入（极高�
     't',
   )
   mem.pushSelf('我说了一句')
-  const msgs = mem.buildApiMessages(8, undefined, undefined, directors, 1)
+  const msgs = mem.buildApiMessages(8, undefined, directors, 1)
   // system(主) + system(导演) + assistant = 3
   assert.equal(msgs.length, 3)
   assert.equal(msgs[0]!.role, 'system')
@@ -536,7 +532,7 @@ test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
   )
   mem.summary = '这是摘要'
   mem.pushSelf('发言')
-  const msgs = mem.buildApiMessages(8, undefined, undefined, directors, 1)
+  const msgs = mem.buildApiMessages(8, undefined, directors, 1)
   // system(主) + system(摘要) + system(导演) + assistant = 4
   assert.equal(msgs.length, 4)
   assert.ok(msgs[1]!.content.includes('摘要'), '第二条应为摘要')
@@ -549,7 +545,7 @@ test('createSession：默认初始化 directors 空数组 + pacing 默认值', (
     agents: [{ name: 'A' }, { name: 'B' }],
   })
   assert.deepEqual(s.directors, [])
-  assert.equal(s.config.pacingEnabled, false)
+  assert.equal(s.config.pacingEnabled, true)
   assert.equal(s.config.pacingBufferRounds, 2)
 })
 

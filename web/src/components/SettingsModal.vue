@@ -130,30 +130,28 @@ function delTopic(id: string) {
 }
 
 /* --------------------------- 世界观模板 tab --------------------------- */
-const worldviewDraft = ref({ name: '', scenario: '', globalPrompt: '' })
+const worldviewDraft = ref({ name: '', scenario: '' })
 
 function addWorldview() {
   if (!worldviewDraft.value.name.trim() && !worldviewDraft.value.scenario.trim()) return
   template.addWorldview(
     worldviewDraft.value.name,
     worldviewDraft.value.scenario,
-    worldviewDraft.value.globalPrompt,
   )
-  worldviewDraft.value = { name: '', scenario: '', globalPrompt: '' }
+  worldviewDraft.value = { name: '', scenario: '' }
 }
 
 /** 当前编辑中的世界观模板 id */
 const editingWorldviewId = ref('')
-const worldviewEditDraft = ref({ name: '', scenario: '', globalPrompt: '' })
+const worldviewEditDraft = ref({ name: '', scenario: '' })
 
 function startEditWorldview(
   id: string,
   name: string,
   scenario: string,
-  globalPrompt: string,
 ) {
   editingWorldviewId.value = id
-  worldviewEditDraft.value = { name, scenario, globalPrompt }
+  worldviewEditDraft.value = { name, scenario }
 }
 function cancelEditWorldview() {
   editingWorldviewId.value = ''
@@ -164,7 +162,6 @@ function saveEditWorldview() {
   template.updateWorldview(editingWorldviewId.value, {
     name: worldviewEditDraft.value.name.trim(),
     scenario: worldviewEditDraft.value.scenario.trim(),
-    globalPrompt: worldviewEditDraft.value.globalPrompt.trim() || undefined,
   })
   editingWorldviewId.value = ''
 }
@@ -481,12 +478,6 @@ const hasHistory = computed(() => history.value.length > 0)
                 placeholder="场景设定 / 世界观（如：深夜的咖啡馆，窗外下着雨…）"
                 class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
               />
-              <textarea
-                v-model="worldviewDraft.globalPrompt"
-                rows="2"
-                placeholder="导演指令 / 全局规则（可选，如：对话基调为悬疑，角色之间暗藏秘密）"
-                class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
-              />
               <button
                 type="button"
                 class="self-start rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
@@ -514,13 +505,12 @@ const hasHistory = computed(() => history.value.length > 0)
                       {{ w.name || '（未命名）' }}
                     </p>
                     <p v-if="w.scenario" class="mt-0.5 line-clamp-2 text-xs text-text-dim">{{ w.scenario }}</p>
-                    <p v-if="w.globalPrompt" class="mt-0.5 line-clamp-1 text-xs text-text-muted">导演：{{ w.globalPrompt }}</p>
                   </div>
                   <div class="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
                       class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-bg-hover hover:text-text-main"
-                      @click="startEditWorldview(w.id, w.name, w.scenario, w.globalPrompt || '')"
+                      @click="startEditWorldview(w.id, w.name, w.scenario)"
                     >
                       编辑
                     </button>
@@ -545,12 +535,6 @@ const hasHistory = computed(() => history.value.length > 0)
                     v-model="worldviewEditDraft.scenario"
                     rows="3"
                     placeholder="场景设定"
-                    class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
-                  />
-                  <textarea
-                    v-model="worldviewEditDraft.globalPrompt"
-                    rows="2"
-                    placeholder="导演指令（可选）"
                     class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
                   />
                   <div class="flex justify-end gap-2">

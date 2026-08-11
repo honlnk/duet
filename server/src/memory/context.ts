@@ -88,14 +88,12 @@ export class AgentMemory {
    *
    * @param _keepRecent  已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
    * @param scenario     场景设定 / 世界观
-   * @param globalPrompt 导演指令 / 全局规则（会话级静态设定）
    * @param directors    导演指令列表（动态注入，含过期逻辑）
    * @param currentRound 当前轮次（用于过滤已过期导演指令）
    */
   buildApiMessages(
     _keepRecent: number = 8,
     scenario?: string,
-    globalPrompt?: string,
     directors?: DirectorInstruction[],
     currentRound?: number,
   ): ApiMessage[] {
@@ -107,7 +105,6 @@ export class AgentMemory {
       relationships: this.extractMyRelationships(),
       topic: this.topic,
       scenario,
-      globalPrompt,
     })
     const out: ApiMessage[] = [{ role: 'system', content: sys }]
     if (this.summary) {

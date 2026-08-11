@@ -87,7 +87,6 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                   additionalProperties: { type: 'string' },
                 },
                 scenario: { type: 'string' },
-                globalPrompt: { type: 'string' },
                 pacingEnabled: { type: 'boolean' },
                 pacingBufferRounds: { type: 'integer', minimum: 1 },
               },

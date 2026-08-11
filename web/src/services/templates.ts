@@ -31,15 +31,13 @@ export interface TopicTemplate {
   createdAt: number
 }
 
-/** 世界观模板（场景 + 导演指令） */
+/** 世界观模板（场景设定） */
 export interface WorldviewTemplate {
   id: string
   /** 模板名（如「校园日常」「赛博朋克」） */
   name: string
   /** 场景设定 */
   scenario: string
-  /** 导演指令（可选） */
-  globalPrompt?: string
   createdAt: number
 }
 
@@ -174,14 +172,12 @@ function saveWorldviewTemplates(list: WorldviewTemplate[]): void {
 export function addWorldviewTemplate(
   name: string,
   scenario: string,
-  globalPrompt?: string,
 ): WorldviewTemplate[] {
   const list = loadWorldviewTemplates()
   const item: WorldviewTemplate = {
     id: genId('w'),
     name: name.trim(),
     scenario: scenario.trim(),
-    globalPrompt: globalPrompt?.trim() || undefined,
     createdAt: Date.now(),
   }
   const next = [item, ...list]
@@ -197,7 +193,7 @@ export function removeWorldviewTemplate(id: string): WorldviewTemplate[] {
 
 export function updateWorldviewTemplate(
   id: string,
-  patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario' | 'globalPrompt'>>,
+  patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario'>>,
 ): WorldviewTemplate[] {
   const list = loadWorldviewTemplates().map((t) =>
     t.id === id ? { ...t, ...patch } : t,

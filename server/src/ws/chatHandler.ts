@@ -413,7 +413,6 @@ export async function runLoop(
       const apiMessages = cur.mem.buildApiMessages(
         session.config.keepRecent,
         session.config.scenario,
-        session.config.globalPrompt,
         session.directors,
         round,
       )

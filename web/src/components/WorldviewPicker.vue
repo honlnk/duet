@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 世界观选择器（从世界观模板中选择场景设定 + 导演指令）。
+ * 世界观选择器（从世界观模板中选择场景设定）。
  *
  * 交互与 TopicPicker 的「搜索框 + 下拉 / 已选卡片」模式对齐：
  *  - 已选择：展示模板名 + scenario 摘要 + 「更换」/「移除」
  *  - 未选择：搜索框 + 下拉列表，输入时按关键字筛选，点击即选中
  *  - 空态（无世界观模板）：提示去设置添加
  *
- * 绑定 form store 的 scenario / globalPrompt / worldviewTemplateId。
+ * 绑定 form store 的 scenario / worldviewTemplateId。
  */
 import { computed, nextTick, ref } from 'vue'
 import { useFormStore } from '@/stores/form'
@@ -35,8 +35,7 @@ const filteredWorldviews = computed(() => {
   return list.filter(
     (w) =>
       w.name.toLowerCase().includes(kw) ||
-      w.scenario.toLowerCase().includes(kw) ||
-      (w.globalPrompt?.toLowerCase().includes(kw) ?? false),
+      w.scenario.toLowerCase().includes(kw),
   )
 })
 
@@ -57,7 +56,7 @@ function closeDropdown() {
 function pick(tid: string) {
   const w = template.worldviews.find((x) => x.id === tid)
   if (!w) return
-  form.selectWorldview(w.id, w.scenario, w.globalPrompt)
+  form.selectWorldview(w.id, w.scenario)
   searchQuery.value = ''
   dropdownOpen.value = false
 }
@@ -86,9 +85,6 @@ function change() {
           </p>
           <p v-if="form.values.scenario" class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-text-dim">
             {{ form.values.scenario }}
-          </p>
-          <p v-if="form.values.globalPrompt" class="mt-0.5 line-clamp-1 text-xs text-text-muted">
-            导演：{{ form.values.globalPrompt }}
           </p>
         </div>
         <button

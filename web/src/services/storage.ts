@@ -30,8 +30,6 @@ export interface FormValues {
   topicTemplateId: string
   /** 场景设定 / 世界观 */
   scenario: string
-  /** 导演指令 / 全局规则 */
-  globalPrompt: string
   /** 所选世界观模板 id（空串 = 未选择模板） */
   worldviewTemplateId: string
   model: string
@@ -50,7 +48,6 @@ export interface FormValues {
 export const SCALAR_FIELD_KEYS = [
   'topic',
   'scenario',
-  'globalPrompt',
   'model',
   'temperature',
   'maxRounds',
@@ -100,7 +97,6 @@ export function defaultValues(): FormValues {
     topic: '',
     topicTemplateId: '',
     scenario: '',
-    globalPrompt: '',
     worldviewTemplateId: '',
     model: 'deepseek-v4-flash',
     temperature: '0.7',
@@ -222,7 +218,6 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
     topic: str(anyInput.topic, def.topic),
     topicTemplateId: str(anyInput.topicTemplateId, def.topicTemplateId),
     scenario: str(anyInput.scenario, def.scenario),
-    globalPrompt: str(anyInput.globalPrompt, def.globalPrompt),
     worldviewTemplateId: str(anyInput.worldviewTemplateId, def.worldviewTemplateId),
     model: str(anyInput.model, def.model),
     temperature: str(anyInput.temperature, def.temperature),

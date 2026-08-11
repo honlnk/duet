@@ -16,7 +16,7 @@
 |---|---|---|---|
 | 1 | 结构化角色卡（description + personality） | 无 | 7 |
 | 2 | 他人描述注入 + 非对称关系图 | 阶段 1 | 6 |
-| 3 | 全局提示词（scenario + globalPrompt）+ 世界观模板 | 无（可与 1/2 并行） | 8 |
+| 3 | 场景设定（scenario）+ 世界观模板 | 无（可与 1/2 并行） | 8 |
 | 4 | 关系图管理页（Vue Flow 可视化） | 阶段 2 | 6 |
 
 ---
@@ -179,7 +179,6 @@ interface AgentSystemParams {
   relationships?: string[]  // 新增：当前 agent 对所有他人的关系描述
   topic: string
   scenario?: string         // 阶段 3 加
-  globalPrompt?: string     // 阶段 3 加
 }
 ```
 
@@ -264,9 +263,9 @@ FormValues 接口 + normalizeValues 补 relationships（默认 `{}`）。
 
 ---
 
-## 阶段 3：全局提示词 + 世界观模板
+## 阶段 3：场景设定 + 世界观模板
 
-**目标**：新增 scenario / globalPrompt 字段 + 可复用的世界观模板。
+**目标**：新增 scenario 字段 + 可复用的世界观模板。
 
 ### 后端
 
@@ -278,7 +277,6 @@ FormValues 接口 + normalizeValues 补 relationships（默认 `{}`）。
 export interface SessionConfig {
   // ... 现有字段 ...
   scenario?: string       // 新增：场景设定
-  globalPrompt?: string   // 新增：导演指令
 }
 ```
 
@@ -290,14 +288,11 @@ export interface SessionConfig {
 ─── 全局设定 ───
 [场景设定]
 {scenario}
-
-[导演指令]
-{globalPrompt}
 ```
 
 #### 3.3 `server/src/routes/sessions.ts`
 
-POST schema config.properties（:62-80，有 `additionalProperties: false`）：加 `scenario` 和 `globalPrompt`（可选 string）。
+POST schema config.properties（:62-80，有 `additionalProperties: false`）：加 `scenario`（可选 string）。
 
 ### 前端
 
@@ -312,12 +307,11 @@ export interface WorldviewTemplate {
   id: string
   name: string              // 模板名（如「校园日常」「赛博朋克」）
   scenario: string          // 场景设定
-  globalPrompt?: string     // 导演指令（可选）
   createdAt: number
 }
 
 export function loadWorldviewTemplates(): WorldviewTemplate[]
-export function addWorldviewTemplate(name: string, scenario: string, globalPrompt?: string): WorldviewTemplate[]
+export function addWorldviewTemplate(name: string, scenario: string): WorldviewTemplate[]
 export function removeWorldviewTemplate(id: string): WorldviewTemplate[]
 ```
 
@@ -333,7 +327,6 @@ FormValues 加：
 
 ```ts
 scenario: string
-globalPrompt: string
 worldviewTemplateId: string
 ```
 
@@ -341,17 +334,17 @@ defaultValues / normalizeValues 补字段。
 
 #### 3.7 `web/src/stores/form.ts`
 
-- 新增 `selectWorldview(templateId, scenario, globalPrompt)` / `clearWorldview()`（照抄 selectTopic 模式）
-- payload 的 config 输出 scenario / globalPrompt
+- 新增 `selectWorldview(templateId, scenario)` / `clearWorldview()`（照抄 selectTopic 模式）
+- payload 的 config 输出 scenario
 
 #### 3.8 `web/src/components/SettingsModal.vue`
 
 - Tab 类型加 `'worldview'`，tabs 数组加 `{ key: 'worldview', label: '世界观模板' }`
-- 新增 tab UI（照抄话题模板 tab）：name 输入框 + scenario 文本框 + globalPrompt 文本框
+- 新增 tab UI（照抄话题模板 tab）：name 输入框 + scenario 文本框
 
 #### 3.9 `web/src/components/WorldviewPicker.vue`（新建）
 
-照抄 TopicPicker.vue，从世界观模板列表选用，填入 scenario + globalPrompt。
+照抄 TopicPicker.vue，从世界观模板列表选用，填入 scenario。
 
 #### 3.10 `web/src/components/NewChatModal.vue`
 
@@ -359,9 +352,9 @@ defaultValues / normalizeValues 补字段。
 
 ### 验证
 
-1. 配置 scenario + globalPrompt，确认注入 system prompt
+1. 配置 scenario，确认注入 system prompt
 2. 世界观模板增删改查正常
-3. 从模板选用后，scenario / globalPrompt 自动填入
+3. 从模板选用后，scenario 自动填入
 
 ---
 

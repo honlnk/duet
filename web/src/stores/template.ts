@@ -89,9 +89,8 @@ export const useTemplateStore = defineStore('template', () => {
   function addWorldview(
     name: string,
     scenario: string,
-    globalPrompt?: string,
   ): WorldviewTemplate[] {
-    worldviews.value = addWorldviewTemplate(name, scenario, globalPrompt)
+    worldviews.value = addWorldviewTemplate(name, scenario)
     return worldviews.value
   }
 
@@ -104,7 +103,7 @@ export const useTemplateStore = defineStore('template', () => {
   /** 更新世界观模板 */
   function updateWorldview(
     id: string,
-    patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario' | 'globalPrompt'>>,
+    patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario'>>,
   ): WorldviewTemplate[] {
     worldviews.value = updateWorldviewTemplate(id, patch)
     return worldviews.value
