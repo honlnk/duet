@@ -50,7 +50,7 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
     temperature: 0.7,
     summaryEveryN: 10,
     keepRecent: 8,
-    pacingEnabled: false,
+    pacingEnabled: true,
     pacingBufferRounds: 2,
     ...overrides,
   }
