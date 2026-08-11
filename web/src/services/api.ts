@@ -78,6 +78,52 @@ export function updateRelationships(
 }
 
 /**
+ * 添加导演指令（用户以导演身份干预对话走向）。
+ * POST /api/sessions/:id/directors
+ * @param content 指令内容
+ * @param durationRounds 有效轮数（0 = 永久）
+ */
+export function addDirector(
+  id: string,
+  content: string,
+  durationRounds: number = 0,
+): Promise<Session> {
+  return request<Session>(`/api/sessions/${id}/directors`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, durationRounds }),
+  })
+}
+
+/**
+ * 删除导演指令。
+ * DELETE /api/sessions/:id/directors/:iid
+ */
+export function deleteDirector(id: string, directorId: string): Promise<Session> {
+  return request<Session>(`/api/sessions/${id}/directors/${directorId}`, {
+    method: 'DELETE',
+  })
+}
+
+/**
+ * 更新会话配置（视窗跟随节奏等）。
+ * PATCH /api/sessions/:id/config
+ */
+export function updateSessionConfig(
+  id: string,
+  body: {
+    pacingEnabled?: boolean
+    pacingBufferRounds?: number
+  },
+): Promise<Session> {
+  return request<Session>(`/api/sessions/${id}/config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/**
  * 查询某会话最近发给 LLM 的完整 Prompt 历史。
  * GET /api/sessions/:id/prompts?agentId=A&limit=20
  * 内存态，进程重启后丢失；未指定 agentId 则返回全部智能体的快照。

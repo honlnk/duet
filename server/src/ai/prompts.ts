@@ -2,7 +2,7 @@
  * Prompt 模板
  */
 
-import type { AgentColor, AgentRef } from '../types/index.js'
+import type { AgentColor, AgentRef, DirectorInstruction } from '../types/index.js'
 
 /** buildAgentSystem 的参数 */
 interface AgentSystemParams {
@@ -183,6 +183,28 @@ export function buildSummaryPrompt({
  */
 export function buildSummaryInjection(summary: string): string {
   return `[对话进展摘要（你的视角）]\n${summary}`
+}
+
+/**
+ * 构建导演指令注入文本。
+ *
+ * 作为独立 system 消息注入，置于摘要之后、messages 之前。
+ * 作为最接近对话历史的 system 消息，天然获得最高注意力权重（极高优先级）。
+ *
+ * @param directors    会话全部导演指令
+ * @param currentRound 当前轮次（用于过滤已过期指令）
+ * @returns 注入文本，无活跃指令时返回 null（不注入）
+ */
+export function buildDirectorInjection(
+  directors: DirectorInstruction[],
+  currentRound: number,
+): string | null {
+  const active = directors.filter(
+    (d) => d.durationRounds === 0 || currentRound - d.addedRound < d.durationRounds,
+  )
+  if (active.length === 0) return null
+  const lines = active.map((d) => `• ${d.content}`)
+  return ['【导演特别指令（最高优先级，必须严格遵循）】', ...lines].join('\n')
 }
 
 /* ----------------------- 颜色辅助（与前端共享） ----------------------- */

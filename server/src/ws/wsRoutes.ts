@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { WebSocket } from '@fastify/websocket'
 import { loadSession } from '../store/sessionStore.js'
-import { attachClient, runLoop, stopSession } from './chatHandler.js'
+import { attachClient, runLoop, stopSession, updateReadingState } from './chatHandler.js'
 import type { ClientToServerMsg } from '../types/index.js'
 
 /** WS 路由请求（带 querystring） */
@@ -78,6 +78,11 @@ async function wsRoutes(fastify: FastifyInstance): Promise<void> {
           }
           if (msg.type === 'stop') {
             stopSession(sessionId)
+            return
+          }
+          if (msg.type === 'reading') {
+            // 视窗跟随节奏：更新用户的阅读状态（是否在底部 + 未读缓冲轮数）
+            updateReadingState(sessionId, msg.atBottom, msg.bufferedRounds)
             return
           }
           send({ type: 'error', message: '未知消息类型: ' + (msg as { type: string }).type })

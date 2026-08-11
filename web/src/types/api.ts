@@ -73,6 +73,21 @@ export type FinishedReason =
   | 'crashed'
   | 'shutdown'
 
+/**
+ * 导演指令（用户以导演身份干预对话走向）。
+ * 注入到系统提示词最高优先级位置（作为最接近对话的独立 system 消息）。
+ */
+export interface DirectorInstruction {
+  id: string
+  content: string
+  /** 创建时间戳 */
+  addedAt: number
+  /** 添加时的轮次快照（用于计算剩余有效期） */
+  addedRound: number
+  /** 有效轮数（0 = 永久有效） */
+  durationRounds: number
+}
+
 /** 智能体定义（完整会话中的形态） */
 export interface Agent {
   id: AgentId
@@ -111,6 +126,10 @@ export interface SessionConfig {
   scenario?: string
   /** 导演指令 / 全局规则 */
   globalPrompt?: string
+  /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
+  pacingEnabled?: boolean
+  /** 缓冲轮数：超出视窗多少轮后暂停生成（默认 2） */
+  pacingBufferRounds?: number
 }
 
 /** 单条消息的 token 用量 */
@@ -176,6 +195,8 @@ export interface Session {
   relationships?: Record<string, string>
   /** 关系图节点位置（XY 坐标），用于关系图管理页布局持久化 */
   nodePositions?: Record<string, { x: number; y: number }>
+  /** 导演指令列表（用户以导演身份干预对话走向） */
+  directors: DirectorInstruction[]
 }
 
 /** GET /api/sessions 列表项（注意 agents 是字符串数组，非对象） */
@@ -313,6 +334,7 @@ export type ClientMessage =
   | { type: 'start'; maxRounds?: number; durationSec?: number }
   | { type: 'stop' }
   | { type: 'ping' }
+  | { type: 'reading'; atBottom: boolean; bufferedRounds: number }
 
 /** 服务器 → 客户端：连接时全量同步 */
 export interface SyncEvent {
@@ -411,6 +433,25 @@ export interface RetryEvent {
   error: string
 }
 
+/** 服务器 → 客户端：导演指令已添加 */
+export interface DirectorAddedEvent {
+  type: 'director_added'
+  director: DirectorInstruction
+}
+
+/** 服务器 → 客户端：导演指令已删除 */
+export interface DirectorRemovedEvent {
+  type: 'director_removed'
+  directorId: string
+}
+
+/** 服务器 → 客户端：视窗跟随节奏变化（暂停/恢复） */
+export interface PacingEvent {
+  type: 'pacing'
+  /** waiting = 已暂停生成等待阅读；resumed = 恢复生成 */
+  phase: 'waiting' | 'resumed'
+}
+
 /** 所有服务器事件联合 */
 export type ServerEvent =
   | SyncEvent
@@ -425,6 +466,9 @@ export type ServerEvent =
   | FinishedEvent
   | PongEvent
   | RetryEvent
+  | DirectorAddedEvent
+  | DirectorRemovedEvent
+  | PacingEvent
 
 /* ----------------------------- Prompt 历史 ----------------------------- */
 

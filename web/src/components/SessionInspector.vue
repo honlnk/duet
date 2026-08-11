@@ -49,6 +49,7 @@ const {
   eventLog,
   viewSide,
   isStopping,
+  directors,
 } = storeToRefs(session)
 
 const { display: durationDisplay, start, stop: stopTimer } = useDurationTracker()
@@ -155,6 +156,62 @@ const statRows = computed(() => [
 
 /** 事件日志为空判断 */
 const hasEvents = computed(() => eventLog.value.length > 0)
+
+/* --------------------------- 导演指令管理 --------------------------- */
+
+/** 判断导演指令是否已过期 */
+function directorStatus(d: { addedRound: number; durationRounds: number }): 'permanent' | 'active' | 'expired' {
+  if (d.durationRounds === 0) return 'permanent'
+  const remaining = d.addedRound + d.durationRounds - round.value
+  if (remaining <= 0) return 'expired'
+  return 'active'
+}
+
+/** 导演指令剩余轮数文案 */
+function directorLabel(d: { addedRound: number; durationRounds: number }): string {
+  const s = directorStatus(d)
+  if (s === 'permanent') return '永久'
+  if (s === 'expired') return '已过期'
+  const remaining = d.addedRound + d.durationRounds - round.value
+  return `剩 ${remaining} 轮`
+}
+
+/** 删除导演指令 */
+const deletingId = ref<string | null>(null)
+async function handleDeleteDirector(id: string) {
+  if (!current.value) return
+  deletingId.value = id
+  try {
+    await session.deleteDirectorAction(current.value.id, id)
+  } finally {
+    deletingId.value = null
+  }
+}
+
+/* --------------------------- 视窗跟随节奏 --------------------------- */
+
+const pacingEnabled = computed({
+  get: () => current.value?.config.pacingEnabled ?? false,
+  set: (val: boolean) => {
+    if (!current.value) return
+    void session.updateConfigAction(current.value.id, { pacingEnabled: val })
+  },
+})
+
+const pacingBufferRounds = computed(() => current.value?.config.pacingBufferRounds ?? 2)
+
+const updatingBuffer = ref(false)
+async function handleBufferChange(e: Event) {
+  if (!current.value) return
+  const val = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(val) || val < 1) return
+  updatingBuffer.value = true
+  try {
+    await session.updateConfigAction(current.value.id, { pacingBufferRounds: val })
+  } finally {
+    updatingBuffer.value = false
+  }
+}
 </script>
 
 <template>
@@ -263,7 +320,85 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </dl>
       </section>
 
-      <!-- ④ 智能体视角（选择哪个智能体消息靠右显示） -->
+      <!-- ④ 导演指令管理 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          导演指令
+        </h3>
+        <div v-if="directors.length > 0" class="flex flex-col gap-1.5">
+          <div
+            v-for="d in directors"
+            :key="d.id"
+            class="group flex items-start gap-2 rounded-lg border border-border-subtle px-3 py-2"
+            :class="directorStatus(d) === 'expired' ? 'opacity-50' : ''"
+          >
+            <span class="mt-1 text-xs text-text-muted">•</span>
+            <div class="min-w-0 flex-1">
+              <p class="whitespace-pre-wrap break-words text-xs leading-relaxed text-text-main">
+                {{ d.content }}
+              </p>
+              <span class="mt-0.5 inline-block text-xs text-text-muted">
+                {{ directorLabel(d) }}
+              </span>
+            </div>
+            <button
+              type="button"
+              :disabled="deletingId === d.id"
+              class="shrink-0 rounded p-0.5 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+              :aria-label="'删除指令'"
+              @click="handleDeleteDirector(d.id)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="4" y1="4" x2="12" y2="12" />
+                <line x1="12" y1="4" x2="4" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p v-else class="text-xs text-text-muted">
+          在聊天框下方输入导演指令，引导对话走向
+        </p>
+      </section>
+
+      <!-- ⑤ 视窗跟随节奏 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          阅读节奏
+        </h3>
+        <div class="rounded-lg border border-border-subtle p-3">
+          <label class="flex items-center justify-between">
+            <span class="text-xs text-text-main">跟随阅读速度</span>
+            <button
+              type="button"
+              class="relative h-5 w-9 rounded-full transition-colors"
+              :class="pacingEnabled ? 'bg-focus' : 'bg-border-subtle'"
+              @click="pacingEnabled = !pacingEnabled"
+            >
+              <span
+                class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+                :class="pacingEnabled ? 'translate-x-4' : 'translate-x-0.5'"
+              />
+            </button>
+          </label>
+          <p class="mt-1.5 text-xs text-text-muted">
+            开启后，不在底部时仅生成缓冲轮数，避免提前生成太多
+          </p>
+          <div v-if="pacingEnabled" class="mt-2 flex items-center gap-2">
+            <span class="text-xs text-text-dim">缓冲轮数</span>
+            <input
+              type="number"
+              min="1"
+              :value="pacingBufferRounds"
+              :disabled="updatingBuffer"
+              class="w-14 rounded-md border border-border-subtle bg-bg px-2 py-0.5 text-xs text-text-main focus:border-focus focus:outline-none disabled:opacity-50"
+              @change="handleBufferChange"
+            />
+            <span class="text-xs text-text-muted">轮</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⑥ 智能体视角（选择哪个智能体消息靠右显示） -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           智能体视角
@@ -290,7 +425,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </div>
       </section>
 
-      <!-- ⑤ 智能体设定 -->
+      <!-- ⑦ 智能体设定 -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           智能体
@@ -324,7 +459,7 @@ const hasEvents = computed(() => eventLog.value.length > 0)
         </div>
       </section>
 
-      <!-- ⑤ 事件日志 -->
+      <!-- ⑧ 事件日志 -->
       <section>
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
           事件日志

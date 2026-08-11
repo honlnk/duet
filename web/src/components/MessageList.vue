@@ -23,6 +23,8 @@ function onScroll() {
   if (!el) return
   const distance = el.scrollHeight - el.scrollTop - el.clientHeight
   isNearBottom.value = distance < BOTTOM_THRESHOLD
+  // 同步阅读状态到 store（视窗跟随节奏用）
+  session.setReadingState(isNearBottom.value)
 }
 
 /** 仅当用户已在底部时，才滚动到底部（避免打断用户浏览） */

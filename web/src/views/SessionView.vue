@@ -21,9 +21,16 @@ import MessageList from '@/components/MessageList.vue'
 import SessionInspector from '@/components/SessionInspector.vue'
 import PromptHistoryModal from '@/components/PromptHistoryModal.vue'
 import ResumeDialog from '@/components/ResumeDialog.vue'
+import DirectorInput from '@/components/DirectorInput.vue'
 import type { ServerEvent, SessionStatus } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
+/**
+ * 声明 new-chat 事件：本组件不 emit，但 <router-view @new-chat> 会把它传给所有路由组件。
+ * SessionView 模板是 fragment（多根节点），不声明 emits 会触发 Vue 的
+ * "Extraneous non-emits event listeners" 警告。
+ */
+defineEmits<{ 'new-chat': [] }>()
 const router = useRouter()
 const session = useSessionStore()
 const sessions = useSessionsStore()
@@ -32,6 +39,9 @@ const {
   pendingStart,
   inspectorOpen,
   sidebarCollapsed,
+  userAtBottom,
+  userBufferedRounds,
+  isPacingWaiting,
 } = storeToRefs(session)
 const { isMobile } = useBreakpoint()
 
@@ -159,6 +169,17 @@ watch(
   },
 )
 
+/**
+ * 视窗跟随：阅读状态变化时通知后端。
+ * 后端据此决定是否暂停生成（pacing）。
+ */
+watch(
+  () => [userAtBottom.value, userBufferedRounds.value] as const,
+  ([atBottom, buffered]) => {
+    sendWs({ type: 'reading', atBottom, bufferedRounds: buffered })
+  },
+)
+
 onMounted(() => {
   void loadSession(props.id)
 })
@@ -274,6 +295,20 @@ onUnmounted(() => {
 
       <!-- 正常态：消息流 -->
       <MessageList v-else />
+
+      <!-- 视窗跟随等待横幅 -->
+      <div
+        v-if="isPacingWaiting"
+        class="shrink-0 border-t border-accent/30 bg-accent/10 px-4 py-2 text-center text-xs text-accent"
+      >
+        ⏸ 已暂停生成，等待你阅读完毕
+      </div>
+
+      <!-- 导演指令输入框 -->
+      <DirectorInput
+        v-if="!loading && !loadError && session.session"
+        :session-id="props.id"
+      />
     </div>
 
     <!-- 右：会话详情（横向并排，仅正常态有意义但始终挂载以保持过渡） -->

@@ -1,16 +1,22 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import type { AgentColor, SessionConfig } from '../types/index.js'
+import type { AgentColor, DirectorInstruction, SessionConfig } from '../types/index.js'
 import {
   createSession,
   saveSession,
   loadSession,
   listSessions,
   deleteSession,
+  currentRound,
   MIN_AGENTS,
   MAX_AGENTS,
 } from '../store/sessionStore.js'
-import { isPresetColor } from '../types/index.js'
-import { syncRelationshipsToRuntime } from '../ws/chatHandler.js'
+import { genId, isPresetColor } from '../types/index.js'
+import {
+  syncRelationshipsToRuntime,
+  syncDirectorsToRuntime,
+  syncConfigToRuntime,
+  broadcastToSession,
+} from '../ws/chatHandler.js'
 import { getPrompts, clearPrompts } from '../store/promptHistory.js'
 
 /** POST /api/sessions 请求体（与 Fastify JSON Schema 对齐） */
@@ -82,6 +88,8 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                 },
                 scenario: { type: 'string' },
                 globalPrompt: { type: 'string' },
+                pacingEnabled: { type: 'boolean' },
+                pacingBufferRounds: { type: 'integer', minimum: 1 },
               },
             },
             relationships: {
@@ -178,6 +186,94 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
         session.nodePositions = req.body.nodePositions
       }
       saveSession(session)
+      return session
+    },
+  )
+
+  // 添加导演指令
+  fastify.post<{ Params: { id: string }; Body: { content: string; durationRounds?: number } }>(
+    '/api/sessions/:id/directors',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['content'],
+          properties: {
+            content: { type: 'string', minLength: 1 },
+            durationRounds: { type: 'integer', minimum: 0 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const session = loadSession(req.params.id)
+      if (!session) return reply.code(404).send({ error: '会话不存在' })
+      const director: DirectorInstruction = {
+        id: genId(),
+        content: req.body.content.trim(),
+        addedAt: Date.now(),
+        addedRound: currentRound(session),
+        durationRounds: req.body.durationRounds ?? 0,
+      }
+      session.directors.push(director)
+      saveSession(session)
+      // 同步到运行中的 runLoop 内存态（下一轮 prompt 生效）
+      syncDirectorsToRuntime(req.params.id, session.directors)
+      // 广播给所有 WS 客户端（实时刷新前端面板）
+      broadcastToSession(req.params.id, { type: 'director_added', director })
+      return session
+    },
+  )
+
+  // 删除导演指令
+  fastify.delete<{ Params: { id: string; iid: string } }>(
+    '/api/sessions/:id/directors/:iid',
+    async (req, reply) => {
+      const session = loadSession(req.params.id)
+      if (!session) return reply.code(404).send({ error: '会话不存在' })
+      const before = session.directors.length
+      session.directors = session.directors.filter((d) => d.id !== req.params.iid)
+      if (session.directors.length === before) {
+        return reply.code(404).send({ error: '导演指令不存在' })
+      }
+      saveSession(session)
+      syncDirectorsToRuntime(req.params.id, session.directors)
+      broadcastToSession(req.params.id, { type: 'director_removed', directorId: req.params.iid })
+      return session
+    },
+  )
+
+  // 更新会话配置（pacing 等）
+  fastify.patch<{
+    Params: { id: string }
+    Body: { pacingEnabled?: boolean; pacingBufferRounds?: number }
+  }>(
+    '/api/sessions/:id/config',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            pacingEnabled: { type: 'boolean' },
+            pacingBufferRounds: { type: 'integer', minimum: 1 },
+          },
+        },
+      },
+    },
+    async (req, reply) => {
+      const session = loadSession(req.params.id)
+      if (!session) return reply.code(404).send({ error: '会话不存在' })
+      if (req.body.pacingEnabled !== undefined) {
+        session.config.pacingEnabled = req.body.pacingEnabled
+      }
+      if (req.body.pacingBufferRounds !== undefined) {
+        session.config.pacingBufferRounds = req.body.pacingBufferRounds
+      }
+      saveSession(session)
+      syncConfigToRuntime(req.params.id, {
+        pacingEnabled: session.config.pacingEnabled,
+        pacingBufferRounds: session.config.pacingBufferRounds,
+      })
       return session
     },
   )

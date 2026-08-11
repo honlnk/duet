@@ -7,6 +7,11 @@
 
 /* ============================== 基础枚举 ============================== */
 
+/** 生成唯一 ID（用于导演指令等实体） */
+export function genId(): string {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
+}
+
 /**
  * 智能体 ID。支持 2~10 个智能体：A、B 为必选，C~J 按需追加。
  */
@@ -82,6 +87,22 @@ export interface AgentRef {
   color?: AgentColor
 }
 
+/**
+ * 导演指令（用户以导演身份干预对话走向）。
+ * 用户通过聊天页输入框下达，可设置轮次有效期或永久有效。
+ * 注入到系统提示词最高优先级位置（作为最接近对话的独立 system 消息）。
+ */
+export interface DirectorInstruction {
+  id: string
+  content: string
+  /** 创建时间戳 */
+  addedAt: number
+  /** 添加时的轮次快照（用于计算剩余有效期） */
+  addedRound: number
+  /** 有效轮数（0 = 永久有效） */
+  durationRounds: number
+}
+
 /** 记忆内部消息（无 agentId / ts，仅 role + content） */
 export interface MemoryMessage {
   role: Exclude<MessageRole, 'system'>
@@ -155,6 +176,10 @@ export interface SessionConfig {
   scenario?: string
   /** 导演指令 / 全局规则 */
   globalPrompt?: string
+  /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
+  pacingEnabled?: boolean
+  /** 缓冲轮数：超出视窗多少轮后暂停生成（默认 2） */
+  pacingBufferRounds?: number
 }
 
 /** 累计成本统计 */
@@ -203,6 +228,8 @@ export interface Session {
   relationships?: Record<string, string>
   /** 关系图节点位置（XY 坐标），key 为 AgentId，用于关系图管理页布局持久化 */
   nodePositions?: Record<string, { x: number; y: number }>
+  /** 导演指令列表（用户以导演身份干预对话走向） */
+  directors: DirectorInstruction[]
 }
 
 /** listSessions 返回的列表项（agents 是 name 数组） */
@@ -383,6 +410,7 @@ export type ClientToServerMsg =
   | { type: 'ping' }
   | { type: 'start'; maxRounds?: number; durationSec?: number }
   | { type: 'stop' }
+  | { type: 'reading'; atBottom: boolean; bufferedRounds: number }
 
 /** 服务器 → 客户端：连接时全量同步 */
 export interface SyncMsg {
@@ -481,6 +509,25 @@ export interface RetryMsg {
   error: string
 }
 
+/** 服务器 → 客户端：导演指令已添加 */
+export interface DirectorAddedMsg {
+  type: 'director_added'
+  director: DirectorInstruction
+}
+
+/** 服务器 → 客户端：导演指令已删除 */
+export interface DirectorRemovedMsg {
+  type: 'director_removed'
+  directorId: string
+}
+
+/** 服务器 → 客户端：视窗跟随节奏变化（暂停/恢复） */
+export interface PacingMsg {
+  type: 'pacing'
+  /** waiting = 已暂停生成等待阅读；resumed = 恢复生成 */
+  phase: 'waiting' | 'resumed'
+}
+
 /** 所有服务器事件联合 */
 export type ServerToClientMsg =
   | SyncMsg
@@ -495,6 +542,9 @@ export type ServerToClientMsg =
   | FinishedMsg
   | PongMsg
   | RetryMsg
+  | DirectorAddedMsg
+  | DirectorRemovedMsg
+  | PacingMsg
 
 /** 广播函数签名 */
 export type BroadcastFn = (msg: ServerToClientMsg) => void

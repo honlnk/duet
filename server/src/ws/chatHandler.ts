@@ -22,8 +22,10 @@ import type {
   AgentId,
   AgentRef,
   BroadcastFn,
+  DirectorInstruction,
   PersistedMessage,
   Session,
+  SessionConfig,
   SessionStatus,
   ServerToClientMsg,
 } from '../types/index.js'
@@ -42,6 +44,10 @@ interface Runtime {
   stopPhase: StopPhase
   /** runLoop 当前操作的 session 内存引用 */
   activeSession: Session | null
+  /** 视窗跟随：用户是否在滚动区底部 */
+  userAtBottom: boolean
+  /** 视窗跟随：用户未读的缓冲轮数 */
+  userBufferedRounds: number
 }
 
 /**
@@ -60,6 +66,8 @@ function getRuntime(sessionId: string): Runtime {
       stopRequested: false,
       stopPhase: 'idle' as StopPhase,
       activeSession: null,
+      userAtBottom: true,
+      userBufferedRounds: 0,
     }
     runtimes.set(sessionId, rt)
   }
@@ -89,6 +97,55 @@ export function syncRelationshipsToRuntime(
   const rt = runtimes.get(sessionId)
   if (!rt || !rt.activeSession) return
   rt.activeSession.relationships = relationships
+}
+
+/**
+ * 同步导演指令到正在运行的会话运行时状态（下一轮 prompt 生效）。
+ * 由 POST/DELETE /api/sessions/:id/directors 路由调用。
+ */
+export function syncDirectorsToRuntime(
+  sessionId: string,
+  directors: DirectorInstruction[],
+): void {
+  const rt = runtimes.get(sessionId)
+  if (!rt || !rt.activeSession) return
+  rt.activeSession.directors = directors
+}
+
+/**
+ * 同步会话配置到正在运行的会话运行时状态（如 pacing 开关）。
+ * 由 PATCH /api/sessions/:id/config 路由调用。
+ */
+export function syncConfigToRuntime(
+  sessionId: string,
+  config: Partial<SessionConfig>,
+): void {
+  const rt = runtimes.get(sessionId)
+  if (!rt || !rt.activeSession) return
+  Object.assign(rt.activeSession.config, config)
+}
+
+/**
+ * 更新用户的阅读状态（视窗跟随节奏用）。
+ * 由 WS reading 消息调用。
+ */
+export function updateReadingState(
+  sessionId: string,
+  atBottom: boolean,
+  bufferedRounds: number,
+): void {
+  const rt = runtimes.get(sessionId)
+  if (!rt) return
+  rt.userAtBottom = atBottom
+  rt.userBufferedRounds = bufferedRounds
+}
+
+/**
+ * 向会话所有 WS 客户端广播消息。
+ * 供 REST 路由（如添加/删除导演指令）在非 runLoop 上下文中广播事件。
+ */
+export function broadcastToSession(sessionId: string, msg: ServerToClientMsg): void {
+  broadcast(sessionId, msg)
 }
 
 /** 向该会话所有 WS 客户端广播 */
@@ -357,6 +414,8 @@ export async function runLoop(
         session.config.keepRecent,
         session.config.scenario,
         session.config.globalPrompt,
+        session.directors,
+        round,
       )
 
       // 捕获「即将发出的完整 Prompt」快照（所见即所发），供前端「查看最近 Prompt」查看
@@ -490,6 +549,29 @@ export async function runLoop(
         break
       } finally {
         rt.abortCtrl = null
+      }
+
+      // === 7. 视窗跟随：等用户阅读追上 ===
+      // 仅在成功完成一轮后触发（retry 的 continue 会跳过此段）
+      if (
+        session.config.pacingEnabled &&
+        rt.wsClients.size > 0 && // 无客户端连接时不阻塞
+        !rt.userAtBottom &&
+        session.status === 'running' &&
+        !rt.stopRequested
+      ) {
+        const limit = session.config.pacingBufferRounds || 2
+        if (rt.userBufferedRounds >= limit) {
+          broadcast(session.id, { type: 'pacing', phase: 'waiting' })
+          while (
+            rt.userBufferedRounds >= limit &&
+            !rt.stopRequested &&
+            session.status === 'running'
+          ) {
+            await new Promise((r) => setTimeout(r, 500)) // 轮询检查（500ms）
+          }
+          broadcast(session.id, { type: 'pacing', phase: 'resumed' })
+        }
       }
     } // end while
 

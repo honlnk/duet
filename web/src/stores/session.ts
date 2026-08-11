@@ -15,11 +15,12 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
-import { createSession, getSession, updateRelationships } from '@/services/api'
+import { createSession, getSession, updateRelationships, addDirector, deleteDirector, updateSessionConfig } from '@/services/api'
 import type {
   Agent,
   AgentId,
   ChatMessage,
+  DirectorInstruction,
   ServerEvent,
   Session,
   SessionStatus,
@@ -95,6 +96,19 @@ export const useSessionStore = defineStore('session', () => {
 
   /** 是否正在暂停中（已请求暂停，等当前发言完成） */
   const isStopping = ref(false)
+
+  /** 视窗跟随：是否正在等待用户阅读（pacing 暂停中） */
+  const isPacingWaiting = ref(false)
+
+  /** 视窗跟随：用户是否在滚动区底部 */
+  const userAtBottom = ref(true)
+  /** 视窗跟随：用户未读的缓冲轮数 */
+  const userBufferedRounds = ref(0)
+  /** 视窗跟随：未读消息条数计数器 */
+  let bufferedMessageCount = 0
+
+  /** 导演指令列表（从 session.directors 读取，供面板渲染） */
+  const directors = ref<DirectorInstruction[]>([])
 
   /**
    * 待启动标记：新建会话后置为 true，由 SessionView 加载该会话后
@@ -192,6 +206,11 @@ export const useSessionStore = defineStore('session', () => {
     round.value = 0
     errorMessage.value = null
     isStopping.value = false
+    isPacingWaiting.value = false
+    userAtBottom.value = true
+    userBufferedRounds.value = 0
+    bufferedMessageCount = 0
+    directors.value = []
     stats.value = {
       totalPromptTokens: 0,
       totalCompletionTokens: 0,
@@ -217,6 +236,7 @@ export const useSessionStore = defineStore('session', () => {
     startedAt.value = s.startedAt
     stoppedAt.value = s.stoppedAt
     stats.value = { ...s.stats }
+    directors.value = s.directors
     streamingAgentId = null
     // 视角默认为第二个智能体（B）；若会话已切换视角且仍有效则保留
     const validIds = s.agents.map((a) => a.id)
@@ -298,6 +318,12 @@ export const useSessionStore = defineStore('session', () => {
         } else {
           messages.value.push(final)
         }
+        // 视窗跟随：用户不在底部时累计未读消息，计算缓冲轮数
+        if (!userAtBottom.value && session.value?.config.pacingEnabled) {
+          bufferedMessageCount++
+          const n = session.value?.agents.length ?? 2
+          userBufferedRounds.value = Math.floor(bufferedMessageCount / n)
+        }
         return 'none'
       }
 
@@ -352,6 +378,18 @@ export const useSessionStore = defineStore('session', () => {
 
       case 'retry':
         log('info', `请求失败，${(msg.delayMs / 1000).toFixed(1)}s 后重试（第 ${msg.attempt}/${msg.maxAttempts} 次）：${msg.error}`)
+        return 'none'
+
+      case 'director_added':
+        directors.value = [...directors.value, msg.director]
+        return 'none'
+
+      case 'director_removed':
+        directors.value = directors.value.filter((d) => d.id !== msg.directorId)
+        return 'none'
+
+      case 'pacing':
+        isPacingWaiting.value = msg.phase === 'waiting'
         return 'none'
 
       default:
@@ -442,6 +480,66 @@ export const useSessionStore = defineStore('session', () => {
     durationSec.value = 0
   }
 
+  /**
+   * 添加导演指令（REST），更新本地 directors + session 引用。
+   */
+  async function addDirectorAction(
+    id: string,
+    content: string,
+    durationRounds: number = 0,
+  ): Promise<boolean> {
+    try {
+      const s = await addDirector(id, content, durationRounds)
+      directors.value = s.directors
+      if (session.value) session.value = { ...s }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 删除导演指令（REST），更新本地 directors + session 引用。
+   */
+  async function deleteDirectorAction(id: string, directorId: string): Promise<boolean> {
+    try {
+      const s = await deleteDirector(id, directorId)
+      directors.value = s.directors
+      if (session.value) session.value = { ...s }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 更新会话配置（pacing 开关 / 缓冲轮数）。
+   */
+  async function updateConfigAction(
+    id: string,
+    body: { pacingEnabled?: boolean; pacingBufferRounds?: number },
+  ): Promise<boolean> {
+    try {
+      const s = await updateSessionConfig(id, body)
+      if (session.value) session.value = { ...s }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 更新用户的阅读状态（由 MessageList onScroll 调用）。
+   * 在底部时重置未读计数。
+   */
+  function setReadingState(atBottom: boolean) {
+    userAtBottom.value = atBottom
+    if (atBottom) {
+      bufferedMessageCount = 0
+      userBufferedRounds.value = 0
+    }
+  }
+
   return {
     // state
     session,
@@ -456,6 +554,10 @@ export const useSessionStore = defineStore('session', () => {
     eventLog,
     errorMessage,
     isStopping,
+    isPacingWaiting,
+    userAtBottom,
+    userBufferedRounds,
+    directors,
     pendingStart,
     inspectorOpen,
     sidebarCollapsed,
@@ -479,5 +581,9 @@ export const useSessionStore = defineStore('session', () => {
     setViewSide,
     toggleInspector,
     toggleSidebar,
+    addDirectorAction,
+    deleteDirectorAction,
+    updateConfigAction,
+    setReadingState,
   }
 })

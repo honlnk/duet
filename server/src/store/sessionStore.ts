@@ -50,6 +50,8 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
     temperature: 0.7,
     summaryEveryN: 10,
     keepRecent: 8,
+    pacingEnabled: false,
+    pacingBufferRounds: 2,
     ...overrides,
   }
 }
@@ -111,6 +113,7 @@ export function createSession({ topic, agents, config: cfg, relationships }: Cre
     createdAt: now,
     updatedAt: now,
     relationships: relationships || {},
+    directors: [],
   }
   return session
 }

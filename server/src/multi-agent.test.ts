@@ -27,7 +27,7 @@ const { createSession, nextAgentId, currentRound } = await import(
   './store/sessionStore.js'
 )
 const { AgentMemory } = await import('./memory/context.js')
-const { buildAgentSystem } = await import('./ai/prompts.js')
+const { buildAgentSystem, buildDirectorInjection } = await import('./ai/prompts.js')
 
 /* --------------------------- createSession --------------------------- */
 
@@ -455,6 +455,112 @@ test('buildApiMessages：scenario/globalPrompt 通过参数注入', () => {
   const msgs = mem.buildApiMessages(8, '场景X', '指令Y')
   assert.ok(msgs[0]!.content.includes('场景X'))
   assert.ok(msgs[0]!.content.includes('指令Y'))
+})
+
+/* --------------------------- 导演指令 --------------------------- */
+
+test('buildDirectorInjection：活跃指令注入到独立 system 消息', () => {
+  const directors = [
+    { id: '1', content: '让话题转向哲学', addedAt: 0, addedRound: 0, durationRounds: 5 },
+    { id: '2', content: '加入意外事件', addedAt: 0, addedRound: 0, durationRounds: 0 },
+  ]
+  const injection = buildDirectorInjection(directors, 3)
+  assert.ok(injection, '应有注入文本')
+  assert.ok(injection!.includes('导演特别指令'), '应含标题')
+  assert.ok(injection!.includes('哲学'), '应含第一条指令')
+  assert.ok(injection!.includes('意外事件'), '应含第二条指令')
+  assert.ok(injection!.includes('最高优先级'), '应标注最高优先级')
+})
+
+test('buildDirectorInjection：过期指令被过滤', () => {
+  const directors = [
+    { id: '1', content: '过期指令', addedAt: 0, addedRound: 0, durationRounds: 3 },
+    { id: '2', content: '活跃指令', addedAt: 0, addedRound: 2, durationRounds: 5 },
+  ]
+  // round=5：第一条 addedRound=0 durationRounds=3 → 5-0=5 >= 3 过期
+  //          第二条 addedRound=2 durationRounds=5 → 5-2=3 < 5 活跃
+  const injection = buildDirectorInjection(directors, 5)
+  assert.ok(injection, '应有注入文本（含活跃指令）')
+  assert.ok(!injection!.includes('过期指令'), '过期指令应被过滤')
+  assert.ok(injection!.includes('活跃指令'), '活跃指令应保留')
+})
+
+test('buildDirectorInjection：永久指令（durationRounds=0）永不过期', () => {
+  const directors = [
+    { id: '1', content: '永久指令', addedAt: 0, addedRound: 0, durationRounds: 0 },
+  ]
+  const injection = buildDirectorInjection(directors, 999)
+  assert.ok(injection, '永久指令应注入')
+  assert.ok(injection!.includes('永久指令'))
+})
+
+test('buildDirectorInjection：无活跃指令返回 null', () => {
+  const directors: { id: string; content: string; addedAt: number; addedRound: number; durationRounds: number }[] = []
+  assert.equal(buildDirectorInjection(directors, 0), null)
+  // 全部过期
+  const expired = [
+    { id: '1', content: '过期', addedAt: 0, addedRound: 0, durationRounds: 2 },
+  ]
+  assert.equal(buildDirectorInjection(expired, 10), null)
+})
+
+test('buildApiMessages：导演指令作为独立 system 消息注入（极高优先级位置）', () => {
+  const directors = [
+    { id: '1', content: '让甲表达愤怒', addedAt: 0, addedRound: 0, durationRounds: 0 },
+  ]
+  const mem = new AgentMemory(
+    { id: 'A', name: '甲', description: 'd' },
+    [{ id: 'B', name: '乙' }],
+    't',
+  )
+  mem.pushSelf('我说了一句')
+  const msgs = mem.buildApiMessages(8, undefined, undefined, directors, 1)
+  // system(主) + system(导演) + assistant = 3
+  assert.equal(msgs.length, 3)
+  assert.equal(msgs[0]!.role, 'system')
+  assert.equal(msgs[1]!.role, 'system')
+  assert.ok(msgs[1]!.content.includes('导演特别指令'), '第二条 system 应为导演指令')
+  assert.ok(msgs[1]!.content.includes('让甲表达愤怒'), '应含指令内容')
+  // 导演指令 system 应在 messages 之前
+  assert.equal(msgs[2]!.role, 'assistant')
+})
+
+test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
+  const directors = [
+    { id: '1', content: '指令A', addedAt: 0, addedRound: 0, durationRounds: 0 },
+  ]
+  const mem = new AgentMemory(
+    { id: 'A', name: '甲' },
+    [{ id: 'B', name: '乙' }],
+    't',
+  )
+  mem.summary = '这是摘要'
+  mem.pushSelf('发言')
+  const msgs = mem.buildApiMessages(8, undefined, undefined, directors, 1)
+  // system(主) + system(摘要) + system(导演) + assistant = 4
+  assert.equal(msgs.length, 4)
+  assert.ok(msgs[1]!.content.includes('摘要'), '第二条应为摘要')
+  assert.ok(msgs[2]!.content.includes('导演'), '第三条应为导演指令')
+})
+
+test('createSession：默认初始化 directors 空数组 + pacing 默认值', () => {
+  const s = createSession({
+    topic: 't',
+    agents: [{ name: 'A' }, { name: 'B' }],
+  })
+  assert.deepEqual(s.directors, [])
+  assert.equal(s.config.pacingEnabled, false)
+  assert.equal(s.config.pacingBufferRounds, 2)
+})
+
+test('createSession：可通过 config 覆盖 pacing 默认值', () => {
+  const s = createSession({
+    topic: 't',
+    agents: [{ name: 'A' }, { name: 'B' }],
+    config: { pacingEnabled: true, pacingBufferRounds: 5 },
+  })
+  assert.equal(s.config.pacingEnabled, true)
+  assert.equal(s.config.pacingBufferRounds, 5)
 })
 
 /* --------------------------- 清理 --------------------------- */

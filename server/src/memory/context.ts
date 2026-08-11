@@ -1,8 +1,9 @@
-import { buildAgentSystem, buildSummaryInjection } from '../ai/prompts.js'
+import { buildAgentSystem, buildSummaryInjection, buildDirectorInjection } from '../ai/prompts.js'
 import type {
   AgentMemoryData,
   AgentRef,
   ApiMessage,
+  DirectorInstruction,
   MemoryMessage,
 } from '../types/index.js'
 
@@ -77,9 +78,27 @@ export class AgentMemory {
    * 直到下一次摘要触发时才由 trimToRecent() 物理裁剪一次。
    * 这样在两次摘要之间，prompt 前缀只增不变，最大化命中上下文缓存。
    *
-   * @param _keepRecent 已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
+   * 注入顺序（从远到近）：
+   *   1. [system] buildAgentSystem（全局设定 + 主角设定 + 在场角色 + 关系 + 对话规则）
+   *   2. [system] 摘要注入（若有）
+   *   3. [system] 导演指令注入（若有，极高优先级，最接近对话）
+   *   4. [...messages]
+   *
+   * 导演指令作为最接近对话的 system 消息，获得最高注意力权重。
+   *
+   * @param _keepRecent  已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
+   * @param scenario     场景设定 / 世界观
+   * @param globalPrompt 导演指令 / 全局规则（会话级静态设定）
+   * @param directors    导演指令列表（动态注入，含过期逻辑）
+   * @param currentRound 当前轮次（用于过滤已过期导演指令）
    */
-  buildApiMessages(_keepRecent: number = 8, scenario?: string, globalPrompt?: string): ApiMessage[] {
+  buildApiMessages(
+    _keepRecent: number = 8,
+    scenario?: string,
+    globalPrompt?: string,
+    directors?: DirectorInstruction[],
+    currentRound?: number,
+  ): ApiMessage[] {
     const sys = buildAgentSystem({
       name: this.agent.name,
       description: this.agent.description,
@@ -93,6 +112,13 @@ export class AgentMemory {
     const out: ApiMessage[] = [{ role: 'system', content: sys }]
     if (this.summary) {
       out.push({ role: 'system', content: buildSummaryInjection(this.summary) })
+    }
+    // 导演指令注入（极高优先级：作为最接近对话的 system 消息）
+    if (directors && directors.length > 0 && currentRound !== undefined) {
+      const injection = buildDirectorInjection(directors, currentRound)
+      if (injection) {
+        out.push({ role: 'system', content: injection })
+      }
     }
     out.push(...this.messages)
     return out
