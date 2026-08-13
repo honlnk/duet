@@ -42,6 +42,8 @@ export interface ChatOpts {
   onContent?: (chunk: string) => void
   /** reasoning 流式回调（仅日志，不进对方上下文） */
   onReasoning?: (chunk: string) => void
+  /** 会话级思考档位 key（覆盖 conn.thinkingConfig；空 = 用 Provider 默认） */
+  thinking?: string
   /** 外部中止信号 */
   signal?: AbortSignal
 }

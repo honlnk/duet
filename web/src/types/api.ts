@@ -122,6 +122,14 @@ export interface SessionConfig {
   providerC?: string
   /** D~J 等智能体的 Provider 映射（优先级高于默认） */
   agentProviders?: Record<string, string>
+  /** 智能体 A 的思考档位（空 = 用 Provider 默认） */
+  thinkingA?: string
+  /** 智能体 B 的思考档位（空 = 用 Provider 默认） */
+  thinkingB?: string
+  /** 智能体 C 的思考档位（空 = 用 Provider 默认） */
+  thinkingC?: string
+  /** D~J 智能体的思考档位映射（优先级同 agentProviders） */
+  agentThinking?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
   /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
@@ -276,6 +284,8 @@ export interface ProviderListItem {
   protocol: ApiProtocol
   /** 价格配置（含货币与缓存单价） */
   pricing: ProviderPricing
+  /** 思考配置（原生 JSON，供前端回填思考下拉默认档位） */
+  thinkingConfig?: Record<string, unknown>
   /** 打码后的 key，如 sk-***x4f2 */
   apiKeyMasked: string
 }
@@ -290,11 +300,31 @@ export interface ProviderFormData {
   protocol?: ApiProtocol
   /** 价格配置；可选以兼容旧入参，后端归一化补全 */
   pricing?: Partial<ProviderPricing>
+  /** 思考配置（原生 JSON，各家协议参数） */
+  thinkingConfig?: Record<string, unknown>
 }
 
 /** POST /api/providers/:id/models 或 POST /api/providers/models 的返回 */
 export interface ModelsResponse {
   models: string[]
+}
+
+/** POST /api/providers/:id/thinking-options 返回的单个思考档位 */
+export interface ThinkingOption {
+  /** 档位 key（各家原生值，提交时原样回传） */
+  key: string
+  /** 中文展示名 */
+  label: string
+}
+
+/** POST /api/providers/:id/thinking-options 或临时凭证版返回 */
+export interface ThinkingOptionsResponse {
+  /** 当前模型是否支持思考 */
+  supported: boolean
+  /** 支持的档位列表（supported=false 时为空） */
+  options: ThinkingOption[]
+  /** Provider thinkingConfig 里已配置的档位（前端回填默认值用） */
+  providerDefault?: string
 }
 
 /** GET /api/pricing/:modelId 返回 */

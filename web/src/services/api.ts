@@ -17,6 +17,7 @@ import type {
   ProviderListResponse,
   Session,
   SessionSummary,
+  ThinkingOptionsResponse,
 } from '@/types/api'
 
 const apiBase = ''
@@ -204,6 +205,32 @@ export function fetchModelsByCred(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ baseUrl, apiKey, protocol }),
+  })
+}
+
+/**
+ * 拉取思考可选项：用已保存 Provider 的凭证。
+ * 返回该模型支持的思考档位 + Provider 配置的默认档位（回填用）。
+ */
+export function fetchThinkingOptions(id: string): Promise<ThinkingOptionsResponse> {
+  return request<ThinkingOptionsResponse>(`/api/providers/${id}/thinking-options`, {
+    method: 'POST',
+  })
+}
+
+/**
+ * 拉取思考可选项：用临时凭证（新增态尚未保存时）。
+ */
+export function fetchThinkingOptionsByCred(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  protocol: ApiProtocol = 'openai'
+): Promise<ThinkingOptionsResponse> {
+  return request<ThinkingOptionsResponse>('/api/providers/thinking-options', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ baseUrl, apiKey, model, protocol }),
   })
 }
 

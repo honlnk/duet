@@ -194,6 +194,8 @@ interface AgentRuntime {
   conn: ConnectionConfig
   rates: CostRates
   provName: string
+  /** 会话级思考档位（覆盖 conn.thinkingConfig；空 = 用 Provider 默认） */
+  thinking?: string
 }
 
 /**
@@ -262,6 +264,14 @@ export async function runLoop(
     return session.config.agentProviders?.[id]
   }
 
+  // 解析会话级思考档位：优先级与 provider 绑定一致（agentThinking > thinkingA/B/C）
+  const thinkingModeOf = (id: AgentId): string | undefined => {
+    if (id === 'A') return session.config.thinkingA
+    if (id === 'B') return session.config.thinkingB
+    if (id === 'C') return session.config.thinkingC
+    return session.config.agentThinking?.[id]
+  }
+
   const runtimes2: AgentRuntime[] = []
   for (const a of session.agents) {
     const prov = resolveProvider(providerIdOf(a.id))
@@ -282,6 +292,7 @@ export async function runLoop(
       apiKey: prov.apiKey,
       model: prov.model,
       protocol: prov.protocol,
+      thinkingConfig: prov.thinkingConfig,
     }
     const rates: CostRates = {
       currency: prov.pricing.currency,
@@ -299,6 +310,7 @@ export async function runLoop(
       conn,
       rates,
       provName: prov.name,
+      thinking: thinkingModeOf(a.id),
     })
   }
 
@@ -438,13 +450,14 @@ export async function runLoop(
           conn: cur.conn,
           temperature: session.config.temperature,
           maxTokens: 1024,
+          thinking: cur.thinking,
           signal: rt.abortCtrl.signal,
           onContent: (chunk) => {
             content += chunk
             broadcast(session.id, { type: 'chunk', agentId, content: chunk })
           },
-          onReasoning: () => {
-            // 思维链不推前端，仅后端日志（按需开启）
+          onReasoning: (_chunk) => {
+            // 思维链增量钩子已就位；本次仅后端，不推 WebSocket（前端展示后置）
           },
         })
 

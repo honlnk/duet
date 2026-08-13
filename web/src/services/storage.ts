@@ -19,6 +19,8 @@ export interface AgentFormValues {
   color: AgentColor
   /** Provider id（空串 = 默认 Provider） */
   provider: string
+  /** 思考档位 key（空串 = 用 Provider 默认配置） */
+  thinking: string
   /** 所选智能体模板 id（空串 = 未选择模板，手填或待选） */
   templateId: string
 }
@@ -86,6 +88,7 @@ export function makeAgent(index: number, over?: Partial<AgentFormValues>): Agent
     personality: '',
     color: over?.color || DEFAULT_AGENT_COLORS[index] || 'blue',
     provider: '',
+    thinking: '',
     templateId: '',
     ...over,
   }
@@ -238,6 +241,7 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
         personality: str(a?.personality, ''),
         color: (isValidColor(a?.color) ? a?.color : def.agents[i]?.color || 'blue') as AgentColor,
         provider: str(a?.provider, ''),
+        thinking: str(a?.thinking, ''),
         templateId: str(a?.templateId, ''),
       }))
   }

@@ -104,6 +104,13 @@ function maskKey(key: string): string {
   return `${prefix}***${tail}`
 }
 
+/** 校验思考配置：仅接受纯对象，否则返回 undefined（丢弃非法值） */
+function normalizeThinkingConfig(tc: unknown): Record<string, unknown> | undefined {
+  return tc != null && typeof tc === 'object' && !Array.isArray(tc)
+    ? (tc as Record<string, unknown>)
+    : undefined
+}
+
 /** Provider → 列表项（打码） */
 function toListItem(p: Provider): ProviderListItem {
   return {
@@ -113,6 +120,7 @@ function toListItem(p: Provider): ProviderListItem {
     model: p.model,
     protocol: p.protocol,
     pricing: p.pricing,
+    thinkingConfig: normalizeThinkingConfig(p.thinkingConfig),
     apiKeyMasked: maskKey(p.apiKey),
   }
 }
@@ -168,6 +176,7 @@ export function addProvider(data: ProviderFormData): Provider {
     model: data.model.trim() || 'deepseek-v4-flash',
     protocol: data.protocol ?? 'openai',
     pricing: normalizePricing(data.pricing),
+    thinkingConfig: normalizeThinkingConfig(data.thinkingConfig),
   }
   file.providers.push(provider)
   // 第一条自动设为默认
@@ -193,6 +202,11 @@ export function updateProvider(id: string, data: Partial<ProviderFormData>): Pro
     // pricing 为部分更新：以旧值为底，用传入字段覆盖后归一化
     pricing:
       data.pricing != null ? normalizePricing({ ...old.pricing, ...data.pricing }) : old.pricing,
+    // thinkingConfig 传入即覆盖（null/对象都算传了，显式清空传 null）；未传字段保留旧值
+    thinkingConfig:
+      data.thinkingConfig !== undefined
+        ? normalizeThinkingConfig(data.thinkingConfig)
+        : old.thinkingConfig,
   }
   saveRaw(file)
   return file.providers[idx]!

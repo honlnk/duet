@@ -145,11 +145,18 @@ export const useFormStore = defineStore('form', () => {
     const providerA = values.agents[0]?.provider || undefined
     const providerB = values.agents[1]?.provider || undefined
     const providerC = values.agents[2]?.provider || undefined
+    // 思考档位：与 provider 同构的 A/B/C + agentThinking 映射
+    const thinkingA = values.agents[0]?.thinking || undefined
+    const thinkingB = values.agents[1]?.thinking || undefined
+    const thinkingC = values.agents[2]?.thinking || undefined
     const agentProviders: Record<string, string> = {}
+    const agentThinking: Record<string, string> = {}
     const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
     for (let i = 3; i < values.agents.length; i++) {
       const p = values.agents[i]?.provider
       if (p) agentProviders[ids[i]!] = p
+      const t = values.agents[i]?.thinking
+      if (t) agentThinking[ids[i]!] = t
     }
     const scenario = values.scenario.trim() || undefined
     return {
@@ -171,6 +178,10 @@ export const useFormStore = defineStore('form', () => {
         providerB,
         providerC,
         agentProviders: Object.keys(agentProviders).length > 0 ? agentProviders : undefined,
+        thinkingA,
+        thinkingB,
+        thinkingC,
+        agentThinking: Object.keys(agentThinking).length > 0 ? agentThinking : undefined,
         scenario,
       } satisfies SessionConfig,
       // 从全局关系图自动注入：把基于 templateId 的关系翻译为会话内 A/B/C 关系

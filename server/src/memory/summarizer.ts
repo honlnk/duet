@@ -70,7 +70,8 @@ export async function summarizeConversation({
       },
       { role: 'user', content: prompt },
     ],
-    conn,
+    // 摘要是内部任务：不注入 Provider 的思考配置，跟随模型默认（省 token，reasoning 不进摘要）
+    conn: { ...conn, thinkingConfig: undefined },
     temperature: 0.3,
     maxTokens: 600,
     signal,

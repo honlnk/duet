@@ -85,6 +85,21 @@ const baseUrlPlaceholder = computed(() => {
   return opt?.baseUrl ?? "https://api.example.com/v1";
 });
 
+/** 思考配置 JSON 示例（按协议，作 textarea placeholder） */
+const thinkingPlaceholder = computed(() => {
+  switch (form.protocol) {
+    case "anthropic":
+      return '{"thinking":{"type":"adaptive"}}';
+    case "gemini":
+      return '{"generationConfig":{"thinkingConfig":{"thinkingLevel":"HIGH","includeThoughts":true}}}';
+    case "openai-responses":
+      return '{"reasoning":{"effort":"high"}}';
+    case "openai":
+    default:
+      return '{"reasoning_effort":"high"}';
+  }
+});
+
 const form = reactive({
   name: "",
   baseUrl: "https://api.deepseek.com/v1",
@@ -92,6 +107,7 @@ const form = reactive({
   apiKeyConfirm: "",
   model: "",
   protocol: "openai" as ApiProtocol,
+  thinkingConfig: "", // 思考配置（原生 JSON 字符串，各家协议参数）
   ...defaultPricing(),
 });
 
@@ -243,6 +259,7 @@ function startEdit(p: ProviderListItem) {
   form.apiKeyConfirm = "";
   form.model = p.model;
   form.protocol = p.protocol;
+  form.thinkingConfig = p.thinkingConfig ? JSON.stringify(p.thinkingConfig, null, 2) : "";
   Object.assign(form, defaultPricing(), p.pricing);
   prevCurrency.value = form.currency;
   modelsList.value = [];
@@ -259,6 +276,7 @@ function startNew() {
     apiKeyConfirm: "",
     model: "",
     protocol: "openai" as ApiProtocol,
+    thinkingConfig: "",
     ...defaultPricing(),
   });
   prevCurrency.value = form.currency;
@@ -293,6 +311,24 @@ async function save() {
     return;
   }
 
+  // 解析思考配置 JSON（空串 = 不传；解析失败给提示）
+  let thinkingConfig: Record<string, unknown> | undefined;
+  const tcTrim = form.thinkingConfig.trim();
+  if (tcTrim) {
+    try {
+      const parsed = JSON.parse(tcTrim) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        thinkingConfig = parsed as Record<string, unknown>;
+      } else {
+        errorMsg.value = "思考配置必须是 JSON 对象";
+        return;
+      }
+    } catch {
+      errorMsg.value = "思考配置 JSON 格式错误";
+      return;
+    }
+  }
+
   saving.value = true;
   try {
     const pricing: ProviderPricing = {
@@ -312,6 +348,7 @@ async function save() {
         model: form.model.trim(),
         protocol: form.protocol,
         pricing,
+        ...(thinkingConfig ? { thinkingConfig } : {}),
       });
     } else if (editing.value) {
       const data: Record<string, unknown> = {
@@ -320,6 +357,8 @@ async function save() {
         model: form.model.trim(),
         protocol: form.protocol,
         pricing,
+        // thinkingConfig 始终传：有值则更新，空则显式清空（null）
+        thinkingConfig: thinkingConfig ?? null,
       };
       // 只在用户填了新 key 时才传
       if (form.apiKey.trim()) {
@@ -627,6 +666,21 @@ function onOverlayMouseUp(e: MouseEvent) {
               >
                 已获取 {{ modelsList.length }} 个模型，可从下拉选择或手动输入
               </span>
+            </div>
+
+            <!-- 思考配置（原生 JSON，可选） -->
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-text-dim">思考配置（可选 · 原生 JSON）</label>
+              <textarea
+                v-model="form.thinkingConfig"
+                rows="3"
+                :placeholder="thinkingPlaceholder"
+                spellcheck="false"
+                class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 font-mono text-xs text-text-main outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              ></textarea>
+              <span class="text-[10px] text-text-muted"
+                >各协议原生思考参数；新建会话时作为默认档位回填，会话级下拉可覆盖</span
+              >
             </div>
 
             <!-- 价格配置 -->

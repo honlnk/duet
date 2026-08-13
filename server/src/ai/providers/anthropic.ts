@@ -26,14 +26,14 @@ interface AnthropicUsage {
 /** Anthropic 流式事件 data */
 interface AnthropicEvent {
   type: string
-  delta?: { type?: string; text?: string; stop_reason?: string | null }
+  delta?: { type?: string; text?: string; thinking?: string; stop_reason?: string | null }
   message?: { usage?: AnthropicUsage }
   usage?: AnthropicUsage // message_delta 里 usage 在顶层
 }
 
 /** Anthropic 非流式响应 */
 interface AnthropicResponse {
-  content?: Array<{ type: string; text?: string }>
+  content?: Array<{ type: string; text?: string; thinking?: string }>
   usage?: AnthropicUsage
 }
 
@@ -68,9 +68,23 @@ function splitSystem(messages: ApiMessage[]): { system: string; messages: ApiMes
   return { system: systemParts.join('\n\n'), messages: rest }
 }
 
+/**
+ * 合并思考配置进 body：
+ * 1. 浅合并 Provider 默认（conn.thinkingConfig）
+ * 2. 会话级档位 thinking 覆盖（adaptive/disabled → thinking.type）
+ */
+function applyThinking(
+  body: Record<string, unknown>,
+  conn: ChatOpts['conn'],
+  thinking?: string,
+): void {
+  if (conn.thinkingConfig) Object.assign(body, conn.thinkingConfig)
+  if (thinking) body.thinking = { type: thinking }
+}
+
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
   const { system, messages: apiMessages } = splitSystem(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/v1/messages`
   const body: Record<string, unknown> = {
@@ -81,6 +95,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     stream: true,
   }
   if (system) body.system = system
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -113,10 +128,14 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
       } catch {
         return
       }
-      // 文本增量
-      if (json.type === 'content_block_delta' && json.delta?.text) {
-        content += json.delta.text
-        onContent?.(json.delta.text)
+      // 增量按 delta.type 分流：thinking_delta 走思维链，text_delta 走正文
+      if (json.type === 'content_block_delta' && json.delta) {
+        if (json.delta.type === 'thinking_delta' && json.delta.thinking) {
+          onReasoning?.(json.delta.thinking)
+        } else if (json.delta.text) {
+          content += json.delta.text
+          onContent?.(json.delta.text)
+        }
       }
       // usage（message_start 带初始 input usage，message_delta 带 output usage）
       if (json.message?.usage) rawUsage = { ...rawUsage, ...json.message.usage }
@@ -130,7 +149,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
   const { system, messages: apiMessages } = splitSystem(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/v1/messages`
   const body: Record<string, unknown> = {
@@ -141,6 +160,7 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     stream: false,
   }
   if (system) body.system = system
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -162,7 +182,12 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     .filter((b) => b.type === 'text' && b.text)
     .map((b) => b.text!)
     .join('')
-  return { content, usage: normalizeUsage(json.usage) }
+  // 思维链块（type === 'thinking'）单独提取，不进正文
+  const reasoning = (json.content || [])
+    .filter((b) => b.type === 'thinking' && b.thinking)
+    .map((b) => b.thinking!)
+    .join('')
+  return { content, reasoning, usage: normalizeUsage(json.usage) }
 }
 
 /** 拉取模型列表：GET /v1/models → data[].id */

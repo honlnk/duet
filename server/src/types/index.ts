@@ -172,6 +172,17 @@ export interface SessionConfig {
    * 优先级：agentProviders[id] > providerA/B/C > 默认。
    */
   agentProviders?: Record<string, string>
+  /** 智能体 A 的思考档位 key（空 = 用 Provider 默认配置） */
+  thinkingA?: string
+  /** 智能体 B 的思考档位 key（空 = 用 Provider 默认配置） */
+  thinkingB?: string
+  /** 智能体 C 的思考档位 key（空 = 用 Provider 默认配置） */
+  thinkingC?: string
+  /**
+   * 智能体 → 思考档位映射（D~J）。
+   * 优先级与 provider 绑定一致：agentThinking[id] > thinkingA/B/C > Provider 默认。
+   */
+  agentThinking?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
   /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
@@ -325,6 +336,8 @@ export interface ConnectionConfig {
   model: string
   /** API 协议类型，决定走哪个适配器 */
   protocol: ApiProtocol
+  /** Provider 配置的思考参数（原生 JSON，作为默认；会话级 thinking 可覆盖） */
+  thinkingConfig?: Record<string, unknown>
 }
 
 /**
@@ -345,6 +358,8 @@ export interface Provider {
   protocol: ApiProtocol
   /** 价格配置（货币、输入/输出/缓存单价） */
   pricing: ProviderPricing
+  /** 思考配置（原生 JSON，各家协议参数；会话级档位可覆盖） */
+  thinkingConfig?: Record<string, unknown>
 }
 
 /** 创建 / 更新 Provider 的入参（不含 id） */
@@ -357,6 +372,8 @@ export interface ProviderFormData {
   protocol?: ApiProtocol
   /** 价格配置；为可选以兼容旧入参，后端会归一化补全 */
   pricing?: Partial<ProviderPricing>
+  /** 思考配置（原生 JSON，各家协议参数） */
+  thinkingConfig?: Record<string, unknown>
 }
 
 /**
@@ -372,6 +389,8 @@ export interface ProviderListItem {
   protocol: ApiProtocol
   /** 价格配置（含货币与缓存单价） */
   pricing: ProviderPricing
+  /** 思考配置（原生 JSON，供前端回填思考下拉默认档位） */
+  thinkingConfig?: Record<string, unknown>
   /** 打码后的 key，如 sk-***x4f2，仅供前端显示「已配置」状态 */
   apiKeyMasked: string
 }

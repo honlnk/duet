@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { ApiProtocol, ProviderFormData } from '../types/index.js'
 import { getAdapter } from '../ai/providers/index.js'
+import { fetchThinkingOptions } from '../ai/thinking-options.js'
 import type { AiError } from '../ai/providers/shared.js'
 import {
   listProviderItems,
@@ -208,6 +209,66 @@ async function providerRoutes(fastify: FastifyInstance): Promise<void> {
       } catch (e) {
         return reply.code(502).send({ error: modelFetchError(e) })
       }
+    }
+  )
+
+  // 拉取思考可选项：用已保存 Provider 的凭证（编辑/选择态）
+  fastify.post(
+    '/api/providers/:id/thinking-options',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+        },
+      },
+    },
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+      const p = getProvider(req.params.id)
+      if (!p) return reply.code(404).send({ error: 'Provider 不存在' })
+      try {
+        return await fetchThinkingOptions(
+          p.protocol,
+          p.baseUrl,
+          p.apiKey,
+          p.model,
+          p.thinkingConfig,
+        )
+      } catch (e) {
+        return reply.code(502).send({ error: modelFetchError(e) })
+      }
+    }
+  )
+
+  // 拉取思考可选项：用临时凭证（新增态尚未保存时）
+  fastify.post(
+    '/api/providers/thinking-options',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['baseUrl', 'apiKey', 'model'],
+          properties: {
+            baseUrl: { type: 'string', minLength: 1 },
+            apiKey: { type: 'string', minLength: 1 },
+            model: { type: 'string', minLength: 1 },
+            protocol: { type: 'string', enum: protocolEnum },
+          },
+        },
+      },
+    },
+    async (
+      req: FastifyRequest<{
+        Body: { baseUrl: string; apiKey: string; model: string; protocol?: ApiProtocol }
+      }>,
+    ) => {
+      const protocol = req.body.protocol ?? 'openai'
+      return await fetchThinkingOptions(
+        protocol,
+        req.body.baseUrl,
+        req.body.apiKey,
+        req.body.model,
+      )
     }
   )
 }

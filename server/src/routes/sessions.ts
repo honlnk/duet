@@ -86,6 +86,13 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                   type: 'object',
                   additionalProperties: { type: 'string' },
                 },
+                thinkingA: { type: 'string' },
+                thinkingB: { type: 'string' },
+                thinkingC: { type: 'string' },
+                agentThinking: {
+                  type: 'object',
+                  additionalProperties: { type: 'string' },
+                },
                 scenario: { type: 'string' },
                 pacingEnabled: { type: 'boolean' },
                 pacingBufferRounds: { type: 'integer', minimum: 1 },

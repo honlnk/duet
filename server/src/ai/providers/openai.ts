@@ -48,11 +48,25 @@ function normalizeUsage(usage: DeepSeekUsage | undefined): NormalizedUsage {
   }
 }
 
+/**
+ * 合并思考配置进 body：
+ * 1. 浅合并 Provider 默认（conn.thinkingConfig）
+ * 2. 会话级档位 thinking 覆盖（reasoning_effort）
+ */
+function applyThinking(
+  body: Record<string, unknown>,
+  conn: ChatOpts['conn'],
+  thinking?: string,
+): void {
+  if (conn.thinkingConfig) Object.assign(body, conn.thinkingConfig)
+  if (thinking) body.reasoning_effort = thinking
+}
+
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
   const url = `${trimBaseUrl(conn.baseUrl)}/chat/completions`
-  const body = {
+  const body: Record<string, unknown> = {
     model: conn.model,
     messages,
     temperature,
@@ -60,6 +74,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     stream: true,
     stream_options: { include_usage: true },
   }
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -112,15 +127,16 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
   const url = `${trimBaseUrl(conn.baseUrl)}/chat/completions`
-  const body = {
+  const body: Record<string, unknown> = {
     model: conn.model,
     messages,
     temperature,
     max_tokens: maxTokens,
     stream: false,
   }
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',

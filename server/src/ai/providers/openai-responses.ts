@@ -74,9 +74,23 @@ function toResponsesInput(messages: ApiMessage[]): {
   return result
 }
 
+/**
+ * 合并思考配置进 body：
+ * 1. 浅合并 Provider 默认（conn.thinkingConfig）
+ * 2. 会话级档位 thinking 覆盖（翻译成 reasoning.effort）
+ */
+function applyThinking(
+  body: Record<string, unknown>,
+  conn: ChatOpts['conn'],
+  thinking?: string,
+): void {
+  if (conn.thinkingConfig) Object.assign(body, conn.thinkingConfig)
+  if (thinking) body.reasoning = { effort: thinking }
+}
+
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
   const { instructions, input } = toResponsesInput(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/responses`
   const body: Record<string, unknown> = {
@@ -87,6 +101,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     stream: true,
   }
   if (instructions) body.instructions = instructions
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -123,6 +138,10 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
         content += json.delta
         onContent?.(json.delta)
       }
+      // 思维链增量（不进对话上下文，仅回调透出）
+      if (json.type === 'response.reasoning_text.delta' && typeof json.delta === 'string') {
+        onReasoning?.(json.delta)
+      }
       // usage（response.completed 事件携带完整 usage）
       if (json.response?.usage) rawUsage = json.response.usage
       if (json.usage) rawUsage = json.usage
@@ -135,7 +154,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
   const { instructions, input } = toResponsesInput(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/responses`
   const body: Record<string, unknown> = {
@@ -146,6 +165,7 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     stream: false,
   }
   if (instructions) body.instructions = instructions
+  applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
     method: 'POST',
@@ -165,6 +185,7 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
   let content = json.output_text
   if (!content && Array.isArray(json.output)) {
     content = json.output
+      .filter((o) => o.type === 'message')
       .flatMap((o) => o.content ?? [])
       .filter((c) => c.type === 'output_text' && c.text)
       .map((c) => c.text!)
