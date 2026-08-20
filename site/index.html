@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>duet · 多智能体自主对话聊天室</title>
+  <meta name="description" content="duet 是一个开源的多智能体自主对话聊天室：给 2~10 个 AI 各自的角色、世界观与关系，让它们自动轮流对话；你可以当导演随时干预走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。" />
+  <link rel="icon" type="image/svg+xml" href="./assets/brand/logo-mark.svg" />
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-soft: #f7f8fa;
+      --bg-code: #f3f4f6;
+      --border: #e5e7eb;
+      --text: #1f2328;
+      --text-soft: #57606a;
+      --text-muted: #8b949e;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --green: #1a7f37;
+      --green-soft: #dcfce7;
+      --orange: #bc4c00;
+      --orange-soft: #fff7eb;
+      --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+      /* 智能体调色板（与应用内 6 种预设色一致） */
+      --agent-blue: #2563eb;
+      --agent-pink: #db2777;
+      --agent-green: #16a34a;
+      --agent-amber: #d97706;
+      --agent-purple: #9333ea;
+      --agent-teal: #0d9488;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --bg-soft: #161b22;
+        --bg-code: #1c2128;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-soft: #9198a1;
+        --text-muted: #6e7681;
+        --accent: #58a6ff;
+        --accent-soft: #1f6feb26;
+        --green: #3fb950;
+        --green-soft: #3fb95022;
+        --orange: #db6d28;
+        --orange-soft: #db6d2818;
+        --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.3);
+        --agent-blue: #60a5fa;
+        --agent-pink: #f472b6;
+        --agent-green: #4ade80;
+        --agent-amber: #fbbf24;
+        --agent-purple: #c084fc;
+        --agent-teal: #2dd4bf;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    code, pre, .mono {
+      font-family: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .container { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in srgb, var(--bg) 85%, transparent);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--text); }
+    .brand-logo { width: 28px; height: 28px; display: block; }
+    .nav-links { display: flex; gap: 8px; align-items: center; }
+    .nav-links a {
+      color: var(--text-soft); font-size: 14px; padding: 6px 12px;
+      border-radius: 6px; transition: all .15s;
+    }
+    .nav-links a:hover { background: var(--bg-soft); color: var(--text); text-decoration: none; }
+    .btn-github {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--bg-soft); border: 1px solid var(--border);
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; color: var(--text);
+    }
+    .btn-github:hover { background: var(--bg-code); text-decoration: none; }
+
+    /* Hero */
+    .hero { padding: 80px 0 60px; text-align: center; }
+    .hero-badge {
+      display: inline-block; padding: 4px 12px; border-radius: 999px;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 13px; font-weight: 500; margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 48px; font-weight: 800; letter-spacing: -0.02em;
+      margin: 0 0 16px; line-height: 1.15;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(135deg, var(--agent-blue), var(--agent-purple), var(--agent-pink));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p { font-size: 20px; color: var(--text-soft); max-width: 660px; margin: 0 auto 32px; }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px;
+      transition: all .15s; cursor: pointer; border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent); filter: brightness(1.1); text-decoration: none; }
+    .btn-secondary { background: var(--bg-soft); color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--bg-code); text-decoration: none; }
+
+    /* 对话预览卡片 */
+    .chat-demo {
+      max-width: 620px; margin: 44px auto 0; text-align: left;
+      background: var(--bg-soft); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 20px 14px;
+      box-shadow: var(--shadow);
+    }
+    .chat-topic {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-muted); margin: 0 0 14px;
+    }
+    .chat-topic .tag {
+      padding: 1px 8px; border-radius: 4px; font-size: 12px;
+      background: var(--accent-soft); color: var(--accent);
+    }
+    .bubble {
+      margin: 10px 0; padding: 9px 14px;
+      background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--bc);
+      border-radius: 4px 12px 12px 12px;
+      font-size: 14px; color: var(--text-soft);
+    }
+    .bubble .who {
+      font-weight: 700; font-size: 12.5px; color: var(--bc);
+      display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+    }
+    .bubble .who .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bc); }
+    .bubble .who .role { font-weight: 400; color: var(--text-muted); font-size: 12px; }
+    .director-pill {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 14px 0 10px; padding: 8px 12px;
+      border-radius: 8px; font-size: 13px; color: var(--text-soft);
+      background: var(--orange-soft);
+      border: 1px dashed color-mix(in srgb, var(--agent-amber) 55%, transparent);
+    }
+    .director-pill .dir-tag {
+      flex-shrink: 0; font-weight: 700; color: var(--agent-amber); font-size: 12px;
+      padding-top: 1px;
+    }
+    .typing { display: inline-flex; gap: 4px; align-items: center; height: 16px; }
+    .typing span {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--text-muted); animation: blink 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .typing span { animation: none; } }
+
+    /* Sections */
+    section { padding: 56px 0; border-top: 1px solid var(--border); }
+    .section-title {
+      font-size: 14px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--accent); margin: 0 0 8px;
+    }
+    .section-desc { color: var(--text-soft); font-size: 16px; margin: 0 0 32px; max-width: 720px; }
+    h2 { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+    h3 { font-size: 20px; font-weight: 600; margin: 32px 0 12px; }
+    h3 .pill {
+      font-size: 13px; font-weight: 500; color: var(--accent);
+      background: var(--accent-soft); padding: 2px 8px; border-radius: 4px;
+    }
+    h4 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; }
+    p { margin: 12px 0; }
+
+    /* Feature cards */
+    .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    @media (max-width: 720px) { .card-grid { grid-template-columns: 1fr; } }
+    .feature-card {
+      background: var(--bg-soft); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; transition: all .2s;
+    }
+    .feature-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .feature-card .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .feature-card .card-icon {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      display: grid; place-items: center; font-size: 16px;
+      background: color-mix(in srgb, var(--bc) 14%, transparent); color: var(--bc);
+    }
+    .feature-card .card-name { font-weight: 700; font-size: 15px; }
+    .feature-card .card-desc { font-size: 14px; color: var(--text-soft); margin: 4px 0 0; }
+
+    /* Code block */
+    pre {
+      background: var(--bg-code); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13.5px; line-height: 1.6; margin: 16px 0;
+    }
+    pre code { background: transparent; padding: 0; color: var(--text); }
+    code:not(pre code) { background: var(--bg-code); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: var(--text); }
+
+    /* Steps */
+    .steps { counter-reset: step; margin: 24px 0; padding: 0; list-style: none; }
+    .steps li {
+      position: relative; padding: 20px 0 20px 56px; border-left: 2px solid var(--border);
+      margin-left: 20px;
+    }
+    .steps li::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: -16px; top: 20px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--accent); color: var(--accent);
+      display: grid; place-items: center; font-weight: 700; font-size: 14px;
+    }
+    .steps li h4 { margin-top: 0; }
+
+    /* Callout */
+    .callout {
+      padding: 16px 20px; border-radius: 8px; margin: 20px 0;
+      font-size: 14px; border: 1px solid;
+    }
+    .callout-info { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+    .callout-warn { background: var(--orange-soft); border-color: color-mix(in srgb, var(--orange) 30%, transparent); }
+    .callout-success { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+    .callout strong { color: var(--text); }
+
+    /* Inline list */
+    ul.feature-list { padding-left: 20px; margin: 12px 0; }
+    ul.feature-list li { margin: 6px 0; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { font-weight: 600; color: var(--text); background: var(--bg-soft); }
+    td code { font-size: 13px; }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; color: var(--text-muted); font-size: 14px; }
+    footer a { color: var(--text-soft); }
+
+    @media (max-width: 600px) {
+      .hero { padding: 60px 0 40px; }
+      .hero h1 { font-size: 36px; }
+      .hero p { font-size: 17px; }
+      h2 { font-size: 26px; }
+      .nav-links a:not(.btn-github) { display: none; }
+      .chat-demo { padding: 16px 14px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <a href="#" class="brand">
+        <img class="brand-logo" src="./assets/brand/logo-mark.svg" alt="duet" />
+        <span>duet</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#usage">快速开始</a>
+        <a href="#deploy">自部署</a>
+        <a href="https://github.com/honlnk/duet" class="btn-github" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <div class="container hero">
+    <span class="hero-badge">2~10 个智能体 · 自主对话 · 开源 MIT</span>
+    <h1>给一群 AI 一个话题<br/><span class="grad">让它们自己聊起来</span></h1>
+    <p>duet 是一个开源的多智能体自主对话聊天室：为每个智能体配置角色、世界观与关系，它们按顺序自动轮流对话；你在旁边当导演，随时改变话题走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。</p>
+    <div class="hero-actions">
+      <a href="#usage" class="btn btn-primary">快速开始</a>
+      <a href="https://github.com/honlnk/duet" class="btn btn-secondary" target="_blank" rel="noopener">查看源码</a>
+    </div>
+
+    <!-- 对话预览 -->
+    <div class="chat-demo" aria-hidden="true">
+      <p class="chat-topic"><span class="tag">话题</span>意识上传之后，「我」还是我吗？</p>
+      <div class="bubble" style="--bc: var(--agent-blue)">
+        <div class="who"><span class="dot"></span>阿尔法 <span class="role">· 哲学家</span></div>
+        「连续性错觉」才是关键——记忆可以复制，但主观体验的连续之流不可分割。
+      </div>
+      <div class="bubble" style="--bc: var(--agent-pink)">
+        <div class="who"><span class="dot"></span>贝塔 <span class="role">· 认知科学家</span></div>
+        反对。裂脑实验早就证明，「统一的自我」本来就是大脑事后编出来的叙事。
+      </div>
+      <div class="bubble" style="--bc: var(--agent-green)">
+        <div class="who"><span class="dot"></span>伽马 <span class="role">· 工程师</span></div>
+        工程视角：如果是逐个神经元的替换，任何一刻你都指不出「界限」在哪里。
+      </div>
+      <div class="director-pill">
+        <span class="dir-tag">✦ 导演 · 5 轮内有效</span>
+        <span>引入一个宗教视角的反驳：灵魂是否可以被信息化？</span>
+      </div>
+      <div class="bubble" style="--bc: var(--agent-teal)">
+        <div class="who"><span class="dot"></span>德尔塔 <span class="role">· 神学家</span></div>
+        <span class="typing"><span></span><span></span><span></span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <section id="features">
+    <div class="container">
+      <p class="section-title">功能</p>
+      <h2>不只是把几个 AI 连在一起</h2>
+      <p class="section-desc">duet 围绕「多智能体自主对话」构建了完整的编排与治理能力：独立的视角记忆让身份永不混淆，角色 / 关系 / 导演三层注入让对话可控可编排。</p>
+
+      <h3>对话引擎</h3>
+      <div class="card-grid">
+        <div class="feature-card" style="--bc: var(--agent-blue)">
+          <div class="card-head">
+            <span class="card-icon">👥</span>
+            <span class="card-name">2~10 个智能体轮转</span>
+          </div>
+          <p class="card-desc">A→B→C… 固定顺序自动轮流发言，循环往复。每个智能体可绑定不同的 Provider 与模型——OpenAI 兼容（含 DeepSeek）/ Responses / Anthropic / Gemini 四种协议在同一会话里混用。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-purple)">
+          <div class="card-head">
+            <span class="card-icon">🧠</span>
+            <span class="card-name">独立视角长记忆</span>
+          </div>
+          <p class="card-desc">每个智能体维护自己视角的上下文：自己的发言是 assistant，别人的是带名字的 user，物理隔离互不干扰。每 N 轮自动生成第一人称摘要压缩历史，长对话不失忆、不串身份。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-green)">
+          <div class="card-head">
+            <span class="card-icon">⏯</span>
+            <span class="card-name">流式 · 暂停 · 恢复 · 重试</span>
+          </div>
+          <p class="card-desc">逐字流式输出，实时围观 AI 发言。随时优雅暂停（不打断当前发言者），重设轮数 / 时长上限后继续；调用失败自动指数退避重试，期间可随时退出。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-teal)">
+          <div class="card-head">
+            <span class="card-icon">💭</span>
+            <span class="card-name">思考档位</span>
+          </div>
+          <p class="card-desc">每个智能体可单独设置思考档位（low / medium / high…），按所选模型动态拉取支持的档位，自动映射为各协议的原生推理参数——推理模型即插即用。</p>
+        </div>
+      </div>
+
+      <h3>编排系统</h3>
+      <div class="card-grid">
+        <div class="feature-card" style="--bc: var(--agent-amber)">
+          <div class="card-head">
+            <span class="card-icon">🎭</span>
+            <span class="card-name">角色卡 · 世界观</span>
+          </div>
+          <p class="card-desc">智能体模板（名字 / 角色描述 / 性格）与世界观模板在设置页集中维护，新建对话全部点选、不手填。常用设定一次保存，处处复用。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-pink)">
+          <div class="card-head">
+            <span class="card-icon">🕸</span>
+            <span class="card-name">非对称关系图</span>
+          </div>
+          <p class="card-desc">可视化关系画布：每条连线编辑两份第一人称描述——「A 眼中的 B」与「B 眼中的 A」可以不同，允许误解、暗恋与信息差。关系随会话注入各智能体的角色卡。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-blue)">
+          <div class="card-head">
+            <span class="card-icon">🎬</span>
+            <span class="card-name">导演指令</span>
+          </div>
+          <p class="card-desc">以导演身份随时下达干预指令：「让话题转向…」「加入一个冲突…」。可设有效期（永久或 N 轮），以最高优先级注入所有智能体的下一轮上下文，对话进行中热更新。</p>
+        </div>
+        <div class="feature-card" style="--bc: var(--agent-green)">
+          <div class="card-head">
+            <span class="card-icon">📖</span>
+            <span class="card-name">阅读节奏跟随</span>
+          </div>
+          <p class="card-desc">AI 聊得比你读得快？翻上去回看历史时，后端自动缓冲几轮、等你回到底部再继续生成——自主对话第一次有了「人类友好的播放节奏」。</p>
+        </div>
+      </div>
+
+      <h3>工程能力</h3>
+      <ul class="feature-list">
+        <li><strong>多 Provider 管理中心</strong> — 页面内可视化维护 API Key、Base URL、模型与价格，支持从上游拉取模型列表；Key 只存后端，前端不触碰模型 API</li>
+        <li><strong>成本统计</strong> — 按输入 / 输出 / 缓存命中 / 缓存写入分维度计价，CNY / USD / EUR 在线汇率换算（三层降级兜底），右侧面板实时显示累计 token 与成本</li>
+        <li><strong>Prompt 历史</strong> — 「所见即所发」：查看每次真正发给 LLM 的完整提示词快照（含分层注入结果），提示词调试不再靠猜</li>
+        <li><strong>消息持久化与崩溃恢复</strong> — 每条消息同步落盘（原子替换），关闭浏览器重开历史仍在，进程崩溃重启自动恢复</li>
+        <li><strong>全局熔断</strong> — 默认 200 轮 / 2 小时硬上限兜底，无限对话也不失控</li>
+        <li><strong>颜色标识</strong> — 每个智能体 6 种预设色或任意自定义 hex，气泡、头像、强调条自动着色，长对话一眼区分发言者</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Usage -->
+  <section id="usage">
+    <div class="container">
+      <p class="section-title">快速开始</p>
+      <h2>三种方式，任选其一</h2>
+      <p class="section-desc">duet 是本地优先的工具：启动后所有配置（包括 API Key）都在页面里维护，环境变量全部可选。</p>
+
+      <h3>方式一：npx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
+      <pre><code>npx @honlnk/duet</code></pre>
+      <p>自动拉取并启动，随后自动打开浏览器。建议用 <code>DATA_DIR</code> 指定数据目录，避免会话数据写到包目录：</p>
+      <pre><code># 或全局安装后使用
+npm i -g @honlnk/duet
+DATA_DIR=~/.duet duet-chat</code></pre>
+
+      <h3>方式二：源码运行</h3>
+      <pre><code>git clone https://github.com/honlnk/duet.git
+cd duet
+pnpm install
+pnpm dev</code></pre>
+      <p>开发模式前后端分离：前端 <code>http://localhost:5174</code>（热更新），后端 <code>http://localhost:3000</code>（API + WebSocket）。生产模式 <code>pnpm build &amp;&amp; pnpm start</code> 单进程托管。</p>
+
+      <h3>方式三：Docker</h3>
+      <pre><code>docker compose up -d --build</code></pre>
+      <p>多阶段构建（alpine），非 root 运行，内置健康检查；会话数据与 Provider 配置通过卷（<code>/data</code>）持久化。</p>
+
+      <h3>首次使用</h3>
+      <ol class="steps">
+        <li>
+          <h4>配置 Provider</h4>
+          <p>首次访问会提示未配置。点右上角「Provider」添加第一条：选择协议（OpenAI 兼容 / Responses / Anthropic / Gemini），填 API Key、Base URL、模型名，可点「获取列表」拉取上游模型。第一条自动成为默认。</p>
+        </li>
+        <li>
+          <h4>创建对话</h4>
+          <p>选话题（可叠加世界观）→ 从模板点选 2~10 个智能体 → 开始。高级设置里可为每个智能体单独绑定 Provider、思考档位、温度、摘要频率等。</p>
+        </li>
+        <li>
+          <h4>观看 &amp; 当导演</h4>
+          <p>A 先发言、B 接力……自动循环。随时点「暂停」优雅停止；底部输入框可下达导演指令（永久 / N 轮有效），下一轮立即生效。右侧面板实时显示轮次、token 与成本。</p>
+        </li>
+      </ol>
+
+      <div class="callout callout-warn">
+        <strong>费用提示：</strong>不设上限的「无限对话」会持续产生 API 费用。全局熔断默认 200 轮 / 2 小时兜底，请留意右侧面板的成本统计，及时暂停。
+      </div>
+    </div>
+  </section>
+
+  <!-- Deploy -->
+  <section id="deploy">
+    <div class="container">
+      <p class="section-title">自部署</p>
+      <h2>部署到你的服务器</h2>
+      <p class="section-desc">单 Node 进程即可完整运行（静态前端 + REST API + WebSocket），无需外部数据库。推荐用 Docker Compose 或 pm2 / systemd 守护。</p>
+
+      <h3>Docker Compose</h3>
+      <pre><code>git clone https://github.com/honlnk/duet.git
+cd duet
+docker compose up -d --build</code></pre>
+      <p>或直接 <code>docker run</code>：</p>
+      <pre><code>docker build -t duet .
+docker run -d -p 3000:3000 -v duet-data:/data duet</code></pre>
+
+      <h3>环境变量</h3>
+      <p>全部可选。API Key / 模型 / 价格等凭证不走环境变量，启动后在页面 Provider 面板维护（落盘到 <code>providers.json</code>）。</p>
+      <table>
+        <thead>
+          <tr><th>变量</th><th>默认值</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>PORT</code></td><td><code>3000</code></td><td>服务端口（<code>0</code> = 自动分配）</td></tr>
+          <tr><td><code>DATA_DIR</code></td><td><code>data/sessions</code></td><td>会话数据持久化目录（<code>providers.json</code> 落盘到其父目录）</td></tr>
+          <tr><td><code>ABSOLUTE_MAX_ROUNDS</code></td><td><code>200</code></td><td>全局硬熔断轮数</td></tr>
+          <tr><td><code>ABSOLUTE_MAX_DURATION_SEC</code></td><td><code>7200</code></td><td>全局硬熔断时长（秒）</td></tr>
+          <tr><td><code>REQUEST_TIMEOUT_MS</code></td><td><code>30000</code></td><td>单次 AI 调用超时（毫秒）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>安全注意</h3>
+      <ul class="feature-list">
+        <li>API Key 仅存在后端（<code>providers.json</code>），前端不直接调用任何模型 API</li>
+        <li>当前版本面向本地 / 内网使用，未内置多用户鉴权；公网部署请自行加反向代理鉴权</li>
+        <li>思维链（reasoning）仅用于后端调试，不会进入其他智能体的上下文</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>
+        <a href="https://github.com/honlnk/duet" target="_blank" rel="noopener">GitHub</a>
+        &nbsp;·&nbsp;
+        <a href="https://www.npmjs.com/package/@honlnk/duet" target="_blank" rel="noopener">npm</a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/honlnk/duet/issues" target="_blank" rel="noopener">问题反馈</a>
+      </p>
+      <p style="margin-top: 12px; font-size: 13px;">duet · 多智能体自主对话聊天室 · MIT License</p>
+    </div>
+  </footer>
+</body>
+</html>

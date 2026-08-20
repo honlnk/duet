@@ -253,6 +253,7 @@ duet/
 
 ## 📚 文档
 
+- [门户页](https://duet.honlnk.com/) — 项目介绍与快速开始（`site/`，由 GitHub Actions 自动发布）
 - [开发计划](docs/DEVELOPMENT_PLAN.md) — 初始设计文档（v1，部分已演进，见文首声明）
 - [调研笔记](docs/RESEARCH_NOTES.md) — DeepSeek API 实测数据
 - [审核记录](docs/REVIEW.md) — 计划审核与修订记录
