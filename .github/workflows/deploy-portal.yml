@@ -1,0 +1,42 @@
+# 门户页部署到 GitHub Pages
+# 推送 master 分支且 site/ 有变更时自动发布，也可手动触发。
+# 首次使用前需在仓库 Settings → Pages → Source 选择 "GitHub Actions"。
+
+name: Deploy portal to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths: ['site/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
