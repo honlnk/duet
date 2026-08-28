@@ -44,8 +44,8 @@ pnpm install
 pnpm dev
 ```
 
-开发模式采用前后端分离：后端跑在 `http://localhost:3000`（仅提供 API/WebSocket），前端由 vite 独立托管在 `http://localhost:5174`（支持热更新）。
-请用浏览器访问 **`http://localhost:5174`**。
+开发模式采用前后端分离：后端跑在 `http://localhost:23892`（仅提供 API/WebSocket），前端由 vite 独立托管在 `http://localhost:46738`（支持热更新）。
+请用浏览器访问 **`http://localhost:46738`**。
 
 > 开发模式下后端不会自动打开浏览器（前端由 vite 托管）。自动打开浏览器的行为仅在生产模式（`pnpm start`）下发生。
 
@@ -97,7 +97,7 @@ DATA_DIR=~/.duet duet-chat
 ```bash
 # 方式一：docker run
 docker build -t duet .
-docker run -d -p 3000:3000 \
+docker run -d -p 23892:23892 \
   -v duet-data:/data \
   duet
 
@@ -116,7 +116,7 @@ docker compose up -d --build
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `PORT` | `3000` | 服务端口（`0` = 自动分配） |
+| `PORT` | `23892` | 服务端口（`0` = 自动分配） |
 | `DATA_DIR` | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定；`providers.json` 落盘到其父目录） |
 | `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
 | `ABSOLUTE_MAX_DURATION_SEC` | `7200` | 全局硬熔断时长（秒） |
@@ -237,7 +237,7 @@ duet/
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `PORT` | 服务端口（0=自动）| `3000` |
+| `PORT` | 服务端口（0=自动）| `23892` |
 | `DATA_DIR` | 会话数据持久化目录（`providers.json` 落盘到其父目录）| `项目根/data/sessions` |
 | `ABSOLUTE_MAX_ROUNDS` | 全局最大轮数熔断 | `200` |
 | `ABSOLUTE_MAX_DURATION_SEC` | 全局最大时长熔断(秒) | `7200` |

@@ -1,7 +1,7 @@
 # Duet — Docker Compose 一键部署
 # 用法：
 #   1. docker compose up -d --build
-#   2. 浏览器访问 http://localhost:3000
+#   2. 浏览器访问 http://localhost:23892
 #   3. 在页面右上角「Provider」中配置 API Key / 模型 / 协议（支持 OpenAI 兼容 / Responses / Anthropic / Gemini）
 #
 # 说明：API Key、模型、价格等凭证全部通过页面 Provider 管理维护，
@@ -15,10 +15,10 @@ services:
     container_name: duet
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "23892:23892"
     environment:
       # 可选：覆盖默认配置（见 .env.example）
-      PORT: "3000"
+      PORT: "23892"
       DATA_DIR: /data
       ABSOLUTE_MAX_ROUNDS: ${ABSOLUTE_MAX_ROUNDS:-200}
       ABSOLUTE_MAX_DURATION_SEC: ${ABSOLUTE_MAX_DURATION_SEC:-7200}
@@ -28,7 +28,7 @@ services:
       - duet-data:/data
     # 健康检查（可选，依赖 /api/health 端点）
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:23892/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -18,19 +18,19 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5174,
+    port: 46738,
     strictPort: false,
-    // 监听 0.0.0.0，允许内网/手机访问（手机访问 http://电脑局域网IP:5174）
+    // 监听 0.0.0.0，允许内网/手机访问（手机访问 http://电脑局域网IP:46738）
     host: true,
-    // 开发态：前端跑在 5174，把 /api、/ws 反代到后端 3000。
+    // 开发态：前端跑在 46738，把 /api、/ws 反代到后端 23892。
     // 业务代码用相对路径 + location.host，无需感知端口差异。
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:23892',
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:3000',
+        target: 'ws://localhost:23892',
         ws: true,
       },
     },

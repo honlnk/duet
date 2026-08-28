@@ -29,7 +29,7 @@ function toInt(v: string | undefined, def: number): number {
 
 const config: AppConfig = {
   env: detectEnv(),
-  port: toInt(process.env.PORT, 3000),
+  port: toInt(process.env.PORT, 23892),
   projectRoot,
   requestTimeoutMs: toInt(process.env.REQUEST_TIMEOUT_MS, 30000),
   // 全局硬熔断

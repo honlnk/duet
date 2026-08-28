@@ -64,7 +64,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 }
 
 async function registerStaticOrVite(fastify: FastifyInstance): Promise<void> {
-  // 开发：后端仅提供 API/WS，前端由 vite 独立托管（默认 http://localhost:5174）
+  // 开发：后端仅提供 API/WS，前端由 vite 独立托管（默认 http://localhost:46738）
   if (config.env !== 'production') {
     fastify.get('/', async () => ({
       message: '后端运行于开发模式，仅提供 API/WebSocket。前端请访问 vite dev server。',
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
       openBrowser(displayUrl)
     } else {
       console.log(
-        '  ℹ️  开发模式：后端仅提供 API/WS，前端请访问 vite dev server（默认 http://localhost:5174）。',
+        '  ℹ️  开发模式：后端仅提供 API/WS，前端请访问 vite dev server（默认 http://localhost:46738）。',
       )
     }
   } catch (e) {
