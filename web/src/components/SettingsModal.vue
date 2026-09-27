@@ -193,7 +193,7 @@ const hasHistory = computed(() => history.value.length > 0)
 <template>
   <!-- 遮罩 -->
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4"
     @mousedown="onOverlayMouseDown"
     @click="onOverlayClick"
   >
@@ -207,8 +207,9 @@ const hasHistory = computed(() => history.value.length > 0)
       >
         <div class="flex items-center gap-2.5">
           <h2 class="text-base font-semibold text-text-main">设置</h2>
-          <span class="text-text-muted">/</span>
-          <span class="text-sm text-text-dim">
+          <!-- 手机端 tab 已横向展示在顶部，当前分类标签只在大屏显示 -->
+          <span class="hidden text-text-muted md:inline">/</span>
+          <span class="hidden text-sm text-text-dim md:inline">
             {{ tabs.find((t) => t.key === tab)?.label }}
           </span>
         </div>
@@ -225,15 +226,15 @@ const hasHistory = computed(() => history.value.length > 0)
         </button>
       </header>
 
-      <!-- 主体：左 tab 导航 + 右内容 -->
-      <div class="flex min-h-0 flex-1">
-        <!-- 左：tab 导航 -->
-        <nav class="flex w-44 shrink-0 flex-col gap-0.5 border-r border-border-subtle bg-bg-card p-2">
+      <!-- 主体：手机端 tab 变顶部横滑条，md 起恢复左导航 + 右内容 -->
+      <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+        <!-- tab 导航 -->
+        <nav class="flex shrink-0 gap-1 overflow-x-auto border-b border-border-subtle bg-bg-card p-2 md:w-44 md:flex-col md:gap-0.5 md:border-r md:border-b-0">
           <button
             v-for="t in tabs"
             :key="t.key"
             type="button"
-            class="rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors"
+            class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors"
             :class="tab === t.key
               ? 'bg-bg-hover text-text-main'
               : 'text-text-dim hover:bg-bg-hover hover:text-text-main'"

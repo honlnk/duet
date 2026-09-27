@@ -489,7 +489,7 @@ function onOverlayMouseUp(e: MouseEvent) {
                     {{ p.baseUrl }}
                   </div>
                   <div
-                    class="mt-1 flex items-center gap-3 text-xs text-text-dim"
+                    class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-text-dim"
                   >
                     <span>模型: {{ p.model }}</span>
                     <span class="font-mono">{{ p.apiKeyMasked }}</span>
