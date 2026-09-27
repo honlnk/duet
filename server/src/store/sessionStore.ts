@@ -2,14 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import config from '../config.js'
-import { AgentMemory } from '../memory/context.js'
+import { CharacterMemory } from '../memory/context.js'
 import { estimateStepCost, round6 } from '../utils/cost.js'
 import type { CostRates } from '../utils/cost.js'
 import { convertCurrency } from '../utils/currency.js'
-import { DEFAULT_AGENT_COLORS, agentColorOf } from '../ai/prompts.js'
+import { DEFAULT_CHARACTER_COLORS, characterColorOf } from '../ai/prompts.js'
 import type {
-  AgentId,
-  AgentRef,
+  CharacterId,
+  CharacterRef,
   CreateSessionInput,
   Session,
   SessionConfig,
@@ -19,25 +19,25 @@ import type {
 import type { NormalizedUsage } from '../ai/providers/types.js'
 
 /** 会话允许的角色数量区间 */
-export const MIN_AGENTS = 2
-export const MAX_AGENTS = 10
+export const MIN_CHARACTERS = 2
+export const MAX_CHARACTERS = 10
 
 /**
- * 把 AgentId 与其在 agents 数组中的索引互转。
+ * 把 CharacterId 与其在 characters 数组中的索引互转。
  * A→0, B→1, ..., J→9。
  */
-export const AGENT_ORDER: readonly AgentId[] = [
+export const CHARACTER_ORDER: readonly CharacterId[] = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 ]
 
-/** AgentId → 索引 */
-export function agentIndex(id: AgentId): number {
-  return AGENT_ORDER.indexOf(id)
+/** CharacterId → 索引 */
+export function characterIndex(id: CharacterId): number {
+  return CHARACTER_ORDER.indexOf(id)
 }
 
-/** 索引 → AgentId */
-export function agentIdAt(index: number): AgentId {
-  return AGENT_ORDER[index] ?? 'A'
+/** 索引 → CharacterId */
+export function characterIdAt(index: number): CharacterId {
+  return CHARACTER_ORDER[index] ?? 'A'
 }
 
 /** 默认会话配置 */
@@ -58,44 +58,44 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
 
 /**
  * 创建新会话对象。
- * 支持 2~3 个角色：agents[0/1/2] 对应 A/B/C。
+ * 支持 2~3 个角色：characters[0/1/2] 对应 A/B/C。
  * 颜色缺省时按 A/B/C 顺序分配默认色（蓝/粉/绿），避免相邻角色撞色。
  */
-export function createSession({ topic, agents, config: cfg, relationships }: CreateSessionInput): Session {
+export function createSession({ topic, characters, config: cfg, relationships }: CreateSessionInput): Session {
   const now = Date.now()
-  // 规范化角色列表：补 id/name/description/personality/color，截断到 MAX_AGENTS。
-  const inputs = agents.slice(0, MAX_AGENTS).filter(
+  // 规范化角色列表：补 id/name/description/personality/color，截断到 MAX_CHARACTERS。
+  const inputs = characters.slice(0, MAX_CHARACTERS).filter(
     (a): a is NonNullable<typeof a> => a != null,
   )
-  const refs: AgentRef[] = inputs.map((a, i) => ({
-    id: agentIdAt(i),
-    name: a.name?.trim() || `角色 ${agentIdAt(i)}`,
+  const refs: CharacterRef[] = inputs.map((a, i) => ({
+    id: characterIdAt(i),
+    name: a.name?.trim() || `角色 ${characterIdAt(i)}`,
     description: a.description?.trim() || undefined,
     personality: a.personality?.trim() || undefined,
-    color: (a.color?.trim() as AgentRef['color']) || DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue',
+    color: (a.color?.trim() as CharacterRef['color']) || DEFAULT_CHARACTER_COLORS[i % DEFAULT_CHARACTER_COLORS.length] || 'blue',
   }))
 
   // 每个角色的「其他人」列表（排除自己）
-  const othersOf = (selfIdx: number): AgentRef[] =>
+  const othersOf = (selfIdx: number): CharacterRef[] =>
     refs.filter((_, i) => i !== selfIdx)
 
   // 为每个角色构建独立记忆（动态，支持 2~10 个）
   const memory = {} as Session['memory']
   refs.forEach((ref, i) => {
-    memory[ref.id] = new AgentMemory(ref, othersOf(i), topic, relationships).toJSON()
+    memory[ref.id] = new CharacterMemory(ref, othersOf(i), topic, relationships).toJSON()
   })
 
   const session: Session = {
     id: 'sess_' + randomUUID(),
     topic,
-    agents: refs,
+    characters: refs,
     config: defaultConfig(cfg),
     status: 'idle',
     finishedReason: null,
     startedAt: null,
     stoppedAt: null,
     messageCount: 0,
-    currentAgentId: 'A',
+    currentCharacterId: 'A',
     messages: [],
     memory,
     stats: {
@@ -129,13 +129,53 @@ export function saveSession(session: Session): void {
   fs.renameSync(tmp, file) // 原子替换
 }
 
+/**
+ * 旧版会话文件归一化（「智能体」概念时期写入的持久化数据）：
+ * - 顶层 agents → characters
+ * - currentAgentId → currentCharacterId
+ * - messages[].agentId → characterId
+ * 读取时转为新结构，下次落盘即写入新格式。
+ */
+function normalizeLegacySession(raw: unknown): Session {
+  const s = raw as Record<string, unknown>
+  if (!s || typeof s !== 'object') return raw as Session
+  if (Array.isArray(s.agents) && !s.characters) {
+    s.characters = s.agents
+    delete s.agents
+  }
+  if (typeof s.currentAgentId === 'string') {
+    s.currentCharacterId = s.currentAgentId
+    delete s.currentAgentId
+  }
+  const cfg = s.config as Record<string, unknown> | undefined
+  if (cfg && typeof cfg === 'object') {
+    if (cfg.agentProviders && !cfg.characterProviders) {
+      cfg.characterProviders = cfg.agentProviders
+      delete cfg.agentProviders
+    }
+    if (cfg.agentThinking && !cfg.characterThinking) {
+      cfg.characterThinking = cfg.agentThinking
+      delete cfg.agentThinking
+    }
+  }
+  if (Array.isArray(s.messages)) {
+    for (const m of s.messages as Array<Record<string, unknown>>) {
+      if (m && typeof m.agentId === 'string') {
+        m.characterId = m.agentId
+        delete m.agentId
+      }
+    }
+  }
+  return raw as Session
+}
+
 /** 读取单个会话 */
 export function loadSession(id: string): Session | null {
   const file = path.join(config.dataDir, `${id}.json`)
   if (!fs.existsSync(file)) return null
   const raw = fs.readFileSync(file, 'utf8')
   try {
-    return JSON.parse(raw) as Session
+    return normalizeLegacySession(JSON.parse(raw))
   } catch (e) {
     console.error('[store] 会话文件损坏:', id, e instanceof Error ? e.message : e)
     return null
@@ -151,7 +191,7 @@ export function listSessions(): SessionListItem[] {
     if (!f.endsWith('.json')) continue
     const raw = fs.readFileSync(path.join(dir, f), 'utf8')
     try {
-      const s = JSON.parse(raw) as Session
+      const s = normalizeLegacySession(JSON.parse(raw))
       out.push({
         id: s.id,
         topic: s.topic,
@@ -159,7 +199,7 @@ export function listSessions(): SessionListItem[] {
         messageCount: s.messageCount,
         updatedAt: s.updatedAt,
         createdAt: s.createdAt,
-        agents: s.agents?.map((a) => a.name) ?? [],
+        characters: s.characters?.map((a) => a.name) ?? [],
       })
     } catch {
       // 损坏文件跳过
@@ -192,7 +232,7 @@ export function recoverSessions(): number {
     const p = path.join(dir, f)
     let s: Session
     try {
-      s = JSON.parse(fs.readFileSync(p, 'utf8')) as Session
+      s = normalizeLegacySession(JSON.parse(fs.readFileSync(p, 'utf8')))
     } catch {
       continue
     }
@@ -255,16 +295,16 @@ export function addStats(
  * 1 round = 所有角色各发言一次（2 人场景 = 2 条 message/轮，3 人场景 = 3 条/轮）。
  */
 export function currentRound(session: Session): number {
-  const n = session.agents.length || MIN_AGENTS
+  const n = session.characters.length || MIN_CHARACTERS
   return Math.floor(session.messageCount / n)
 }
 
 /**
  * 计算会话的下一个发言者：按 A→B→C→A… 的固定顺序循环。
  */
-export function nextAgentId(session: Session): AgentId {
-  const n = session.agents.length
-  const curIdx = agentIndex(session.currentAgentId)
+export function nextCharacterId(session: Session): CharacterId {
+  const n = session.characters.length
+  const curIdx = characterIndex(session.currentCharacterId)
   const nextIdx = (curIdx + 1) % n
-  return session.agents[nextIdx]?.id ?? 'A'
+  return session.characters[nextIdx]?.id ?? 'A'
 }

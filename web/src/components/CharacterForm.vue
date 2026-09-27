@@ -6,34 +6,34 @@
  *  - 未选择：搜索框 + 下拉列表，输入时按名字筛选，点击即选中。
  *  - 已选择：展示该角色名 + description 摘要 + 颜色选择器 + 更换/移除。
  *
- * 通过 index 绑定 form store 的 agents 数组对应项。
+ * 通过 index 绑定 form store 的 characters 数组对应项。
  */
 import { computed, nextTick, ref } from 'vue'
 import { useFormStore } from '@/stores/form'
 import { useTemplateStore } from '@/stores/template'
-import { AGENT_COLOR_OPTIONS, isPresetColor, MIN_AGENTS } from '@/types/api'
-import { bgColor, textColor, resolveColor } from '@/utils/agentColor'
-import type { AgentTemplate } from '@/services/templates'
+import { CHARACTER_COLOR_OPTIONS, isPresetColor, MIN_CHARACTERS } from '@/types/api'
+import { bgColor, textColor, resolveColor } from '@/utils/characterColor'
+import type { CharacterTemplate } from '@/services/templates'
 
 const props = defineProps<{
-  /** 该角色在 agents 数组中的索引 */
+  /** 该角色在 characters 数组中的索引 */
   index: number
 }>()
 
 const form = useFormStore()
 const template = useTemplateStore()
 
-const agent = computed(() => form.values.agents[props.index])
+const character = computed(() => form.values.characters[props.index])
 const label = computed(() => `角色 ${String.fromCharCode(65 + props.index)}`)
-const color = computed(() => resolveColor(agent.value?.color, props.index))
+const color = computed(() => resolveColor(character.value?.color, props.index))
 /** 当前是否为自定义颜色（非预设 key） */
 const isCustomColor = computed(() => !isPresetColor(color.value))
-const canRemove = computed(() => form.values.agents.length > MIN_AGENTS)
+const canRemove = computed(() => form.values.characters.length > MIN_CHARACTERS)
 
 /** 已被其它槽位占用的模板 id（避免同一会话重复选同一角色） */
 const usedTemplateIds = computed(() => {
   const set = new Set<string>()
-  form.values.agents.forEach((a, i) => {
+  form.values.characters.forEach((a, i) => {
     if (i !== props.index && a.templateId) set.add(a.templateId)
   })
   return set
@@ -41,10 +41,10 @@ const usedTemplateIds = computed(() => {
 
 /** 可选模板（排除已被其它槽位选中的） */
 const availableTemplates = computed(() =>
-  template.agents.filter((t) => !usedTemplateIds.value.has(t.id)),
+  template.characters.filter((t) => !usedTemplateIds.value.has(t.id)),
 )
 
-const selected = computed(() => agent.value && agent.value.templateId !== '')
+const selected = computed(() => character.value && character.value.templateId !== '')
 
 /* --------------------------- 搜索 + 下拉 --------------------------- */
 
@@ -54,7 +54,7 @@ const dropdownOpen = ref(false)
 const searchInputEl = ref<HTMLInputElement | null>(null)
 
 /** 按名字筛选后的可选模板 */
-const filteredTemplates = computed<AgentTemplate[]>(() => {
+const filteredTemplates = computed<CharacterTemplate[]>(() => {
   const kw = searchQuery.value.trim().toLowerCase()
   const list = availableTemplates.value
   if (!kw) return list
@@ -81,7 +81,7 @@ function closeDropdown() {
 }
 
 function pick(tid: string) {
-  const t = template.findAgent(tid)
+  const t = template.findCharacter(tid)
   if (!t) return
   form.selectTemplate(
     props.index,
@@ -102,22 +102,22 @@ function change() {
 }
 
 function remove() {
-  form.removeAgent(props.index)
+  form.removeCharacter(props.index)
 }
 
-function pickColor(c: (typeof AGENT_COLOR_OPTIONS)[number]['key']) {
-  form.patchAgent(props.index, { color: c })
+function pickColor(c: (typeof CHARACTER_COLOR_OPTIONS)[number]['key']) {
+  form.patchCharacter(props.index, { color: c })
 }
 
 /** 自定义颜色：原生取色器 input 事件 */
 function pickCustomHex(e: Event) {
   const hex = (e.target as HTMLInputElement).value
-  if (hex) form.patchAgent(props.index, { color: hex })
+  if (hex) form.patchCharacter(props.index, { color: hex })
 }
 </script>
 
 <template>
-  <div v-if="agent" class="flex flex-col gap-2">
+  <div v-if="character" class="flex flex-col gap-2">
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2">
         <span class="h-2.5 w-2.5 rounded-full" :class="bgColor(color).class" :style="bgColor(color).style" />
@@ -141,12 +141,12 @@ function pickCustomHex(e: Event) {
     >
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-text-main">{{ agent.name }}</p>
+          <p class="text-sm font-medium text-text-main">{{ character.name }}</p>
           <p
-            v-if="agent.description"
+            v-if="character.description"
             class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-text-dim"
           >
-            {{ agent.description }}
+            {{ character.description }}
           </p>
           <p v-else class="mt-0.5 text-xs text-text-muted">（未设定身份）</p>
         </div>
@@ -163,13 +163,13 @@ function pickCustomHex(e: Event) {
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs text-text-dim">颜色</span>
         <button
-          v-for="opt in AGENT_COLOR_OPTIONS"
+          v-for="opt in CHARACTER_COLOR_OPTIONS"
           :key="opt.key"
           type="button"
           class="h-3.5 w-3.5 rounded-full border transition-transform hover:scale-110"
           :class="[
             bgColor(opt.key).class,
-            agent.color === opt.key
+            character.color === opt.key
               ? 'border-text-main ring-2 ring-text-main/40'
               : 'border-black/15',
           ]"

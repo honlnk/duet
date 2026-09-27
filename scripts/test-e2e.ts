@@ -7,16 +7,16 @@ import {
 } from '../server/src/store/sessionStore.js'
 import WebSocket from 'ws'
 
-const API = process.env.API || 'http://localhost:3001'
+const API = process.env.API || 'http://localhost:23892'
 const WS_URL = API.replace(/^http/, 'ws')
 
 async function main() {
   // 创建会话
   const session = createSession({
     topic: '猫和狗哪个更适合做家庭宠物（简短辩论，2轮）',
-    agents: [
-      { name: '猫派', persona: '你认为猫独立干净，是更好的家庭宠物。' },
-      { name: '狗派', persona: '你认为狗忠诚亲人，是更好的家庭宠物。' },
+    characters: [
+      { name: '猫派', description: '你认为猫独立干净，是更好的家庭宠物。' },
+      { name: '狗派', description: '你认为狗忠诚亲人，是更好的家庭宠物。' },
     ],
     config: { maxRounds: 2, temperature: 0.7, summaryEveryN: 10, keepRecent: 8 },
   })
@@ -40,13 +40,13 @@ async function main() {
         process.stdout.write(msg.content as string)
       } else if (msg.type === 'message_done') {
         const m = msg.message as { content: string }
-        console.log(`\n[test] 消息完成 (${msg.agentId}): ${m.content.slice(0, 50)}...`)
+        console.log(`\n[test] 消息完成 (${msg.characterId}): ${m.content.slice(0, 50)}...`)
       } else if (msg.type === 'stats') {
         console.log(`[test] stats: ${msg.totalTokens} token, $${msg.estCost}`)
       } else if (msg.type === 'turn_end') {
         console.log(`[test] 轮次结束: round=${msg.round}, messageCount=${msg.messageCount}`)
       } else if (msg.type === 'summary') {
-        console.log(`[test] 摘要 ${msg.agentId} ${msg.phase}`)
+        console.log(`[test] 摘要 ${msg.characterId} ${msg.phase}`)
       } else if (msg.type === 'finished') {
         console.log(`[test] 对话结束: ${msg.reason}`)
         finished = true
@@ -113,13 +113,15 @@ async function main() {
     throw new Error('[test] token 统计未更新')
   }
 
-  // 关键校验：A 的 messages 里不应出现 B 的 persona
-  const bPersona = final.agents[1].persona
-  const aHasBPersona = final.memory.A.messages.some(
-    (m) => m.content && m.content.includes(bPersona.slice(0, 10))
-  )
-  console.log('A 视角是否串入 B persona:', aHasBPersona ? '❌ 是(身份混淆!)' : '✅ 否(隔离正确)')
-  if (aHasBPersona) throw new Error('[test] A 视角串入了 B persona')
+  // 关键校验：A 的 messages 里不应出现 B 的角色描述
+  const bPersona = final.characters[1]?.description ?? ''
+  const aHasBPersona =
+    bPersona.length >= 10 &&
+    final.memory.A.messages.some(
+      (m) => m.content && m.content.includes(bPersona.slice(0, 10))
+    )
+  console.log('A 视角是否串入 B 角色描述:', aHasBPersona ? '❌ 是(身份混淆!)' : '✅ 否(隔离正确)')
+  if (aHasBPersona) throw new Error('[test] A 视角串入了 B 角色描述')
 
   // role 翻转校验
   const aSelf = final.memory.A.messages.filter((m) => m.role === 'assistant').length

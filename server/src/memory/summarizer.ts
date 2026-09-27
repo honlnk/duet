@@ -2,17 +2,17 @@ import { getAdapter } from '../ai/providers/index.js'
 import type { NormalizedUsage } from '../ai/providers/types.js'
 import type { ConnectionConfig } from '../types/index.js'
 import { buildSummaryPrompt } from '../ai/prompts.js'
-import type { AgentRef, MemoryMessage } from '../types/index.js'
+import type { CharacterRef, MemoryMessage } from '../types/index.js'
 
 /** summarizeConversation 参数 */
 interface SummarizeOpts {
-  agentName: string
+  characterName: string
   /** 其他参与者的引用（用于在对话文本里标注发言者） */
-  others: AgentRef[]
+  others: CharacterRef[]
   messages: MemoryMessage[]
   oldSummary?: string
   words?: number
-  /** 该 Agent 使用的 Provider 连接配置（跟 Agent 走） */
+  /** 该 Character 使用的 Provider 连接配置（跟 Character 走） */
   conn: ConnectionConfig
   signal?: AbortSignal
 }
@@ -35,7 +35,7 @@ export interface SummaryResult {
  * 注意：调用 LLM 时只取 content，丢弃 reasoning_content（chatComplete 已处理）。
  */
 export async function summarizeConversation({
-  agentName,
+  characterName,
   others,
   messages,
   oldSummary,
@@ -49,13 +49,13 @@ export async function summarizeConversation({
   const recentText = messages
     .map((m) => {
       // assistant 是本角色；user 是其他人（content 已带 [名字]: 前缀）
-      const who = m.role === 'assistant' ? agentName : '其他参与者'
+      const who = m.role === 'assistant' ? characterName : '其他参与者'
       return `${who}:\n${m.content}`
     })
     .join('\n\n')
 
   const prompt = buildSummaryPrompt({
-    agentName,
+    characterName,
     otherNames,
     oldSummary,
     recentMessages: recentText,

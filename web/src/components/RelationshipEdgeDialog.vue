@@ -10,16 +10,16 @@
  * 双向关系在 2 人场景下是一条连线对应两个 key。
  */
 import { ref, watch } from 'vue'
-import type { Agent } from '@/types/api'
-import { bgColor, textColor, resolveColor } from '@/utils/agentColor'
+import type { Character } from '@/types/api'
+import { bgColor, textColor, resolveColor } from '@/utils/characterColor'
 
 const props = defineProps<{
   /** 是否打开 */
   open: boolean
-  /** 连线源节点（Agent） */
-  source: Agent | null
-  /** 连线目标节点（Agent） */
-  target: Agent | null
+  /** 连线源节点（Character） */
+  source: Character | null
+  /** 连线目标节点（Character） */
+  target: Character | null
   /** A→B 的现有关系描述 */
   sourceToTarget: string
   /** B→A 的现有关系描述 */

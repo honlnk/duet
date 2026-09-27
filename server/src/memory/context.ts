@@ -1,7 +1,7 @@
-import { buildAgentSystem, buildSummaryInjection, buildDirectorInjection } from '../ai/prompts.js'
+import { buildCharacterSystem, buildSummaryInjection, buildDirectorInjection } from '../ai/prompts.js'
 import type {
-  AgentMemoryData,
-  AgentRef,
+  CharacterMemoryData,
+  CharacterRef,
   ApiMessage,
   DirectorInstruction,
   MemoryMessage,
@@ -10,7 +10,7 @@ import type {
 /**
  * 单个 AI 的上下文管理器。
  *
- * 一个 AgentMemory 维护：
+ * 一个 CharacterMemory 维护：
  *   - messages: 该 AI 视角的对话历史（自己是 assistant，其他人是 user）
  *   - summary:  当前摘要（第一人称视角）
  *   - others:   本会话中除自己以外的所有其他角色（2~3 人）
@@ -25,9 +25,9 @@ import type {
  * 自己的发言以 assistant 角色追加。这样每个角色都拥有独立的、
  * 第一人称视角的历史，与其它角色物理隔离。
  */
-export class AgentMemory {
-  agent: AgentRef
-  others: AgentRef[]
+export class CharacterMemory {
+  character: CharacterRef
+  others: CharacterRef[]
   topic: string
   messages: MemoryMessage[]
   summary: string
@@ -35,8 +35,8 @@ export class AgentMemory {
   /** 会话级非对称关系图（Key "{fromId}->{toId}"） */
   relationships: Record<string, string>
 
-  constructor(agent: AgentRef, others: AgentRef[], topic: string, relationships?: Record<string, string>) {
-    this.agent = agent
+  constructor(character: CharacterRef, others: CharacterRef[], topic: string, relationships?: Record<string, string>) {
+    this.character = character
     this.others = others
     this.topic = topic
     this.messages = []
@@ -56,13 +56,13 @@ export class AgentMemory {
   }
 
   /**
-   * 从会话级关系图中提取「当前 agent 视角」的关系描述。
+   * 从会话级关系图中提取「当前 character 视角」的关系描述。
    * 返回格式化的条目列表，如 ["─── 我与小美的关系 ───\n小美是我的同桌……"]。
    */
   private extractMyRelationships(): string[] {
     const out: string[] = []
     for (const other of this.others) {
-      const key = `${this.agent.id}->${other.id}`
+      const key = `${this.character.id}->${other.id}`
       const rel = this.relationships[key]
       if (rel && rel.trim()) {
         out.push(`─── 我与${other.name}的关系 ───\n${rel.trim()}`)
@@ -79,7 +79,7 @@ export class AgentMemory {
    * 这样在两次摘要之间，prompt 前缀只增不变，最大化命中上下文缓存。
    *
    * 注入顺序（从远到近）：
-   *   1. [system] buildAgentSystem（全局设定 + 主角设定 + 在场角色 + 关系 + 对话规则）
+   *   1. [system] buildCharacterSystem（全局设定 + 主角设定 + 在场角色 + 关系 + 对话规则）
    *   2. [system] 摘要注入（若有）
    *   3. [system] 导演指令注入（若有，极高优先级，最接近对话）
    *   4. [...messages]
@@ -97,10 +97,10 @@ export class AgentMemory {
     directors?: DirectorInstruction[],
     currentRound?: number,
   ): ApiMessage[] {
-    const sys = buildAgentSystem({
-      name: this.agent.name,
-      description: this.agent.description,
-      personality: this.agent.personality,
+    const sys = buildCharacterSystem({
+      name: this.character.name,
+      description: this.character.description,
+      personality: this.character.personality,
       others: this.others,
       relationships: this.extractMyRelationships(),
       topic: this.topic,
@@ -133,9 +133,9 @@ export class AgentMemory {
     }
   }
 
-  toJSON(): AgentMemoryData {
+  toJSON(): CharacterMemoryData {
     return {
-      agent: this.agent,
+      character: this.character,
       others: this.others,
       topic: this.topic,
       messages: this.messages,
@@ -145,8 +145,8 @@ export class AgentMemory {
     }
   }
 
-  static fromJSON(obj: AgentMemoryData): AgentMemory {
-    const m = new AgentMemory(obj.agent, obj.others || [], obj.topic, obj.relationships)
+  static fromJSON(obj: CharacterMemoryData): CharacterMemory {
+    const m = new CharacterMemory(obj.character, obj.others || [], obj.topic, obj.relationships)
     m.messages = obj.messages || []
     m.summary = obj.summary || ''
     m.lastSummarizedRound = obj.lastSummarizedRound || 0

@@ -20,12 +20,12 @@ import { labelOf } from '@/services/storage'
 
 const emit = defineEmits<{ close: [] }>()
 
-type Tab = 'provider' | 'agent' | 'relationship' | 'topic' | 'worldview' | 'history'
+type Tab = 'provider' | 'character' | 'relationship' | 'topic' | 'worldview' | 'history'
 const tab = ref<Tab>('provider')
 
 const tabs: Array<{ key: Tab; label: string }> = [
   { key: 'provider', label: 'API 配置' },
-  { key: 'agent', label: '角色模板' },
+  { key: 'character', label: '角色模板' },
   { key: 'relationship', label: '关系图' },
   { key: 'topic', label: '话题模板' },
   { key: 'worldview', label: '世界观模板' },
@@ -44,53 +44,53 @@ function onOverlayClick(e: MouseEvent) {
 
 /* --------------------------- 模板（store 统一管理） --------------------------- */
 const template = useTemplateStore()
-const { agents: agentTemplates, topics: topicTemplates, worldviews: worldviewTemplates } = storeToRefs(template)
+const { characters: characterTemplates, topics: topicTemplates, worldviews: worldviewTemplates } = storeToRefs(template)
 const relationshipStore = useRelationshipStore()
 
 /* --------------------------- 角色模板 tab --------------------------- */
-const agentDraft = ref({ name: '', description: '', personality: '' })
+const characterDraft = ref({ name: '', description: '', personality: '' })
 
-function addAgent() {
+function addCharacter() {
   if (
-    !agentDraft.value.name.trim() &&
-    !agentDraft.value.description.trim() &&
-    !agentDraft.value.personality.trim()
+    !characterDraft.value.name.trim() &&
+    !characterDraft.value.description.trim() &&
+    !characterDraft.value.personality.trim()
   ) return
-  template.addAgent(
-    agentDraft.value.name,
-    agentDraft.value.description,
-    agentDraft.value.personality,
+  template.addCharacter(
+    characterDraft.value.name,
+    characterDraft.value.description,
+    characterDraft.value.personality,
   )
-  agentDraft.value = { name: '', description: '', personality: '' }
+  characterDraft.value = { name: '', description: '', personality: '' }
 }
 
 /** 当前编辑中的角色模板 id（空串 = 未在编辑） */
-const editingAgentId = ref('')
-const agentEditDraft = ref({ name: '', description: '', personality: '' })
+const editingCharacterId = ref('')
+const characterEditDraft = ref({ name: '', description: '', personality: '' })
 
-function startEditAgent(id: string, name: string, description: string, personality: string) {
-  editingAgentId.value = id
-  agentEditDraft.value = { name, description, personality }
+function startEditCharacter(id: string, name: string, description: string, personality: string) {
+  editingCharacterId.value = id
+  characterEditDraft.value = { name, description, personality }
 }
-function cancelEditAgent() {
-  editingAgentId.value = ''
+function cancelEditCharacter() {
+  editingCharacterId.value = ''
 }
-function saveEditAgent() {
-  if (!editingAgentId.value) return
-  template.updateAgent(editingAgentId.value, {
-    name: agentEditDraft.value.name.trim(),
-    description: agentEditDraft.value.description.trim(),
-    personality: agentEditDraft.value.personality.trim(),
+function saveEditCharacter() {
+  if (!editingCharacterId.value) return
+  template.updateCharacter(editingCharacterId.value, {
+    name: characterEditDraft.value.name.trim(),
+    description: characterEditDraft.value.description.trim(),
+    personality: characterEditDraft.value.personality.trim(),
   })
-  editingAgentId.value = ''
+  editingCharacterId.value = ''
 }
 
-function delAgent(id: string) {
-  template.removeAgent(id)
+function delCharacter(id: string) {
+  template.removeCharacter(id)
   // 同步清理该模板在关系图中的所有关系 + 节点位置
   relationshipStore.purgeTemplate(id)
   // 若正在编辑该模板，取消编辑
-  if (editingAgentId.value === id) editingAgentId.value = ''
+  if (editingCharacterId.value === id) editingCharacterId.value = ''
 }
 
 /** 角色模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
@@ -252,7 +252,7 @@ const hasHistory = computed(() => history.value.length > 0)
           </div>
 
           <!-- 角色模板 tab -->
-          <div v-else-if="tab === 'agent'" class="flex flex-col gap-4 p-5">
+          <div v-else-if="tab === 'character'" class="flex flex-col gap-4 p-5">
             <div class="flex items-center justify-between gap-2">
               <p class="text-xs text-text-dim">
                 保存常用的角色身份设定，新建对话时直接点选使用。
@@ -261,8 +261,8 @@ const hasHistory = computed(() => history.value.length > 0)
               <button
                 type="button"
                 class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40"
-                :disabled="agentTemplates.length < 2"
-                :title="agentTemplates.length < 2 ? '至少需要 2 个角色模板' : ''"
+                :disabled="characterTemplates.length < 2"
+                :title="characterTemplates.length < 2 ? '至少需要 2 个角色模板' : ''"
                 @click="startNewChat"
               >
                 + 新建会话
@@ -271,19 +271,19 @@ const hasHistory = computed(() => history.value.length > 0)
             <!-- 新增表单 -->
             <div class="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-card p-3">
               <input
-                v-model="agentDraft.name"
+                v-model="characterDraft.name"
                 type="text"
                 placeholder="名称（如：苏格拉底）"
                 class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
               />
               <textarea
-                v-model="agentDraft.description"
+                v-model="characterDraft.description"
                 rows="3"
                 placeholder="角色描述（你是谁、背景、外貌、核心设定…）"
                 class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
               />
               <input
-                v-model="agentDraft.personality"
+                v-model="characterDraft.personality"
                 type="text"
                 placeholder="性格关键词（如：温和、爱反问、逻辑严密）"
                 class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
@@ -291,25 +291,25 @@ const hasHistory = computed(() => history.value.length > 0)
               <button
                 type="button"
                 class="self-start rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
-                :disabled="!agentDraft.name.trim() && !agentDraft.description.trim() && !agentDraft.personality.trim()"
-                @click="addAgent"
+                :disabled="!characterDraft.name.trim() && !characterDraft.description.trim() && !characterDraft.personality.trim()"
+                @click="addCharacter"
               >
                 + 新建角色
               </button>
             </div>
             <!-- 角色列表 -->
-            <div v-if="agentTemplates.length === 0" class="py-6 text-center text-xs text-text-muted">
+            <div v-if="characterTemplates.length === 0" class="py-6 text-center text-xs text-text-muted">
               还没有角色
             </div>
             <div v-else class="flex flex-col gap-2">
               <div
-                v-for="t in agentTemplates"
+                v-for="t in characterTemplates"
                 :key="t.id"
                 class="group rounded-lg border border-border-subtle bg-white px-3 py-2"
-                :class="editingAgentId === t.id && 'border-focus ring-1 ring-focus'"
+                :class="editingCharacterId === t.id && 'border-focus ring-1 ring-focus'"
               >
                 <!-- 展示态 -->
-                <div v-if="editingAgentId !== t.id" class="flex items-start justify-between gap-3">
+                <div v-if="editingCharacterId !== t.id" class="flex items-start justify-between gap-3">
                   <div class="min-w-0 flex-1">
                     <p class="text-sm font-medium text-text-main">
                       {{ t.name || '（未命名）' }}
@@ -321,14 +321,14 @@ const hasHistory = computed(() => history.value.length > 0)
                     <button
                       type="button"
                       class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-bg-hover hover:text-text-main"
-                      @click="startEditAgent(t.id, t.name, t.description, t.personality)"
+                      @click="startEditCharacter(t.id, t.name, t.description, t.personality)"
                     >
                       编辑
                     </button>
                     <button
                       type="button"
                       class="rounded-md px-2 py-1 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
-                      @click="delAgent(t.id)"
+                      @click="delCharacter(t.id)"
                     >
                       删除
                     </button>
@@ -337,19 +337,19 @@ const hasHistory = computed(() => history.value.length > 0)
                 <!-- 编辑态 -->
                 <div v-else class="flex flex-col gap-2">
                   <input
-                    v-model="agentEditDraft.name"
+                    v-model="characterEditDraft.name"
                     type="text"
                     placeholder="名称"
                     class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
                   />
                   <textarea
-                    v-model="agentEditDraft.description"
+                    v-model="characterEditDraft.description"
                     rows="3"
                     placeholder="角色描述"
                     class="w-full resize-y rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
                   />
                   <input
-                    v-model="agentEditDraft.personality"
+                    v-model="characterEditDraft.personality"
                     type="text"
                     placeholder="性格关键词"
                     class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm outline-none focus:border-focus focus:ring-1 focus:ring-focus"
@@ -358,14 +358,14 @@ const hasHistory = computed(() => history.value.length > 0)
                     <button
                       type="button"
                       class="rounded-lg border border-border-subtle bg-white px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
-                      @click="cancelEditAgent"
+                      @click="cancelEditCharacter"
                     >
                       取消
                     </button>
                     <button
                       type="button"
                       class="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
-                      @click="saveEditAgent"
+                      @click="saveEditCharacter"
                     >
                       保存
                     </button>

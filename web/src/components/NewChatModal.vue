@@ -14,8 +14,8 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useFormStore } from '@/stores/form'
 import { useDraftStore } from '@/stores/draft'
 import { useTemplateStore } from '@/stores/template'
-import { MAX_AGENTS } from '@/types/api'
-import AgentForm from './AgentForm.vue'
+import { MAX_CHARACTERS } from '@/types/api'
+import CharacterForm from './CharacterForm.vue'
 import TopicPicker from './TopicPicker.vue'
 import WorldviewPicker from './WorldviewPicker.vue'
 import AdvancedSettings from './AdvancedSettings.vue'
@@ -34,10 +34,10 @@ const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
 /** 是否还能再添加角色 */
-const canAddAgent = computed(() => values.value.agents.length < MAX_AGENTS)
+const canAddCharacter = computed(() => values.value.characters.length < MAX_CHARACTERS)
 
 /** 是否完全没有角色模板（引导用户去设置） */
-const hasNoTemplates = computed(() => template.agents.length === 0)
+const hasNoTemplates = computed(() => template.characters.length === 0)
 
 /** 点遮罩关闭（防误触：按下和松开都在遮罩才关） */
 let mouseDownOnOverlay = false
@@ -54,7 +54,7 @@ async function handleSubmit() {
   if (!form.canSubmit) {
     if (!form.hasTopic) {
       errorMsg.value = '请选择一个话题'
-    } else if (!form.allAgentsSelected) {
+    } else if (!form.allCharactersSelected) {
       errorMsg.value = '请为每个角色选择一个模板'
     }
     return
@@ -131,8 +131,8 @@ async function handleSubmit() {
               去设置添加角色
             </button>
           </div>
-          <AgentForm
-            v-for="(agent, idx) in values.agents"
+          <CharacterForm
+            v-for="(character, idx) in values.characters"
             :key="idx"
             :index="idx"
           />
@@ -140,12 +140,12 @@ async function handleSubmit() {
 
         <!-- 添加角色按钮 -->
         <button
-          v-if="canAddAgent"
+          v-if="canAddCharacter"
           type="button"
           class="self-start rounded-lg border border-dashed border-border-subtle px-3 py-1.5 text-sm text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main"
-          @click="form.addAgent()"
+          @click="form.addCharacter()"
         >
-          + 添加角色（最多 {{ MAX_AGENTS }} 个）
+          + 添加角色（最多 {{ MAX_CHARACTERS }} 个）
         </button>
 
         <!-- 高级设置（折叠） -->

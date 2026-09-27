@@ -327,7 +327,7 @@ onUnmounted(() => {
   <PromptHistoryModal
     v-if="showPromptHistory && session.session"
     :session-id="props.id"
-    :agents="session.session.agents"
+    :characters="session.session.characters"
     @close="showPromptHistory = false"
   />
 

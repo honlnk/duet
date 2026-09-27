@@ -15,10 +15,10 @@ export function genId(): string {
 /**
  * 角色 ID。支持 2~10 个角色：A、B 为必选，C~J 按需追加。
  */
-export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+export type CharacterId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
 
 /** 所有可能的角色 ID */
-export const ALL_AGENT_IDS: readonly AgentId[] = [
+export const ALL_CHARACTER_IDS: readonly CharacterId[] = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 ] as const
 
@@ -26,13 +26,13 @@ export const ALL_AGENT_IDS: readonly AgentId[] = [
  * 预设颜色 key（与前端 CSS 设计 token 一一对应）。
  * 自定义颜色用 hex 字符串（如 '#ff5533'），后端不校验具体值，仅透传存储。
  */
-export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
+export type CharacterPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
 
 /** 角色颜色值：预设 key 或自定义 hex 字符串 */
-export type AgentColor = AgentPresetColor | string
+export type CharacterColor = CharacterPresetColor | string
 
 /** 前端调色板（label 供 UI 展示，key 与 CSS token 对应） */
-export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: string }> = [
+export const CHARACTER_COLOR_OPTIONS: ReadonlyArray<{ key: CharacterPresetColor; label: string }> = [
   { key: 'blue', label: '蓝色' },
   { key: 'pink', label: '粉色' },
   { key: 'green', label: '绿色' },
@@ -42,7 +42,7 @@ export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: 
 ]
 
 /** 判断颜色值是否为预设 key */
-export function isPresetColor(c: string): c is AgentPresetColor {
+export function isPresetColor(c: string): c is CharacterPresetColor {
   return c === 'blue' || c === 'pink' || c === 'green' ||
     c === 'amber' || c === 'purple' || c === 'teal'
 }
@@ -76,15 +76,15 @@ export type FinishedReason =
 /* ============================== 实体类型 ============================== */
 
 /** 角色引用 */
-export interface AgentRef {
-  id: AgentId
+export interface CharacterRef {
+  id: CharacterId
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
   description?: string
   /** 性格关键词摘要 */
   personality?: string
   /** 颜色标识（与前端 CSS token 对应），缺省时由 createSession 按顺序分配 */
-  color?: AgentColor
+  color?: CharacterColor
 }
 
 /**
@@ -103,7 +103,7 @@ export interface DirectorInstruction {
   durationRounds: number
 }
 
-/** 记忆内部消息（无 agentId / ts，仅 role + content） */
+/** 记忆内部消息（无 characterId / ts，仅 role + content） */
 export interface MemoryMessage {
   role: Exclude<MessageRole, 'system'>
   content: string
@@ -116,13 +116,13 @@ export interface ApiMessage {
 }
 
 /**
- * AgentMemory.toJSON() 的持久化形态。
+ * CharacterMemory.toJSON() 的持久化形态。
  * others 为本会话中除自己外的所有其他角色（2 角色场景含 1 个，3 角色含 2 个）。
- * relationships 为会话级关系图（Key "{fromId}->{toId}"），供每个 agent 读取自己视角的关系。
+ * relationships 为会话级关系图（Key "{fromId}->{toId}"），供每个 character 读取自己视角的关系。
  */
-export interface AgentMemoryData {
-  agent: AgentRef
-  others: AgentRef[]
+export interface CharacterMemoryData {
+  character: CharacterRef
+  others: CharacterRef[]
   topic: string
   messages: MemoryMessage[]
   summary: string
@@ -139,7 +139,7 @@ export interface TokenUsage {
 
 /** 持久化在 session.messages 的消息 */
 export interface PersistedMessage {
-  agentId: AgentId
+  characterId: CharacterId
   role: 'assistant'
   content: string
   ts: number
@@ -169,9 +169,9 @@ export interface SessionConfig {
   providerC?: string
   /**
    * 角色 → Provider id 映射（D~J 等超出 A/B/C 的角色用此字段）。
-   * 优先级：agentProviders[id] > providerA/B/C > 默认。
+   * 优先级：characterProviders[id] > providerA/B/C > 默认。
    */
-  agentProviders?: Record<string, string>
+  characterProviders?: Record<string, string>
   /** 角色 A 的思考档位 key（空 = 用 Provider 默认配置） */
   thinkingA?: string
   /** 角色 B 的思考档位 key（空 = 用 Provider 默认配置） */
@@ -180,9 +180,9 @@ export interface SessionConfig {
   thinkingC?: string
   /**
    * 角色 → 思考档位映射（D~J）。
-   * 优先级与 provider 绑定一致：agentThinking[id] > thinkingA/B/C > Provider 默认。
+   * 优先级与 provider 绑定一致：characterThinking[id] > thinkingA/B/C > Provider 默认。
    */
-  agentThinking?: Record<string, string>
+  characterThinking?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
   /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
@@ -211,37 +211,37 @@ export interface SessionStats {
 
 /**
  * 完整会话对象（写盘 JSON 形状）。
- * - agents：AgentRef[]（长度 2~10），按 A,B,C... 顺序。
+ * - characters：CharacterRef[]（长度 2~10），按 A,B,C... 顺序。
  * - memory：每个角色各一份；至少含 A/B，其余按实际角色数动态存在。
  * - relationships：非对称关系图，Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述。
  */
 export interface Session {
   id: string
   topic: string
-  agents: AgentRef[]
+  characters: CharacterRef[]
   config: SessionConfig
   status: SessionStatus
   finishedReason: FinishedReason | null
   startedAt: number | null
   stoppedAt: number | null
   messageCount: number
-  currentAgentId: AgentId
+  currentCharacterId: CharacterId
   messages: PersistedMessage[]
-  /** 每个角色的独立记忆，key 为 AgentId */
-  memory: Record<AgentId, AgentMemoryData>
+  /** 每个角色的独立记忆，key 为 CharacterId */
+  memory: Record<CharacterId, CharacterMemoryData>
   stats: SessionStats
   error: string | null
   createdAt: number
   updatedAt: number
   /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
   relationships?: Record<string, string>
-  /** 关系图节点位置（XY 坐标），key 为 AgentId，用于关系图管理页布局持久化 */
+  /** 关系图节点位置（XY 坐标），key 为 CharacterId，用于关系图管理页布局持久化 */
   nodePositions?: Record<string, { x: number; y: number }>
   /** 导演指令列表（用户以导演身份干预对话走向） */
   directors: DirectorInstruction[]
 }
 
-/** listSessions 返回的列表项（agents 是 name 数组） */
+/** listSessions 返回的列表项（characters 是 name 数组） */
 export interface SessionListItem {
   id: string
   topic: string
@@ -249,25 +249,25 @@ export interface SessionListItem {
   messageCount: number
   updatedAt: number
   createdAt: number
-  agents: string[]
+  characters: string[]
 }
 
-/** createSession 入参中的单个 agent */
-export interface AgentInput {
+/** createSession 入参中的单个 character */
+export interface CharacterInput {
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
   description?: string
   /** 性格关键词摘要 */
   personality?: string
   /** 颜色标识（缺省则按顺序分配默认色） */
-  color?: AgentColor
+  color?: CharacterColor
 }
 
 /** createSession 入参（支持 2~10 个角色） */
 export interface CreateSessionInput {
   topic: string
-  /** 至少 2 个，最多 MAX_AGENTS 个；前两个恒为 A/B */
-  agents: AgentInput[]
+  /** 至少 2 个，最多 MAX_CHARACTERS 个；前两个恒为 A/B */
+  characters: CharacterInput[]
   config?: Partial<SessionConfig>
   /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
   relationships?: Record<string, string>
@@ -328,7 +328,7 @@ export interface ProviderPricing {
 
 /**
  * AI 调用所需的连接参数。
- * 由调用方从 Provider 解析后显式传入，支持多 Provider 并发（每个 Agent 可用不同协议/baseUrl/apiKey/model）。
+ * 由调用方从 Provider 解析后显式传入，支持多 Provider 并发（每个 Character 可用不同协议/baseUrl/apiKey/model）。
  */
 export interface ConnectionConfig {
   baseUrl: string
@@ -445,21 +445,21 @@ export interface StartedMsg {
 /** 服务器 → 客户端：流式片段 */
 export interface ChunkMsg {
   type: 'chunk'
-  agentId: AgentId
+  characterId: CharacterId
   content: string
 }
 
 /** 服务器 → 客户端：一轮发言结束（附带权威 message 对象） */
 export interface MessageDoneMsg {
   type: 'message_done'
-  agentId: AgentId
+  characterId: CharacterId
   message: PersistedMessage
 }
 
 /** 服务器 → 客户端：摘要生命周期 */
 export interface SummaryMsg {
   type: 'summary'
-  agentId: AgentId
+  characterId: CharacterId
   phase: 'start' | 'done' | 'error'
   /** 仅 phase=done 时存在 */
   summary?: string

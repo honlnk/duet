@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import type { AgentColor, DirectorInstruction, SessionConfig } from '../types/index.js'
+import type { CharacterColor, DirectorInstruction, SessionConfig } from '../types/index.js'
 import {
   createSession,
   saveSession,
@@ -7,8 +7,8 @@ import {
   listSessions,
   deleteSession,
   currentRound,
-  MIN_AGENTS,
-  MAX_AGENTS,
+  MIN_CHARACTERS,
+  MAX_CHARACTERS,
 } from '../store/sessionStore.js'
 import { genId, isPresetColor } from '../types/index.js'
 import {
@@ -22,7 +22,9 @@ import { getPrompts, clearPrompts } from '../store/promptHistory.js'
 /** POST /api/sessions 请求体（与 Fastify JSON Schema 对齐） */
 interface CreateSessionBody {
   topic: string
-  agents: Array<{ name: string; description?: string; personality?: string; color?: string }>
+  characters: Array<{ name: string; description?: string; personality?: string; color?: string }>
+  /** 旧字段名（智能体概念时期）：与 characters 同构，二选一，用于兼容外部脚本 */
+  agents?: Array<{ name: string; description?: string; personality?: string; color?: string }>
   config?: Partial<SessionConfig>
   relationships?: Record<string, string>
 }
@@ -36,7 +38,7 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/
 /**
  * 校验颜色值：预设 key 或合法 hex 都通过，否则返回 null。
  */
-function validateColor(c: string | undefined): AgentColor | undefined {
+function validateColor(c: string | undefined): CharacterColor | undefined {
   if (!c) return undefined
   if (isPresetColor(c)) return c
   if (HEX_COLOR_RE.test(c)) return c.toLowerCase()
@@ -51,13 +53,29 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       schema: {
         body: {
           type: 'object',
-          required: ['topic', 'agents'],
+          required: ['topic'],
           properties: {
             topic: { type: 'string', minLength: 1 },
+            characters: {
+              type: 'array',
+              minItems: MIN_CHARACTERS,
+              maxItems: MAX_CHARACTERS,
+              items: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string', minLength: 1 },
+                  description: { type: 'string' },
+                  personality: { type: 'string' },
+                  color: { type: 'string' },
+                },
+              },
+            },
+            // 旧字段名（智能体概念时期）：结构同 characters，仅供外部脚本过渡
             agents: {
               type: 'array',
-              minItems: MIN_AGENTS,
-              maxItems: MAX_AGENTS,
+              minItems: MIN_CHARACTERS,
+              maxItems: MAX_CHARACTERS,
               items: {
                 type: 'object',
                 required: ['name'],
@@ -82,14 +100,14 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
                 providerA: { type: 'string' },
                 providerB: { type: 'string' },
                 providerC: { type: 'string' },
-                agentProviders: {
+                characterProviders: {
                   type: 'object',
                   additionalProperties: { type: 'string' },
                 },
                 thinkingA: { type: 'string' },
                 thinkingB: { type: 'string' },
                 thinkingC: { type: 'string' },
-                agentThinking: {
+                characterThinking: {
                   type: 'object',
                   additionalProperties: { type: 'string' },
                 },
@@ -108,8 +126,15 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
     },
     async (req: FastifyRequest<{ Body: CreateSessionBody }>, reply) => {
       const body = req.body
+      // 新字段优先，缺省回退旧字段名（agents），两者都缺/为空则 400
+      const rawCharacters = body.characters ?? body.agents ?? []
+      if (rawCharacters.length < MIN_CHARACTERS || rawCharacters.length > MAX_CHARACTERS) {
+        return reply.code(400).send({
+          error: `characters 数量须在 ${MIN_CHARACTERS}~${MAX_CHARACTERS} 之间`,
+        })
+      }
       // 校验颜色：预设 key 或合法 hex 保留，非法 → undefined（由 createSession 补默认色）
-      const agentsInput = body.agents.map((a) => ({
+      const charactersInput = rawCharacters.map((a) => ({
         name: a.name,
         description: a.description,
         personality: a.personality,
@@ -117,7 +142,7 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       }))
       const session = createSession({
         topic: body.topic,
-        agents: agentsInput,
+        characters: charactersInput,
         config: body.config ?? {},
         relationships: body.relationships,
       })
@@ -179,8 +204,8 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       if (!session) return reply.code(404).send({ error: '会话不存在' })
       if (req.body.relationships !== undefined) {
         session.relationships = req.body.relationships
-        // 同步更新所有 AgentMemoryData 的 relationships（持久化形态）
-        for (const a of session.agents) {
+        // 同步更新所有 CharacterMemoryData 的 relationships（持久化形态）
+        for (const a of session.characters) {
           if (session.memory[a.id]) {
             session.memory[a.id]!.relationships = session.relationships
           }
@@ -284,8 +309,8 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
     },
   )
 
-  // 查看某个会话最近发给 LLM 的完整 Prompt（按 agentId 过滤；内存态，进程重启后丢失）
-  fastify.get<{ Params: { id: string }; Querystring: { agentId?: string; limit?: string } }>(
+  // 查看某个会话最近发给 LLM 的完整 Prompt（按 characterId 过滤；内存态，进程重启后丢失）
+  fastify.get<{ Params: { id: string }; Querystring: { characterId?: string; limit?: string } }>(
     '/api/sessions/:id/prompts',
     async (req, reply) => {
       // 会话是否存在（不存在则 404，与详情接口语义一致）
@@ -293,7 +318,7 @@ async function sessionRoutes(fastify: FastifyInstance): Promise<void> {
       if (!s) return reply.code(404).send({ error: '会话不存在' })
       const limitRaw = Number.parseInt(req.query.limit ?? '', 10)
       const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined
-      const snapshots = getPrompts(req.params.id, req.query.agentId as never, limit)
+      const snapshots = getPrompts(req.params.id, req.query.characterId as never, limit)
       return { prompts: snapshots }
     },
   )

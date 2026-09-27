@@ -2,18 +2,18 @@
  * Prompt 模板
  */
 
-import type { AgentColor, AgentRef, DirectorInstruction } from '../types/index.js'
+import type { CharacterColor, CharacterRef, DirectorInstruction } from '../types/index.js'
 
-/** buildAgentSystem 的参数 */
-interface AgentSystemParams {
+/** buildCharacterSystem 的参数 */
+interface CharacterSystemParams {
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
   description?: string
   /** 性格关键词摘要 */
   personality?: string
   /** 本会话中除自己以外的所有其他角色（完整角色信息） */
-  others: AgentRef[]
-  /** 当前 agent 对所有他人的关系描述（已提取为「我与某人的关系」条目） */
+  others: CharacterRef[]
+  /** 当前 character 对所有他人的关系描述（已提取为「我与某人的关系」条目） */
   relationships?: string[]
   topic: string
   /** 场景设定 / 世界观 */
@@ -30,7 +30,7 @@ interface AgentSystemParams {
  * - 关系：第一人称非对称关系描述
  * - 对话规则：字数控制、避免复读
  */
-export function buildAgentSystem({
+export function buildCharacterSystem({
   name,
   description,
   personality,
@@ -38,7 +38,7 @@ export function buildAgentSystem({
   relationships,
   topic,
   scenario,
-}: AgentSystemParams): string {
+}: CharacterSystemParams): string {
   const sections: string[] = []
 
   // ─── 全局设定（话题恒在最前，确保所有角色都明确对话主题）───
@@ -133,7 +133,7 @@ export function wrapOtherMessage(otherName: string, otherContent: string): strin
 
 /** buildSummaryPrompt 的参数 */
 interface SummaryPromptParams {
-  agentName: string
+  characterName: string
   /** 其他参与者的名字（用于在摘要中以「对方」指代） */
   otherNames: string[]
   oldSummary?: string
@@ -146,7 +146,7 @@ interface SummaryPromptParams {
  * 见 DEVELOPMENT_PLAN.md §5.3
  */
 export function buildSummaryPrompt({
-  agentName,
+  characterName,
   otherNames,
   oldSummary,
   recentMessages,
@@ -154,11 +154,11 @@ export function buildSummaryPrompt({
 }: SummaryPromptParams): string {
   const othersText = otherNames.join('、')
   return [
-    `下面是「${agentName}」参与的一段多方对话（其他参与者：${othersText}）。`,
-    `请改以「${agentName}」的第一人称视角重写一份摘要，仿佛这份摘要就是「${agentName}」自己的备忘日记，供它后续继续对话时回忆使用。`,
+    `下面是「${characterName}」参与的一段多方对话（其他参与者：${othersText}）。`,
+    `请改以「${characterName}」的第一人称视角重写一份摘要，仿佛这份摘要就是「${characterName}」自己的备忘日记，供它后续继续对话时回忆使用。`,
     '',
     '要求：',
-    '1. 用「我」指代「' + agentName + '」，用「对方(名字)」指代其他参与者。',
+    '1. 用「我」指代「' + characterName + '」，用「对方(名字)」指代其他参与者。',
     '2. 重点记录：当前讨论的话题、我的核心立场与论点、各参与者的核心立场与论点、我们已达成或未达成的共识、尚未解决的问题。',
     '3. 如果已有旧摘要，请【保留旧摘要中的关键事实原句，不要改写已有的事实陈述，只追加新事实】。',
     `4. 控制在 ${words} 字以内。只输出摘要正文，不要任何额外说明。`,
@@ -206,13 +206,13 @@ export function buildDirectorInjection(
  * 角色默认颜色顺序（按 A/B/C... 依次循环分配）。
  * 超出预设数量时从头部循环复用，保证相邻角色不撞色。
  */
-export const DEFAULT_AGENT_COLORS: AgentColor[] = [
+export const DEFAULT_CHARACTER_COLORS: CharacterColor[] = [
   'blue', 'pink', 'green', 'amber', 'purple', 'teal',
 ]
 
 /**
- * 取角色颜色，缺省时按其在 agents 数组中的索引回退到默认色。
+ * 取角色颜色，缺省时按其在 characters 数组中的索引回退到默认色。
  */
-export function agentColorOf(agent: AgentRef, fallbackIndex: number): AgentColor {
-  return agent.color || DEFAULT_AGENT_COLORS[fallbackIndex] || 'blue'
+export function characterColorOf(character: CharacterRef, fallbackIndex: number): CharacterColor {
+  return character.color || DEFAULT_CHARACTER_COLORS[fallbackIndex] || 'blue'
 }

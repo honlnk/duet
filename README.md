@@ -4,7 +4,7 @@
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
 > 每个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
-![status](https://img.shields.io/badge/status-v3.0%20ready-green) ![agents](https://img.shields.io/badge/agents-2~10-orange) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
+![status](https://img.shields.io/badge/status-v3.0%20ready-green) ![characters](https://img.shields.io/badge/characters-2~10-orange) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![stack](https://img.shields.io/badge/Vue-3.5%20%2B%20TS%20%2B%20Pinia-42b883) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![pm](https://img.shields.io/badge/pnpm-workspace-f69220)
 
 ## ✨ 功能特性
 
@@ -198,7 +198,7 @@ A 的视角：                 B 的视角：                 C 的视角：
 ### 轮次定义（N 角色场景）
 
 - **1 轮（round）= N 个角色各发言一次 = N 条 message**（N = 角色数量）。
-- `round = floor(messageCount / agents.length)`。
+- `round = floor(messageCount / characters.length)`。
 - 「对话轮数上限」「摘要频率」均按 round 计。
 
 ## 📁 项目结构
@@ -223,7 +223,7 @@ duet/
 │       ├── services/      # REST 封装 + localStorage 草稿与模板
 │       ├── composables/   # WebSocket 连接 + 计时器 + 响应式逻辑
 │       ├── stores/        # Pinia（session / sessions / form / draft / config / provider / template）
-│       ├── utils/         # 角色颜色映射（agentColor）
+│       ├── utils/         # 角色颜色映射（characterColor）
 │       ├── router/        # Vue Router 路由
 │       ├── views/         # 页面（Home / Session）
 │       └── components/    # SFC 组件（Sidebar / Bubble / Inspector / Modal…）

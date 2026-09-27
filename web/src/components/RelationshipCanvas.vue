@@ -31,30 +31,30 @@ import {
   textColor,
   resolveColor,
   colorHex,
-} from '@/utils/agentColor'
+} from '@/utils/characterColor'
 import RelationshipEdgeDialog from './RelationshipEdgeDialog.vue'
-import type { AgentColor, AgentId } from '@/types/api'
+import type { CharacterColor, CharacterId } from '@/types/api'
 
 /* --------------------------- Stores --------------------------- */
 
 const templateStore = useTemplateStore()
-const { agents: agentTemplates } = storeToRefs(templateStore)
+const { characters: characterTemplates } = storeToRefs(templateStore)
 const relationshipStore = useRelationshipStore()
 const { relationships, nodePositions } = storeToRefs(relationshipStore)
 
-/* --------------------------- 适配 RelationshipEdgeDialog 的 Agent 类型 --------------------------- */
+/* --------------------------- 适配 RelationshipEdgeDialog 的 Character 类型 --------------------------- */
 
-/** RelationshipEdgeDialog 接受 Agent 接口（含 id: AgentId），这里把 template 映射为兼容形态 */
-interface TemplateNodeAgent {
-  id: AgentId
+/** RelationshipEdgeDialog 接受 Character 接口（含 id: CharacterId），这里把 template 映射为兼容形态 */
+interface TemplateNodeCharacter {
+  id: CharacterId
   name: string
   description?: string
-  color?: AgentColor
+  color?: CharacterColor
 }
 
 /* --------------------------- Vue Flow 状态 --------------------------- */
 
-const nodes = ref<Node<AgentNodeData>[]>([])
+const nodes = ref<Node<CharacterNodeData>[]>([])
 const edges = ref<Edge[]>([])
 
 /** 默认节点位置：圆形布局 */
@@ -71,7 +71,7 @@ function defaultPositionFor(
   }
 }
 
-interface AgentNodeData {
+interface CharacterNodeData {
   name: string
   description: string
   personality: string
@@ -87,20 +87,20 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 /* --------------------------- 渲染：从 store 重建 nodes / edges --------------------------- */
 
 function rebuildGraph() {
-  const list = agentTemplates.value
+  const list = characterTemplates.value
   if (list.length === 0) {
     nodes.value = []
     edges.value = []
     return
   }
   // 节点
-  const nodeList: Node<AgentNodeData>[] = []
+  const nodeList: Node<CharacterNodeData>[] = []
   list.forEach((t, i) => {
     const pos =
       nodePositions.value[t.id] ?? defaultPositionFor(i, list.length)
-    const node: Node<AgentNodeData> = {
+    const node: Node<CharacterNodeData> = {
       id: t.id,
-      type: 'agent',
+      type: 'character',
       position: { ...pos },
       data: {
         name: t.name,
@@ -197,21 +197,21 @@ const dialogOpen = ref(false)
 const dialogSourceId = ref<string | null>(null)
 const dialogTargetId = ref<string | null>(null)
 
-/** 适配 RelationshipEdgeDialog 的 Agent 接口（含 id: AgentId） */
-const dialogSource = computed<TemplateNodeAgent | null>(() =>
-  templateToNodeAgent(dialogSourceId.value),
+/** 适配 RelationshipEdgeDialog 的 Character 接口（含 id: CharacterId） */
+const dialogSource = computed<TemplateNodeCharacter | null>(() =>
+  templateToNodeCharacter(dialogSourceId.value),
 )
-const dialogTarget = computed<TemplateNodeAgent | null>(() =>
-  templateToNodeAgent(dialogTargetId.value),
+const dialogTarget = computed<TemplateNodeCharacter | null>(() =>
+  templateToNodeCharacter(dialogTargetId.value),
 )
 
-function templateToNodeAgent(templateId: string | null): TemplateNodeAgent | null {
+function templateToNodeCharacter(templateId: string | null): TemplateNodeCharacter | null {
   if (!templateId) return null
-  const t = agentTemplates.value.find((a) => a.id === templateId)
+  const t = characterTemplates.value.find((a) => a.id === templateId)
   if (!t) return null
-  const idx = agentTemplates.value.indexOf(t)
+  const idx = characterTemplates.value.indexOf(t)
   return {
-    id: 'A' as AgentId, // RelationshipEdgeDialog 用 id 做颜色解析的 fallback，实际不参与关系 key
+    id: 'A' as CharacterId, // RelationshipEdgeDialog 用 id 做颜色解析的 fallback，实际不参与关系 key
     name: t.name,
     description: t.description,
     color: resolveColor(undefined, idx),
@@ -281,13 +281,13 @@ function onKeydown(e: KeyboardEvent) {
 
 /* --------------------------- 统计 --------------------------- */
 
-const agentCount = computed(() => agentTemplates.value.length)
+const characterCount = computed(() => characterTemplates.value.length)
 const edgeCount = computed(() => edges.value.length)
 
 /* --------------------------- 渲染初始化 --------------------------- */
 
 watch(
-  [agentTemplates, relationships],
+  [characterTemplates, relationships],
   () => rebuildGraph(),
   { immediate: true, deep: true },
 )
@@ -334,7 +334,7 @@ function nodeTextStyle(color: string) {
       >
         <div class="flex items-center gap-2 text-xs text-text-muted">
           <span>
-            {{ agentCount }} 个角色 · {{ edgeCount }} 条关系
+            {{ characterCount }} 个角色 · {{ edgeCount }} 条关系
           </span>
           <span class="hidden sm:inline">·</span>
           <span class="hidden sm:inline">
@@ -377,7 +377,7 @@ function nodeTextStyle(color: string) {
       <div class="relative min-h-0 flex-1 bg-bg-card">
         <!-- 空态：无角色模板 -->
         <div
-          v-if="agentCount === 0"
+          v-if="characterCount === 0"
           class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center"
         >
           <p class="text-sm text-text-dim">还没有角色模板</p>
@@ -388,7 +388,7 @@ function nodeTextStyle(color: string) {
 
         <!-- 空态：有角色但无关系 -->
         <div
-          v-else-if="edgeCount === 0 && agentCount >= 2"
+          v-else-if="edgeCount === 0 && characterCount >= 2"
           class="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-white/90 px-4 py-2 text-xs text-text-muted shadow"
         >
           从节点右侧圆点拖拽到另一个节点，创建关系连线
@@ -403,7 +403,7 @@ function nodeTextStyle(color: string) {
           fit-view-on-init
           class="h-full w-full"
         >
-          <template #node-agent="nodeProps">
+          <template #node-character="nodeProps">
             <div
               class="relative min-w-[170px] max-w-[220px] rounded-xl border-2 bg-white px-3.5 py-2.5 shadow-md"
               :style="{ borderColor: nodeBorderHex(nodeProps.data.color) }"

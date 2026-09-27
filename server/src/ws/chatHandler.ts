@@ -6,21 +6,21 @@ import {
   buildOpeningPrompt,
   wrapOtherMessage,
 } from '../ai/prompts.js'
-import { AgentMemory } from '../memory/context.js'
+import { CharacterMemory } from '../memory/context.js'
 import { summarizeConversation } from '../memory/summarizer.js'
 import {
   saveSession,
   addStats,
   currentRound,
-  nextAgentId,
+  nextCharacterId,
 } from '../store/sessionStore.js'
 import { recordPrompt } from '../store/promptHistory.js'
 import { resolveProvider } from '../store/providerStore.js'
 import { pickDisplayCurrency, getRatesWithFallback } from '../utils/currency.js'
 import config from '../config.js'
 import type {
-  AgentId,
-  AgentRef,
+  CharacterId,
+  CharacterRef,
   BroadcastFn,
   DirectorInstruction,
   PersistedMessage,
@@ -85,7 +85,7 @@ export function attachClient(sessionId: string, send: BroadcastFn): () => void {
  * 同步关系数据到正在运行的会话运行时状态。
  *
  * PATCH /api/sessions/:id/relationships 路由调用此函数，
- * 把新关系图同步到 runLoop 持有的内存态 Session + 各 AgentMemory，
+ * 把新关系图同步到 runLoop 持有的内存态 Session + 各 CharacterMemory，
  * 使「对话进行中修改关系 → 下一轮 prompt 更新」生效。
  *
  * 若该会话当前未运行（无 activeSession），则无操作（磁盘已由路由写盘）。
@@ -186,11 +186,11 @@ function errorMessage(e: unknown): string {
   return String(e)
 }
 
-/** 每个 Agent 的连接配置 + 单价缓存（运行期一次性解析） */
-interface AgentRuntime {
-  id: AgentId
-  ref: AgentRef
-  mem: AgentMemory
+/** 每个 Character 的连接配置 + 单价缓存（运行期一次性解析） */
+interface CharacterRuntime {
+  id: CharacterId
+  ref: CharacterRef
+  mem: CharacterMemory
   conn: ConnectionConfig
   rates: CostRates
   provName: string
@@ -245,35 +245,35 @@ export async function runLoop(
   saveSession(session)
   broadcast(session.id, { type: 'started', startedAt: session.startedAt })
 
-  // 把 JSON 形态的 memory 还原成 AgentMemory 实例（操作内存，结束时再写回）
-  const memMap = new Map<AgentId, AgentMemory>()
-  for (const a of session.agents) {
+  // 把 JSON 形态的 memory 还原成 CharacterMemory 实例（操作内存，结束时再写回）
+  const memMap = new Map<CharacterId, CharacterMemory>()
+  for (const a of session.characters) {
     const data = session.memory[a.id]
-    const mem = data ? AgentMemory.fromJSON(data) : new AgentMemory(a, [], session.topic, session.relationships)
+    const mem = data ? CharacterMemory.fromJSON(data) : new CharacterMemory(a, [], session.topic, session.relationships)
     // 确保运行期 relationships 与 session 级一致（PATCH 可能修改过）
     mem.relationships = session.relationships || {}
     memMap.set(a.id, mem)
   }
 
-  // 为每个 Agent 解析 Provider 连接配置。
-  // 优先 agentProviders[id]（D~J 等），其次 providerA/B/C（兼容旧字段），再次默认。
-  const providerIdOf = (id: AgentId): string | undefined => {
+  // 为每个 Character 解析 Provider 连接配置。
+  // 优先 characterProviders[id]（D~J 等），其次 providerA/B/C（兼容旧字段），再次默认。
+  const providerIdOf = (id: CharacterId): string | undefined => {
     if (id === 'A') return session.config.providerA
     if (id === 'B') return session.config.providerB
     if (id === 'C') return session.config.providerC
-    return session.config.agentProviders?.[id]
+    return session.config.characterProviders?.[id]
   }
 
-  // 解析会话级思考档位：优先级与 provider 绑定一致（agentThinking > thinkingA/B/C）
-  const thinkingModeOf = (id: AgentId): string | undefined => {
+  // 解析会话级思考档位：优先级与 provider 绑定一致（characterThinking > thinkingA/B/C）
+  const thinkingModeOf = (id: CharacterId): string | undefined => {
     if (id === 'A') return session.config.thinkingA
     if (id === 'B') return session.config.thinkingB
     if (id === 'C') return session.config.thinkingC
-    return session.config.agentThinking?.[id]
+    return session.config.characterThinking?.[id]
   }
 
-  const runtimes2: AgentRuntime[] = []
-  for (const a of session.agents) {
+  const runtimes2: CharacterRuntime[] = []
+  for (const a of session.characters) {
     const prov = resolveProvider(providerIdOf(a.id))
     if (!prov) {
       broadcast(session.id, {
@@ -361,9 +361,9 @@ export async function runLoop(
       }
 
       // === 2. 决定当前发言者 ===
-      const agentId: AgentId = session.currentAgentId
-      const cur = runtimes2.find((r) => r.id === agentId) ?? runtimes2[0]!
-      const others = runtimes2.filter((r) => r.id !== agentId)
+      const characterId: CharacterId = session.currentCharacterId
+      const cur = runtimes2.find((r) => r.id === characterId) ?? runtimes2[0]!
+      const others = runtimes2.filter((r) => r.id !== characterId)
 
       // === 3. 触发摘要？ ===
       const roundsSinceSummary = round - cur.mem.lastSummarizedRound
@@ -373,12 +373,12 @@ export async function runLoop(
       if (shouldSummarize) {
         broadcast(session.id, {
           type: 'summary',
-          agentId,
+          characterId,
           phase: 'start',
         })
         try {
           const { content: summary, usage: summaryUsage } = await summarizeConversation({
-            agentName: cur.ref.name,
+            characterName: cur.ref.name,
             others: cur.mem.others,
             messages: cur.mem.messages,
             oldSummary: cur.mem.summary,
@@ -386,13 +386,13 @@ export async function runLoop(
             conn: cur.conn,
           })
           if (summary) {
-            // 摘要调用成本也计入会话总成本（按该 Agent 的 Provider 单价 + 展示货币换算）
+            // 摘要调用成本也计入会话总成本（按该 Character 的 Provider 单价 + 展示货币换算）
             addStats(session, summaryUsage, cur.rates, displayCurrency, exchangeRates)
             cur.mem.applySummary(summary, round)
             cur.mem.trimToRecent(session.config.keepRecent)
             broadcast(session.id, {
               type: 'summary',
-              agentId,
+              characterId,
               phase: 'done',
               summary,
             })
@@ -401,7 +401,7 @@ export async function runLoop(
           // 摘要失败不致命，继续对话
           broadcast(session.id, {
             type: 'summary',
-            agentId,
+            characterId,
             phase: 'error',
             message: errorMessage(e),
           })
@@ -409,10 +409,10 @@ export async function runLoop(
       }
 
       // === 4. 组装 messages（首条加开场提示）===
-      // 先同步 session 级 relationships → 当前 agent 的 memory（PATCH 运行时修改生效）
+      // 先同步 session 级 relationships → 当前 character 的 memory（PATCH 运行时修改生效）
       cur.mem.relationships = session.relationships || {}
 
-      if (session.messageCount === 0 && agentId === 'A' && cur.mem.messages.length === 0) {
+      if (session.messageCount === 0 && characterId === 'A' && cur.mem.messages.length === 0) {
         cur.mem.pushOther(
           buildOpeningPrompt({
             name: cur.ref.name,
@@ -431,8 +431,8 @@ export async function runLoop(
 
       // 捕获「即将发出的完整 Prompt」快照（所见即所发），供前端「查看最近 Prompt」查看
       recordPrompt(session.id, {
-        agentId,
-        agentName: cur.ref.name,
+        characterId,
+        characterName: cur.ref.name,
         round,
         timestamp: Date.now(),
         protocol: cur.conn.protocol,
@@ -454,7 +454,7 @@ export async function runLoop(
           signal: rt.abortCtrl.signal,
           onContent: (chunk) => {
             content += chunk
-            broadcast(session.id, { type: 'chunk', agentId, content: chunk })
+            broadcast(session.id, { type: 'chunk', characterId, content: chunk })
           },
           onReasoning: (_chunk) => {
             // 思维链增量钩子已就位；本次仅后端，不推 WebSocket（前端展示后置）
@@ -481,13 +481,13 @@ export async function runLoop(
           const completion = usage.completion_tokens ?? 0
           const hitRate = prompt > 0 ? ((hit / prompt) * 100).toFixed(1) : '0.0'
           console.log(
-            `[cache] 轮${round} ${agentId} [${cur.provName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion}`
+            `[cache] 轮${round} ${characterId} [${cur.provName}] | prompt=${prompt} (命中=${hit}, 未命中=${miss}, 命中率=${hitRate}%) | 输出=${completion}`
           )
         }
 
         const ts = Date.now()
         const msg: PersistedMessage = {
-          agentId,
+          characterId,
           role: 'assistant',
           content,
           ts,
@@ -507,11 +507,11 @@ export async function runLoop(
         }
 
         session.messageCount += 1
-        session.currentAgentId = nextAgentId(session)
+        session.currentCharacterId = nextCharacterId(session)
         session.updatedAt = ts
         saveSession(session)
 
-        broadcast(session.id, { type: 'message_done', agentId, message: msg })
+        broadcast(session.id, { type: 'message_done', characterId, message: msg })
         broadcast(session.id, {
           type: 'stats',
           totalPromptTokens: session.stats.totalPromptTokens,
@@ -550,7 +550,7 @@ export async function runLoop(
           if (rt.stopRequested) {
             break
           }
-          continue // 重试同一角色（currentAgentId 未前进）
+          continue // 重试同一角色（currentCharacterId 未前进）
         }
         // 重试耗尽 → error 状态
         session.status = 'error'
@@ -593,7 +593,7 @@ export async function runLoop(
     }
     if (!session.stoppedAt) session.stoppedAt = Date.now()
     // 写回 memory 实例
-    for (const a of session.agents) {
+    for (const a of session.characters) {
       const m = memMap.get(a.id)
       if (m) session.memory[a.id] = m.toJSON()
     }

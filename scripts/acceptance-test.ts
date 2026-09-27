@@ -15,7 +15,7 @@ import WebSocket from 'ws'
 const API = process.env.API || 'http://localhost:3001'
 const WS_URL = API.replace(/^http/, 'ws')
 
-interface AgentInput {
+interface CharacterInput {
   name: string
   persona?: string
 }
@@ -33,11 +33,11 @@ interface RunOpts {
 
 async function runSession(
   topic: string,
-  agents: [AgentInput, AgentInput],
+  characters: [CharacterInput, CharacterInput],
   config: Partial<SessionConfig>,
   { stopAfterChunk = false, waitMs = 60000 }: RunOpts = {}
 ) {
-  const session = createSession({ topic, agents, config })
+  const session = createSession({ topic, characters, config })
   saveSession(session)
   const ws = new WebSocket(`${WS_URL}/ws/chat?sessionId=${session.id}`)
   const events: Array<{ type: string; [k: string]: unknown }> = []
@@ -74,7 +74,7 @@ async function main() {
     { maxRounds: 1, temperature: 0.7 }
   )
   check('自动轮流对话完成', r1.session.status === 'finished', `status=${r1.session.status}`)
-  check('A 先发言', r1.session.messages[0]?.agentId === 'A')
+  check('A 先发言', r1.session.messages[0]?.characterId === 'A')
   check('A 和 B 都发言', r1.session.messageCount === 2, `messageCount=${r1.session.messageCount}`)
   check(
     'chunk 流式事件收到',

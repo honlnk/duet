@@ -4,8 +4,8 @@
  * 管理：当前会话、状态、消息流、流式累积、统计、事件日志、视角。
  *
  * 关键契约（务必遵守）：
- * 1. chunk 事件无消息 id，需用 streamingAgentId 追踪当前发言者。
- * 2. message_done 时若存在同 agentId 的流式气泡，替换其内容而非新增（去重）。
+ * 1. chunk 事件无消息 id，需用 streamingCharacterId 追踪当前发言者。
+ * 2. message_done 时若存在同 characterId 的流式气泡，替换其内容而非新增（去重）。
  * 3. stats 事件字段在顶层展开（msg.totalTokens），非嵌套。
  * 4. finished 后需重拉 GET /api/sessions/:id 取权威终态。
  *
@@ -17,8 +17,8 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 import { createSession, getSession, updateRelationships, addDirector, deleteDirector, updateSessionConfig } from '@/services/api'
 import type {
-  Agent,
-  AgentId,
+  Character,
+  CharacterId,
   ChatMessage,
   DirectorInstruction,
   ServerEvent,
@@ -42,7 +42,7 @@ export interface EventLogItem {
  */
 export interface ViewMessage {
   uid: string
-  agentId: AgentId
+  characterId: CharacterId
   content: string
   truncated: boolean
   streaming: boolean
@@ -143,17 +143,17 @@ export const useSessionStore = defineStore('session', () => {
 
   /**
    * 角色视角：选中的角色 id，其消息靠右显示，其余靠左。
-   * 默认为会话第二个角色（B）；加载会话时按 agents 重置。
+   * 默认为会话第二个角色（B）；加载会话时按 characters 重置。
    */
-  const viewSide = ref<AgentId>('B')
+  const viewSide = ref<CharacterId>('B')
 
   /** 切换视角（右侧面板的角色选择器调用） */
-  function setViewSide(id: AgentId) {
+  function setViewSide(id: CharacterId) {
     viewSide.value = id
   }
 
   // --- 流式状态（非响应式，避免每个 chunk 触发大量依赖） ---
-  let streamingAgentId: AgentId | null = null
+  let streamingCharacterId: CharacterId | null = null
 
   /* --------------------------- 计算属性 --------------------------- */
 
@@ -175,25 +175,25 @@ export const useSessionStore = defineStore('session', () => {
     })
   }
 
-  /** 查找指定 agentId 的流式气泡（去重用） */
-  function findStreaming(agentId: AgentId): ViewMessage | undefined {
-    return messages.value.find((m) => m.agentId === agentId && m.streaming)
+  /** 查找指定 characterId 的流式气泡（去重用） */
+  function findStreaming(characterId: CharacterId): ViewMessage | undefined {
+    return messages.value.find((m) => m.characterId === characterId && m.streaming)
   }
 
   /** 角色显示名 */
-  function agentName(agentId: AgentId): string {
-    const a = session.value?.agents.find((x) => x.id === agentId)
-    return a?.name ?? agentId
+  function characterName(characterId: CharacterId): string {
+    const a = session.value?.characters.find((x) => x.id === characterId)
+    return a?.name ?? characterId
   }
 
   /** 查找角色对象 */
-  function findAgent(agentId: AgentId): Agent | undefined {
-    return session.value?.agents.find((x) => x.id === agentId)
+  function findCharacter(characterId: CharacterId): Character | undefined {
+    return session.value?.characters.find((x) => x.id === characterId)
   }
 
   /** 判断某角色消息是否靠右显示（即是否为当前视角） */
-  function isRightSide(agentId: AgentId): boolean {
-    return agentId === viewSide.value
+  function isRightSide(characterId: CharacterId): boolean {
+    return characterId === viewSide.value
   }
 
   /* --------------------------- 重置/渲染 --------------------------- */
@@ -202,7 +202,7 @@ export const useSessionStore = defineStore('session', () => {
   function resetRuntime() {
     messages.value = []
     eventLog.value = []
-    streamingAgentId = null
+    streamingCharacterId = null
     round.value = 0
     errorMessage.value = null
     isStopping.value = false
@@ -237,22 +237,22 @@ export const useSessionStore = defineStore('session', () => {
     stoppedAt.value = s.stoppedAt
     stats.value = { ...s.stats }
     directors.value = s.directors
-    streamingAgentId = null
+    streamingCharacterId = null
     // 视角默认为第二个角色（B）；若会话已切换视角且仍有效则保留
-    const validIds = s.agents.map((a) => a.id)
+    const validIds = s.characters.map((a) => a.id)
     if (!validIds.includes(viewSide.value)) {
-      viewSide.value = s.agents[1]?.id ?? s.agents[0]!.id
+      viewSide.value = s.characters[1]?.id ?? s.characters[0]!.id
     }
     // 重放历史消息
     messages.value = s.messages.map<ViewMessage>((m) => ({
       uid: nextUid(),
-      agentId: m.agentId,
+      characterId: m.characterId,
       content: m.content,
       truncated: m.truncated,
       streaming: false,
     }))
     // round = 所有角色各说一句算 1 轮
-    const n = s.agents.length || 2
+    const n = s.characters.length || 2
     round.value = Math.floor(s.messageCount / n)
     if (s.error) errorMessage.value = s.error
   }
@@ -278,14 +278,14 @@ export const useSessionStore = defineStore('session', () => {
 
       case 'chunk': {
         // 切换发言者：开始新的流式气泡
-        if (streamingAgentId !== msg.agentId) {
-          streamingAgentId = msg.agentId
-          // 复用同 agentId 的流式气泡（去重），否则新建
-          let bubble = findStreaming(msg.agentId)
+        if (streamingCharacterId !== msg.characterId) {
+          streamingCharacterId = msg.characterId
+          // 复用同 characterId 的流式气泡（去重），否则新建
+          let bubble = findStreaming(msg.characterId)
           if (!bubble) {
             bubble = {
               uid: nextUid(),
-              agentId: msg.agentId,
+              characterId: msg.characterId,
               content: '',
               truncated: false,
               streaming: true,
@@ -295,7 +295,7 @@ export const useSessionStore = defineStore('session', () => {
           bubble.content += msg.content
         } else {
           // 累积到现有流式气泡
-          const bubble = findStreaming(msg.agentId)
+          const bubble = findStreaming(msg.characterId)
           if (bubble) bubble.content += msg.content
         }
         return 'none'
@@ -304,11 +304,11 @@ export const useSessionStore = defineStore('session', () => {
       case 'message_done': {
         // 落定：用权威 message 替换流式气泡（去重关键逻辑）
         const idx = messages.value.findIndex(
-          (m) => m.agentId === msg.agentId && m.streaming,
+          (m) => m.characterId === msg.characterId && m.streaming,
         )
         const final: ViewMessage = {
           uid: idx >= 0 ? messages.value[idx]!.uid : nextUid(),
-          agentId: msg.agentId,
+          characterId: msg.characterId,
           content: msg.message.content,
           truncated: msg.message.truncated,
           streaming: false,
@@ -321,7 +321,7 @@ export const useSessionStore = defineStore('session', () => {
         // 视窗跟随：用户不在底部时累计未读消息，计算缓冲轮数
         if (!userAtBottom.value && session.value?.config.pacingEnabled) {
           bufferedMessageCount++
-          const n = session.value?.agents.length ?? 2
+          const n = session.value?.characters.length ?? 2
           userBufferedRounds.value = Math.floor(bufferedMessageCount / n)
         }
         return 'none'
@@ -347,7 +347,7 @@ export const useSessionStore = defineStore('session', () => {
         return 'none'
 
       case 'summary': {
-        const name = agentName(msg.agentId)
+        const name = characterName(msg.characterId)
         if (msg.phase === 'start') {
           log('summary', `${name} 正在整理记忆…`)
         } else if (msg.phase === 'done') {
@@ -409,13 +409,13 @@ export const useSessionStore = defineStore('session', () => {
       if (fresh.messages.length > messages.value.length) {
         messages.value = fresh.messages.map<ViewMessage>((m) => ({
           uid: nextUid(),
-          agentId: m.agentId,
+          characterId: m.characterId,
           content: m.content,
           truncated: m.truncated,
           streaming: false,
         }))
       }
-      const n = fresh.agents.length || 2
+      const n = fresh.characters.length || 2
       round.value = Math.floor(fresh.messageCount / n)
       stats.value = { ...fresh.stats }
     } else {
@@ -575,8 +575,8 @@ export const useSessionStore = defineStore('session', () => {
     clearSession,
     resetRuntime,
     log,
-    agentName,
-    findAgent,
+    characterName,
+    findCharacter,
     isRightSide,
     setViewSide,
     toggleInspector,

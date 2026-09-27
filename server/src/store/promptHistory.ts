@@ -2,7 +2,7 @@
  * Prompt 历史记录（内存态环形缓冲）。
  *
  * 在每次「拼装好 ApiMessage[] 准备发给 LLM 之前」捕获一条快照，
- * 按 sessionId → agentId 二级索引存放，每个角色保留最近 {@link MAX_PER_AGENT} 条。
+ * 按 sessionId → characterId 二级索引存放，每个角色保留最近 {@link MAX_PER_CHARACTER} 条。
  *
  * 设计要点：
  * - 纯内存、模块级单例（与 chatHandler 的 runtimes Map、pricing/exchange 的 cache 同构），
@@ -13,17 +13,17 @@
  *   而非事后重建——所见即所发。
  */
 
-import type { AgentId, ApiMessage } from '../types/index.js'
+import type { CharacterId, ApiMessage } from '../types/index.js'
 
 /** 每个角色保留的最近 prompt 条数 */
-export const MAX_PER_AGENT = 20
+export const MAX_PER_CHARACTER = 20
 
 /** 单条 prompt 快照 */
 export interface PromptSnapshot {
   /** 发言角色 id */
-  agentId: AgentId
+  characterId: CharacterId
   /** 发言角色名（冗余，便于前端展示） */
-  agentName: string
+  characterName: string
   /** 该次发言所在的轮次（由 messageCount 派生） */
   round: number
   /** 捕获时间戳（ms） */
@@ -36,8 +36,8 @@ export interface PromptSnapshot {
   messages: ApiMessage[]
 }
 
-/** 二级结构：sessionId → agentId → 快照数组（最新在尾） */
-const store = new Map<string, Map<AgentId, PromptSnapshot[]>>()
+/** 二级结构：sessionId → characterId → 快照数组（最新在尾） */
+const store = new Map<string, Map<CharacterId, PromptSnapshot[]>>()
 
 /**
  * 记录一条 prompt 快照。
@@ -49,39 +49,39 @@ export function recordPrompt(sessionId: string, entry: PromptSnapshot): void {
     perSession = new Map()
     store.set(sessionId, perSession)
   }
-  let list = perSession.get(entry.agentId)
+  let list = perSession.get(entry.characterId)
   if (!list) {
     list = []
-    perSession.set(entry.agentId, list)
+    perSession.set(entry.characterId, list)
   }
   list.push(entry)
   // 环形裁剪：超出上限丢弃最旧的
-  if (list.length > MAX_PER_AGENT) {
-    list.splice(0, list.length - MAX_PER_AGENT)
+  if (list.length > MAX_PER_CHARACTER) {
+    list.splice(0, list.length - MAX_PER_CHARACTER)
   }
 }
 
 /**
  * 查询某个会话的 prompt 历史。
  * @param sessionId 会话 id
- * @param agentId   指定角色；省略则返回全部角色的快照（合并后按时间倒序）
- * @param limit     最多返回条数（默认 MAX_PER_AGENT）
+ * @param characterId   指定角色；省略则返回全部角色的快照（合并后按时间倒序）
+ * @param limit     最多返回条数（默认 MAX_PER_CHARACTER）
  * @returns 按时间倒序（最新在前）的快照数组
  */
 export function getPrompts(
   sessionId: string,
-  agentId?: AgentId,
-  limit: number = MAX_PER_AGENT,
+  characterId?: CharacterId,
+  limit: number = MAX_PER_CHARACTER,
 ): PromptSnapshot[] {
   const perSession = store.get(sessionId)
   if (!perSession) return []
-  if (agentId) {
-    const list = perSession.get(agentId)
+  if (characterId) {
+    const list = perSession.get(characterId)
     if (!list) return []
     // 最新在前
     return list.slice(-limit).reverse()
   }
-  // 合并所有 agent，按时间倒序
+  // 合并所有 character，按时间倒序
   const all: PromptSnapshot[] = []
   for (const list of perSession.values()) all.push(...list)
   all.sort((a, b) => b.timestamp - a.timestamp)

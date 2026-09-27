@@ -3,14 +3,14 @@
  *
  * 纯逻辑验证：不依赖真实网络/Provider，覆盖
  *  - createSession 支持 2/3 角色与默认颜色分配
- *  - nextAgentId 循环顺序（2/3 角色）
+ *  - nextCharacterId 循环顺序（2/3 角色）
  *  - currentRound 按角色数计算
- *  - AgentMemory 多对手视角（others 数组、buildApiMessages）
+ *  - CharacterMemory 多对手视角（others 数组、buildApiMessages）
  *  - 结构化角色卡（description + personality）
  *  - 非对称关系图（relationships）
  *  - 全局设定（scenario）
  *
- * 运行：node --import tsx --test server/src/multi-agent.test.ts
+ * 运行：node --import tsx --test server/src/multi-character.test.ts
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,28 +23,28 @@ import fs from 'node:fs'
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'duet-test-'))
 process.env.DATA_DIR = tmpDir
 
-const { createSession, nextAgentId, currentRound } = await import(
+const { createSession, nextCharacterId, currentRound } = await import(
   './store/sessionStore.js'
 )
-const { AgentMemory } = await import('./memory/context.js')
-const { buildAgentSystem, buildDirectorInjection } = await import('./ai/prompts.js')
+const { CharacterMemory } = await import('./memory/context.js')
+const { buildCharacterSystem, buildDirectorInjection } = await import('./ai/prompts.js')
 
 /* --------------------------- createSession --------------------------- */
 
 test('createSession：2 角色，默认颜色 蓝/粉', () => {
   const s = createSession({
     topic: '测试话题',
-    agents: [
+    characters: [
       { name: '猫派', description: '我喜欢猫' },
       { name: '狗派', description: '我喜欢狗' },
     ],
   })
-  assert.equal(s.agents.length, 2)
-  assert.equal(s.agents[0]!.id, 'A')
-  assert.equal(s.agents[1]!.id, 'B')
-  assert.equal(s.agents[0]!.color, 'blue')
-  assert.equal(s.agents[1]!.color, 'pink')
-  assert.equal(s.currentAgentId, 'A')
+  assert.equal(s.characters.length, 2)
+  assert.equal(s.characters[0]!.id, 'A')
+  assert.equal(s.characters[1]!.id, 'B')
+  assert.equal(s.characters[0]!.color, 'blue')
+  assert.equal(s.characters[1]!.color, 'pink')
+  assert.equal(s.currentCharacterId, 'A')
   assert.equal(s.messageCount, 0)
   // memory.A/B 必有，C 不存在
   assert.ok(s.memory.A)
@@ -55,15 +55,15 @@ test('createSession：2 角色，默认颜色 蓝/粉', () => {
 test('createSession：3 角色，默认颜色 蓝/粉/绿，memory.C 存在', () => {
   const s = createSession({
     topic: '三方讨论',
-    agents: [
+    characters: [
       { name: 'A', description: 'a' },
       { name: 'B', description: 'b' },
       { name: 'C', description: 'c' },
     ],
   })
-  assert.equal(s.agents.length, 3)
-  assert.equal(s.agents[2]!.id, 'C')
-  assert.equal(s.agents[2]!.color, 'green')
+  assert.equal(s.characters.length, 3)
+  assert.equal(s.characters[2]!.id, 'C')
+  assert.equal(s.characters[2]!.color, 'green')
   assert.ok(s.memory.C, '三角色 memory.C 应存在')
   // C 的 others 应包含 A 和 B
   const cOthers = s.memory.C.others.map((o) => o.id)
@@ -73,19 +73,19 @@ test('createSession：3 角色，默认颜色 蓝/粉/绿，memory.C 存在', ()
 test('createSession：用户自定义颜色覆盖默认', () => {
   const s = createSession({
     topic: '自定义颜色',
-    agents: [
+    characters: [
       { name: 'X', color: 'purple' },
       { name: 'Y', color: 'teal' },
     ],
   })
-  assert.equal(s.agents[0]!.color, 'purple')
-  assert.equal(s.agents[1]!.color, 'teal')
+  assert.equal(s.characters[0]!.color, 'purple')
+  assert.equal(s.characters[1]!.color, 'teal')
 })
 
 test('createSession：5 角色（A-E），memory 全存在，默认色循环', () => {
   const s = createSession({
     topic: '五方讨论',
-    agents: [
+    characters: [
       { name: '甲' },
       { name: '乙' },
       { name: '丙' },
@@ -93,12 +93,12 @@ test('createSession：5 角色（A-E），memory 全存在，默认色循环', (
       { name: '戊' },
     ],
   })
-  assert.equal(s.agents.length, 5)
-  assert.equal(s.agents[3]!.id, 'D')
-  assert.equal(s.agents[4]!.id, 'E')
+  assert.equal(s.characters.length, 5)
+  assert.equal(s.characters[3]!.id, 'D')
+  assert.equal(s.characters[4]!.id, 'E')
   // 默认色循环：blue/pink/green/amber/purple
-  assert.equal(s.agents[3]!.color, 'amber')
-  assert.equal(s.agents[4]!.color, 'purple')
+  assert.equal(s.characters[3]!.color, 'amber')
+  assert.equal(s.characters[4]!.color, 'purple')
   // memory 应全部存在
   assert.ok(s.memory.D, 'memory.D 应存在')
   assert.ok(s.memory.E, 'memory.E 应存在')
@@ -109,28 +109,28 @@ test('createSession：5 角色（A-E），memory 全存在，默认色循环', (
 test('createSession：自定义 hex 颜色（#ff5533）透传存储', () => {
   const s = createSession({
     topic: 'hex 颜色',
-    agents: [
+    characters: [
       { name: 'X', color: '#ff5533' },
       { name: 'Y', color: '#abc' },
     ],
   })
-  assert.equal(s.agents[0]!.color, '#ff5533')
-  assert.equal(s.agents[1]!.color, '#abc')
+  assert.equal(s.characters[0]!.color, '#ff5533')
+  assert.equal(s.characters[1]!.color, '#abc')
 })
 
 test('createSession：缺省 name 时按字母补默认名', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: '' }, { name: '' }],
+    characters: [{ name: '' }, { name: '' }],
   })
-  assert.equal(s.agents[0]!.name, '角色 A')
-  assert.equal(s.agents[1]!.name, '角色 B')
+  assert.equal(s.characters[0]!.name, '角色 A')
+  assert.equal(s.characters[1]!.name, '角色 B')
 })
 
 test('createSession：memory 视角隔离——A 的 others 不含自己', () => {
   const s = createSession({
     topic: '隔离测试',
-    agents: [
+    characters: [
       { name: '甲', description: 'p1' },
       { name: '乙', description: 'p2' },
       { name: '丙', description: 'p3' },
@@ -144,36 +144,36 @@ test('createSession：memory 视角隔离——A 的 others 不含自己', () =>
   assert.deepEqual(bOtherNames, ['甲', '丙'])
 })
 
-/* --------------------------- nextAgentId 循环 --------------------------- */
+/* --------------------------- nextCharacterId 循环 --------------------------- */
 
-test('nextAgentId：2 角色 A→B→A 循环', () => {
+test('nextCharacterId：2 角色 A→B→A 循环', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }],
+    characters: [{ name: 'A' }, { name: 'B' }],
   })
-  s.currentAgentId = 'A'
-  assert.equal(nextAgentId(s), 'B')
-  s.currentAgentId = 'B'
-  assert.equal(nextAgentId(s), 'A')
+  s.currentCharacterId = 'A'
+  assert.equal(nextCharacterId(s), 'B')
+  s.currentCharacterId = 'B'
+  assert.equal(nextCharacterId(s), 'A')
 })
 
-test('nextAgentId：3 角色 A→B→C→A 循环', () => {
+test('nextCharacterId：3 角色 A→B→C→A 循环', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
+    characters: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
   })
-  s.currentAgentId = 'A'
-  assert.equal(nextAgentId(s), 'B')
-  s.currentAgentId = 'B'
-  assert.equal(nextAgentId(s), 'C')
-  s.currentAgentId = 'C'
-  assert.equal(nextAgentId(s), 'A')
+  s.currentCharacterId = 'A'
+  assert.equal(nextCharacterId(s), 'B')
+  s.currentCharacterId = 'B'
+  assert.equal(nextCharacterId(s), 'C')
+  s.currentCharacterId = 'C'
+  assert.equal(nextCharacterId(s), 'A')
 })
 
-test('nextAgentId：5 角色 A→B→C→D→E→A 循环', () => {
+test('nextCharacterId：5 角色 A→B→C→D→E→A 循环', () => {
   const s = createSession({
     topic: 't',
-    agents: [
+    characters: [
       { name: 'A' },
       { name: 'B' },
       { name: 'C' },
@@ -181,10 +181,10 @@ test('nextAgentId：5 角色 A→B→C→D→E→A 循环', () => {
       { name: 'E' },
     ],
   })
-  s.currentAgentId = 'C'
-  assert.equal(nextAgentId(s), 'D')
-  s.currentAgentId = 'E'
-  assert.equal(nextAgentId(s), 'A')
+  s.currentCharacterId = 'C'
+  assert.equal(nextCharacterId(s), 'D')
+  s.currentCharacterId = 'E'
+  assert.equal(nextCharacterId(s), 'A')
 })
 
 /* --------------------------- currentRound --------------------------- */
@@ -192,7 +192,7 @@ test('nextAgentId：5 角色 A→B→C→D→E→A 循环', () => {
 test('currentRound：2 角色时 2 条/轮', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }],
+    characters: [{ name: 'A' }, { name: 'B' }],
   })
   s.messageCount = 0
   assert.equal(currentRound(s), 0)
@@ -207,7 +207,7 @@ test('currentRound：2 角色时 2 条/轮', () => {
 test('currentRound：3 角色时 3 条/轮', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
+    characters: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
   })
   s.messageCount = 2
   assert.equal(currentRound(s), 0)
@@ -217,15 +217,15 @@ test('currentRound：3 角色时 3 条/轮', () => {
   assert.equal(currentRound(s), 2)
 })
 
-/* --------------------------- AgentMemory --------------------------- */
+/* --------------------------- CharacterMemory --------------------------- */
 
-test('AgentMemory：多对手 buildApiMessages 含 system + 所有对手名', () => {
+test('CharacterMemory：多对手 buildApiMessages 含 system + 所有对手名', () => {
   const me = { id: 'A' as const, name: '甲', description: '我是甲' }
   const others = [
     { id: 'B' as const, name: '乙', description: 'b' },
     { id: 'C' as const, name: '丙', description: 'c' },
   ]
-  const mem = new AgentMemory(me, others, '话题')
+  const mem = new CharacterMemory(me, others, '话题')
   mem.pushSelf('我说了一句')
   mem.pushOther('[乙]: 乙说的')
   mem.pushOther('[丙]: 丙说的')
@@ -244,27 +244,27 @@ test('AgentMemory：多对手 buildApiMessages 含 system + 所有对手名', ()
   assert.equal(msgs[3]!.role, 'user')
 })
 
-test('AgentMemory：toJSON/fromJSON 往返保持 others', () => {
+test('CharacterMemory：toJSON/fromJSON 往返保持 others', () => {
   const me = { id: 'A' as const, name: '甲' }
   const others = [
     { id: 'B' as const, name: '乙' },
     { id: 'C' as const, name: '丙' },
   ]
-  const mem = new AgentMemory(me, others, 't')
+  const mem = new CharacterMemory(me, others, 't')
   mem.pushSelf('hi')
   mem.summary = '旧摘要'
 
   const json = mem.toJSON()
   assert.equal(json.others.length, 2)
 
-  const restored = AgentMemory.fromJSON(json)
+  const restored = CharacterMemory.fromJSON(json)
   assert.equal(restored.others.length, 2)
   assert.equal(restored.summary, '旧摘要')
   assert.equal(restored.messages.length, 1)
 })
 
-test('AgentMemory：trimToRecent 裁剪到最近 N 条', () => {
-  const mem = new AgentMemory(
+test('CharacterMemory：trimToRecent 裁剪到最近 N 条', () => {
+  const mem = new CharacterMemory(
     { id: 'A', name: '甲' },
     [{ id: 'B', name: '乙' }],
     't',
@@ -275,10 +275,10 @@ test('AgentMemory：trimToRecent 裁剪到最近 N 条', () => {
   assert.equal(mem.messages[0]!.content, '第7句')
 })
 
-/* --------------------------- buildAgentSystem --------------------------- */
+/* --------------------------- buildCharacterSystem --------------------------- */
 
-test('buildAgentSystem：单对手时列出参与者', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：单对手时列出参与者', () => {
+  const sys = buildCharacterSystem({
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
@@ -287,8 +287,8 @@ test('buildAgentSystem：单对手时列出参与者', () => {
   assert.ok(sys.includes('乙'))
 })
 
-test('buildAgentSystem：多对手时列出所有参与者', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：多对手时列出所有参与者', () => {
+  const sys = buildCharacterSystem({
     name: '甲',
     description: 'd',
     others: [
@@ -306,23 +306,23 @@ test('buildAgentSystem：多对手时列出所有参与者', () => {
 test('createSession：description + personality 透传存储', () => {
   const s = createSession({
     topic: 't',
-    agents: [
+    characters: [
       { name: '甲', description: '阳光男孩', personality: '开朗' },
       { name: '乙', description: '温柔女孩', personality: '善良' },
     ],
   })
-  assert.equal(s.agents[0]!.description, '阳光男孩')
-  assert.equal(s.agents[0]!.personality, '开朗')
-  assert.equal(s.agents[1]!.description, '温柔女孩')
-  assert.equal(s.agents[1]!.personality, '善良')
+  assert.equal(s.characters[0]!.description, '阳光男孩')
+  assert.equal(s.characters[0]!.personality, '开朗')
+  assert.equal(s.characters[1]!.description, '温柔女孩')
+  assert.equal(s.characters[1]!.personality, '善良')
   // memory 中也透传
-  assert.equal(s.memory.A.agent.description, '阳光男孩')
-  assert.equal(s.memory.A.agent.personality, '开朗')
+  assert.equal(s.memory.A.character.description, '阳光男孩')
+  assert.equal(s.memory.A.character.personality, '开朗')
   assert.equal(s.memory.B.others[0]!.description, '阳光男孩')
 })
 
-test('buildAgentSystem：主角 description + personality 注入', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：主角 description + personality 注入', () => {
+  const sys = buildCharacterSystem({
     name: '小张',
     description: '阳光帅气，打篮球',
     personality: '开朗爱调侃',
@@ -334,8 +334,8 @@ test('buildAgentSystem：主角 description + personality 注入', () => {
   assert.ok(sys.includes('小张'), '应含主角名')
 })
 
-test('buildAgentSystem：他人 description 注入到在场角色', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：他人 description 注入到在场角色', () => {
+  const sys = buildCharacterSystem({
     name: '小张',
     description: '主角',
     others: [
@@ -357,7 +357,7 @@ test('createSession：relationships 透传到 session 和 memory', () => {
   }
   const s = createSession({
     topic: 't',
-    agents: [
+    characters: [
       { name: '小张', description: 'd' },
       { name: '小美', description: 'd' },
     ],
@@ -368,12 +368,12 @@ test('createSession：relationships 透传到 session 和 memory', () => {
   assert.deepEqual(s.memory.B.relationships, rels)
 })
 
-test('AgentMemory：extractMyRelationships 注入到 system prompt（非对称）', () => {
+test('CharacterMemory：extractMyRelationships 注入到 system prompt（非对称）', () => {
   const rels = {
     'A->B': '小美是我的同桌，暗恋我',
     'B->A': '小张是我的Crush',
   }
-  const memA = new AgentMemory(
+  const memA = new CharacterMemory(
     { id: 'A', name: '小张', description: '主角' },
     [{ id: 'B', name: '小美', description: '对方' }],
     't',
@@ -385,7 +385,7 @@ test('AgentMemory：extractMyRelationships 注入到 system prompt（非对称�
   assert.ok(sysA.includes('同桌'), 'A 应含 A→B 关系')
   assert.ok(!sysA.includes('Crush'), 'A 不应含 B→A 关系（非对称）')
 
-  const memB = new AgentMemory(
+  const memB = new CharacterMemory(
     { id: 'B', name: '小美', description: '主角' },
     [{ id: 'A', name: '小张', description: '对方' }],
     't',
@@ -398,9 +398,9 @@ test('AgentMemory：extractMyRelationships 注入到 system prompt（非对称�
   assert.ok(!sysB.includes('暗恋'), 'B 不应含 A→B 关系（非对称）')
 })
 
-test('AgentMemory：toJSON/fromJSON 往返保持 relationships', () => {
+test('CharacterMemory：toJSON/fromJSON 往返保持 relationships', () => {
   const rels = { 'A->B': '关系A' }
-  const mem = new AgentMemory(
+  const mem = new CharacterMemory(
     { id: 'A', name: '甲' },
     [{ id: 'B', name: '乙' }],
     't',
@@ -408,14 +408,14 @@ test('AgentMemory：toJSON/fromJSON 往返保持 relationships', () => {
   )
   const json = mem.toJSON()
   assert.deepEqual(json.relationships, rels)
-  const restored = AgentMemory.fromJSON(json)
+  const restored = CharacterMemory.fromJSON(json)
   assert.deepEqual(restored.relationships, rels)
 })
 
 /* --------------------------- 全局设定 --------------------------- */
 
-test('buildAgentSystem：scenario 注入全局设定段落', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：scenario 注入全局设定段落', () => {
+  const sys = buildCharacterSystem({
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
@@ -431,8 +431,8 @@ test('buildAgentSystem：scenario 注入全局设定段落', () => {
   assert.ok(sys.indexOf('全局设定') < sys.indexOf('主角设定'))
 })
 
-test('buildAgentSystem：无 scenario 时全局设定仍含话题', () => {
-  const sys = buildAgentSystem({
+test('buildCharacterSystem：无 scenario 时全局设定仍含话题', () => {
+  const sys = buildCharacterSystem({
     name: '甲',
     description: 'd',
     others: [{ id: 'B', name: '乙' }],
@@ -444,7 +444,7 @@ test('buildAgentSystem：无 scenario 时全局设定仍含话题', () => {
 })
 
 test('buildApiMessages：scenario 通过参数注入', () => {
-  const mem = new AgentMemory(
+  const mem = new CharacterMemory(
     { id: 'A', name: '甲', description: 'd' },
     [{ id: 'B', name: '乙' }],
     't',
@@ -504,7 +504,7 @@ test('buildApiMessages：导演指令作为独立 system 消息注入（极高�
   const directors = [
     { id: '1', content: '让甲表达愤怒', addedAt: 0, addedRound: 0, durationRounds: 0 },
   ]
-  const mem = new AgentMemory(
+  const mem = new CharacterMemory(
     { id: 'A', name: '甲', description: 'd' },
     [{ id: 'B', name: '乙' }],
     't',
@@ -525,7 +525,7 @@ test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
   const directors = [
     { id: '1', content: '指令A', addedAt: 0, addedRound: 0, durationRounds: 0 },
   ]
-  const mem = new AgentMemory(
+  const mem = new CharacterMemory(
     { id: 'A', name: '甲' },
     [{ id: 'B', name: '乙' }],
     't',
@@ -542,7 +542,7 @@ test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
 test('createSession：默认初始化 directors 空数组 + pacing 默认值', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }],
+    characters: [{ name: 'A' }, { name: 'B' }],
   })
   assert.deepEqual(s.directors, [])
   assert.equal(s.config.pacingEnabled, true)
@@ -552,7 +552,7 @@ test('createSession：默认初始化 directors 空数组 + pacing 默认值', (
 test('createSession：可通过 config 覆盖 pacing 默认值', () => {
   const s = createSession({
     topic: 't',
-    agents: [{ name: 'A' }, { name: 'B' }],
+    characters: [{ name: 'A' }, { name: 'B' }],
     config: { pacingEnabled: true, pacingBufferRounds: 5 },
   })
   assert.equal(s.config.pacingEnabled, true)

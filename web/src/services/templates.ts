@@ -2,19 +2,21 @@
  * 模板持久化层（localStorage）
  *
  * 管理三类可复用模板，供「新建对话」时一键填充：
- *  - 角色模板（AgentTemplate）：名称 + 身份设定
+ *  - 角色模板（CharacterTemplate）：名称 + 身份设定
  *  - 话题模板（TopicTemplate）：话题文本
  *  - 世界观模板（WorldviewTemplate）：场景 + 导演指令
  *
  * 与 storage.ts（草稿/历史）同模式：零 DOM、零网络，try/catch 容错。
  */
 
-const AGENT_TPL_KEY = 'duet:agent-templates:v1'
+const CHARACTER_TPL_KEY = 'duet:character-templates:v1'
+/** 旧版键（智能体概念时期），首次读取时一次性迁移到新键 */
+const LEGACY_CHARACTER_TPL_KEY = 'duet:agent-templates:v1'
 const TOPIC_TPL_KEY = 'duet:topic-templates:v1'
 const WORLDVIEW_TPL_KEY = 'duet:worldview-templates:v1'
 
 /** 角色模板 */
-export interface AgentTemplate {
+export interface CharacterTemplate {
   id: string
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
@@ -56,29 +58,41 @@ function genId(prefix: string): string {
 
 /* --------------------------- 角色模板 --------------------------- */
 
-export function loadAgentTemplates(): AgentTemplate[] {
+export function loadCharacterTemplates(): CharacterTemplate[] {
   try {
-    return safeParse<AgentTemplate[]>(localStorage.getItem(AGENT_TPL_KEY), [])
+    const raw = localStorage.getItem(CHARACTER_TPL_KEY)
+    if (raw == null) {
+      // 旧键迁移：把智能体时期的模板搬到新键，然后移除旧键
+      const legacy = localStorage.getItem(LEGACY_CHARACTER_TPL_KEY)
+      if (legacy != null) {
+        const list = safeParse<CharacterTemplate[]>(legacy, [])
+        saveCharacterTemplates(list)
+        localStorage.removeItem(LEGACY_CHARACTER_TPL_KEY)
+        return list
+      }
+      return []
+    }
+    return safeParse<CharacterTemplate[]>(raw, [])
   } catch {
     return []
   }
 }
 
-function saveAgentTemplates(list: AgentTemplate[]): void {
+function saveCharacterTemplates(list: CharacterTemplate[]): void {
   try {
-    localStorage.setItem(AGENT_TPL_KEY, JSON.stringify(list))
+    localStorage.setItem(CHARACTER_TPL_KEY, JSON.stringify(list))
   } catch {
     /* ignore */
   }
 }
 
-export function addAgentTemplate(
+export function addCharacterTemplate(
   name: string,
   description: string = '',
   personality: string = '',
-): AgentTemplate[] {
-  const list = loadAgentTemplates()
-  const item: AgentTemplate = {
+): CharacterTemplate[] {
+  const list = loadCharacterTemplates()
+  const item: CharacterTemplate = {
     id: genId('a'),
     name: name.trim(),
     description: description.trim(),
@@ -86,24 +100,24 @@ export function addAgentTemplate(
     createdAt: Date.now(),
   }
   const next = [item, ...list]
-  saveAgentTemplates(next)
+  saveCharacterTemplates(next)
   return next
 }
 
-export function updateAgentTemplate(
+export function updateCharacterTemplate(
   id: string,
-  patch: Partial<Pick<AgentTemplate, 'name' | 'description' | 'personality'>>,
-): AgentTemplate[] {
-  const list = loadAgentTemplates().map((t) =>
+  patch: Partial<Pick<CharacterTemplate, 'name' | 'description' | 'personality'>>,
+): CharacterTemplate[] {
+  const list = loadCharacterTemplates().map((t) =>
     t.id === id ? { ...t, ...patch } : t,
   )
-  saveAgentTemplates(list)
+  saveCharacterTemplates(list)
   return list
 }
 
-export function removeAgentTemplate(id: string): AgentTemplate[] {
-  const list = loadAgentTemplates().filter((t) => t.id !== id)
-  saveAgentTemplates(list)
+export function removeCharacterTemplate(id: string): CharacterTemplate[] {
+  const list = loadCharacterTemplates().filter((t) => t.id !== id)
+  saveCharacterTemplates(list)
   return list
 }
 

@@ -9,31 +9,31 @@
 /**
  * 角色 ID。支持 2~10 个角色：A、B 为必选，C~J 按需追加。
  */
-export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
+export type CharacterId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
 
 /** 所有可能的角色 ID */
-export const ALL_AGENT_IDS: readonly AgentId[] = [
+export const ALL_CHARACTER_IDS: readonly CharacterId[] = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 ] as const
 
 /**
  * 预设颜色 key（与前端 CSS 设计 token 一一对应）。
- * 自定义颜色用 hex 字符串，见 AgentColorValue。
+ * 自定义颜色用 hex 字符串，见 CharacterColorValue。
  */
-export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
+export type CharacterPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
 
 /**
  * 角色颜色值：预设 key 或自定义 hex（如 '#ff5533'）。
- * - 预设色走 Tailwind class（text-agent-blue 等）
+ * - 预设色走 Tailwind class（text-character-blue 等）
  * - 自定义色走 inline style + CSS 变量（运行时注入，非构建期）
  */
-export type AgentColorValue = AgentPresetColor | string
+export type CharacterColorValue = CharacterPresetColor | string
 
 /** 向后兼容别名 */
-export type AgentColor = AgentColorValue
+export type CharacterColor = CharacterColorValue
 
 /** 前端预设调色板（label 供 UI 展示，key 与 CSS token 对应） */
-export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: string }> = [
+export const CHARACTER_COLOR_OPTIONS: ReadonlyArray<{ key: CharacterPresetColor; label: string }> = [
   { key: 'blue', label: '蓝色' },
   { key: 'pink', label: '粉色' },
   { key: 'green', label: '绿色' },
@@ -43,7 +43,7 @@ export const AGENT_COLOR_OPTIONS: ReadonlyArray<{ key: AgentPresetColor; label: 
 ]
 
 /** 判断颜色值是否为预设 key */
-export function isPresetColor(c: string): c is AgentPresetColor {
+export function isPresetColor(c: string): c is CharacterPresetColor {
   return c === 'blue' || c === 'pink' || c === 'green' ||
     c === 'amber' || c === 'purple' || c === 'teal'
 }
@@ -52,13 +52,13 @@ export function isPresetColor(c: string): c is AgentPresetColor {
  * 角色默认颜色顺序（按 A/B/C... 依次循环分配）。
  * 超出预设数量时从头部循环复用。
  */
-export const DEFAULT_AGENT_COLORS: AgentPresetColor[] = [
+export const DEFAULT_CHARACTER_COLORS: CharacterPresetColor[] = [
   'blue', 'pink', 'green', 'amber', 'purple', 'teal',
 ]
 
 /** 会话允许的角色数量区间 */
-export const MIN_AGENTS = 2
-export const MAX_AGENTS = 10
+export const MIN_CHARACTERS = 2
+export const MAX_CHARACTERS = 10
 
 /** 会话状态 */
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'finished' | 'error'
@@ -89,15 +89,15 @@ export interface DirectorInstruction {
 }
 
 /** 角色定义（完整会话中的形态） */
-export interface Agent {
-  id: AgentId
+export interface Character {
+  id: CharacterId
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
   description?: string
   /** 性格关键词摘要 */
   personality?: string
   /** 颜色标识（与前端 CSS token 对应） */
-  color?: AgentColor
+  color?: CharacterColor
 }
 
 /** 会话配置 */
@@ -121,15 +121,15 @@ export interface SessionConfig {
   /** 角色 C 使用的 Provider id（空 = 默认 Provider） */
   providerC?: string
   /** D~J 等角色的 Provider 映射（优先级高于默认） */
-  agentProviders?: Record<string, string>
+  characterProviders?: Record<string, string>
   /** 角色 A 的思考档位（空 = 用 Provider 默认） */
   thinkingA?: string
   /** 角色 B 的思考档位（空 = 用 Provider 默认） */
   thinkingB?: string
   /** 角色 C 的思考档位（空 = 用 Provider 默认） */
   thinkingC?: string
-  /** D~J 角色的思考档位映射（优先级同 agentProviders） */
-  agentThinking?: Record<string, string>
+  /** D~J 角色的思考档位映射（优先级同 characterProviders） */
+  characterThinking?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
   /** 视窗跟随节奏：启用后，用户不在视窗底部时暂停生成（避免提前生成太多） */
@@ -146,7 +146,7 @@ export interface TokenUsage {
 
 /** 消息（session.messages 数组元素） */
 export interface ChatMessage {
-  agentId: AgentId
+  characterId: CharacterId
   role: 'assistant'
   content: string
   ts: number
@@ -176,23 +176,23 @@ export interface SessionStats {
 /**
  * 完整的会话对象
  * 对应 createSession() 的返回，以及 GET /api/sessions/:id 和 WS sync 事件。
- * - agents：长度 2 或 3（第 0 个恒为 A、第 1 个为 B，第 2 个（可选）为 C）
+ * - characters：长度 2 或 3（第 0 个恒为 A、第 1 个为 B，第 2 个（可选）为 C）
  * - memory：A/B 必有；C 仅在三角色会话时存在
  */
 export interface Session {
   id: string
   topic: string
-  agents: Agent[]
+  characters: Character[]
   config: SessionConfig
   status: SessionStatus
   finishedReason: FinishedReason | null
   startedAt: number | null
   stoppedAt: number | null
   messageCount: number
-  currentAgentId: AgentId
+  currentCharacterId: CharacterId
   messages: ChatMessage[]
   /** 后端内部记忆（前端通常不渲染，但会出现在 payload 中） */
-  memory: Record<AgentId, unknown>
+  memory: Record<CharacterId, unknown>
   stats: SessionStats
   error: string | null
   createdAt: number
@@ -205,7 +205,7 @@ export interface Session {
   directors: DirectorInstruction[]
 }
 
-/** GET /api/sessions 列表项（注意 agents 是字符串数组，非对象） */
+/** GET /api/sessions 列表项（注意 characters 是字符串数组，非对象） */
 export interface SessionSummary {
   id: string
   topic: string
@@ -213,17 +213,17 @@ export interface SessionSummary {
   messageCount: number
   updatedAt: number
   createdAt: number
-  agents: string[]
+  characters: string[]
 }
 
 /** POST /api/sessions 请求体（支持 2~3 个角色，每个可带颜色） */
 export interface CreateSessionPayload {
   topic: string
-  agents: Array<{
+  characters: Array<{
     name: string
     description?: string
     personality?: string
-    color?: AgentColor
+    color?: CharacterColor
   }>
   config: Partial<SessionConfig>
   /** 非对称关系图：Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述 */
@@ -380,21 +380,21 @@ export interface StartedEvent {
 /** 服务器 → 客户端：流式片段 */
 export interface ChunkEvent {
   type: 'chunk'
-  agentId: AgentId
+  characterId: CharacterId
   content: string
 }
 
 /** 服务器 → 客户端：一轮发言结束（附带权威 message 对象） */
 export interface MessageDoneEvent {
   type: 'message_done'
-  agentId: AgentId
+  characterId: CharacterId
   message: ChatMessage
 }
 
 /** 服务器 → 客户端：摘要生命周期 */
 export interface SummaryEvent {
   type: 'summary'
-  agentId: AgentId
+  characterId: CharacterId
   phase: 'start' | 'done' | 'error'
   /** 仅 phase=done 时存在 */
   summary?: string
@@ -511,8 +511,8 @@ export interface PromptMessage {
  * 在后端 buildApiMessages 之后、chatCompletion 之前捕获，所见即所发。
  */
 export interface PromptSnapshot {
-  agentId: AgentId
-  agentName: string
+  characterId: CharacterId
+  characterName: string
   round: number
   timestamp: number
   protocol: string

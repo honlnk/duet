@@ -14,9 +14,9 @@ import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useProviderStore } from '@/stores/provider'
 import { useDurationTracker } from '@/composables/useDurationTracker'
-import { bgColor, textColor, resolveColor } from '@/utils/agentColor'
+import { bgColor, textColor, resolveColor } from '@/utils/characterColor'
 import StatusBadge from './StatusBadge.vue'
-import type { AgentId } from '@/types/api'
+import type { CharacterId } from '@/types/api'
 
 defineProps<{
   /** 是否展开 */
@@ -76,42 +76,42 @@ const isRunning = computed(() => status.value === 'running')
 const topic = computed(() => current.value?.topic ?? '（未设定话题）')
 
 /** 角色列表（2~3 个），带颜色 dot */
-const agents = computed(() => current.value?.agents ?? [])
+const characters = computed(() => current.value?.characters ?? [])
 
 /**
  * 各角色使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
  * 解析优先级与后端 chatHandler.providerIdOf 保持一致：
- *   A/B/C → providerA/B/C；D~J → agentProviders[id]；均缺省回退默认 Provider。
+ *   A/B/C → providerA/B/C；D~J → characterProviders[id]；均缺省回退默认 Provider。
  */
-const agentProviders = computed<Record<string, string>>(() => {
+const characterProviders = computed<Record<string, string>>(() => {
   const cfg = current.value?.config
   const resolve = (pid: string | undefined) => {
     const p = provider.find(pid) ?? provider.find(provider.defaultId)
     return p?.name || '—'
   }
   const out: Record<string, string> = {}
-  for (const a of agents.value) {
+  for (const a of characters.value) {
     let pid: string | undefined
     if (a.id === 'A') pid = cfg?.providerA
     else if (a.id === 'B') pid = cfg?.providerB
     else if (a.id === 'C') pid = cfg?.providerC
-    else pid = cfg?.agentProviders?.[a.id]
+    else pid = cfg?.characterProviders?.[a.id]
     out[a.id] = resolve(pid)
   }
   return out
 })
 
-/** 角色颜色 dot（按 agent.color 解析，预设→class / 自定义→style） */
-function agentDot(id: AgentId) {
-  const idx = agents.value.findIndex((a) => a.id === id)
-  const color = resolveColor(agents.value[idx]?.color, idx)
+/** 角色颜色 dot（按 character.color 解析，预设→class / 自定义→style） */
+function characterDot(id: CharacterId) {
+  const idx = characters.value.findIndex((a) => a.id === id)
+  const color = resolveColor(characters.value[idx]?.color, idx)
   return bgColor(color)
 }
 
 /** 角色名称颜色 */
-function agentText(id: AgentId) {
-  const idx = agents.value.findIndex((a) => a.id === id)
-  const color = resolveColor(agents.value[idx]?.color, idx)
+function characterText(id: CharacterId) {
+  const idx = characters.value.findIndex((a) => a.id === id)
+  const color = resolveColor(characters.value[idx]?.color, idx)
   return textColor(color)
 }
 
@@ -287,13 +287,13 @@ async function handleBufferChange(e: Event) {
         </h3>
         <div class="flex flex-col gap-1.5">
           <div
-            v-for="agent in agents"
-            :key="agent.id"
+            v-for="character in characters"
+            :key="character.id"
             class="flex items-center gap-2 text-xs"
           >
-            <span class="h-2 w-2 shrink-0 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
-            <span class="shrink-0 text-text-dim">{{ agent.name }}</span>
-            <span class="truncate text-text-main">{{ agentProviders[agent.id] }}</span>
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="shrink-0 text-text-dim">{{ character.name }}</span>
+            <span class="truncate text-text-main">{{ characterProviders[character.id] }}</span>
           </div>
         </div>
       </section>
@@ -406,19 +406,19 @@ async function handleBufferChange(e: Event) {
         <p class="mb-2 text-xs text-text-muted">选中角色的消息靠右显示</p>
         <div class="flex flex-col gap-1.5">
           <button
-            v-for="agent in agents"
-            :key="agent.id"
+            v-for="character in characters"
+            :key="character.id"
             type="button"
             class="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors"
-            :class="viewSide === agent.id
+            :class="viewSide === character.id
               ? 'border-focus bg-bg-hover text-text-main'
               : 'border-border-subtle text-text-dim hover:bg-bg-hover'"
-            @click="session.setViewSide(agent.id)"
+            @click="session.setViewSide(character.id)"
           >
-            <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
-            <span class="flex-1 truncate">{{ agent.name }}</span>
+            <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="flex-1 truncate">{{ character.name }}</span>
             <span
-              v-if="viewSide === agent.id"
+              v-if="viewSide === character.id"
               class="text-xs text-focus"
             >右侧</span>
           </button>
@@ -435,26 +435,26 @@ async function handleBufferChange(e: Event) {
           <div class="text-xs text-text-muted">话题</div>
           <div class="mt-0.5 text-sm text-text-main">{{ topic }}</div>
         </div>
-        <!-- 每个 Agent -->
+        <!-- 每个 Character -->
         <div
-          v-for="agent in agents"
-          :key="agent.id"
+          v-for="character in characters"
+          :key="character.id"
           class="mb-2 rounded-lg border border-border-subtle p-3"
         >
           <div class="mb-1.5 flex items-center gap-2">
-            <span class="h-2 w-2 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
-            <span class="text-sm font-medium" :class="agentText(agent.id).class" :style="agentText(agent.id).style">{{ agent.name }}</span>
-            <span class="text-xs text-text-muted">角色 {{ agent.id }}</span>
+            <span class="h-2 w-2 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="text-sm font-medium" :class="characterText(character.id).class" :style="characterText(character.id).style">{{ character.name }}</span>
+            <span class="text-xs text-text-muted">角色 {{ character.id }}</span>
           </div>
           <p
-            v-if="agent.description"
+            v-if="character.description"
             class="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-text-dim"
           >
-            {{ agent.description }}
+            {{ character.description }}
           </p>
           <p v-else class="text-xs text-text-muted">（未设定身份）</p>
-          <p v-if="agent.personality" class="mt-1 text-xs text-text-muted">
-            性格：{{ agent.personality }}
+          <p v-if="character.personality" class="mt-1 text-xs text-text-muted">
+            性格：{{ character.personality }}
           </p>
         </div>
       </section>

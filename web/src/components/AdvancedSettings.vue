@@ -67,7 +67,7 @@ function labelOf(id: string): string {
 }
 
 /** 角色字母标签（A/B/C…） */
-function agentLabel(idx: number): string {
+function characterLabel(idx: number): string {
   return String.fromCharCode(65 + idx)
 }
 
@@ -81,15 +81,15 @@ interface ThinkingState {
   loadedFor: string
 }
 
-/** 每 agent 的思考选项状态（按 idx 索引） */
+/** 每 character 的思考选项状态（按 idx 索引） */
 const thinkingStates = ref<Record<number, ThinkingState>>({})
 
-/** 取 agent 实际生效的 provider id（空 = 默认） */
+/** 取 character 实际生效的 provider id（空 = 默认） */
 function effectiveProviderId(idx: number): string {
-  return values.value.agents[idx]?.provider || defaultId.value
+  return values.value.characters[idx]?.provider || defaultId.value
 }
 
-/** 拉取某 agent 当前 provider 的思考可选项 */
+/** 拉取某 character 当前 provider 的思考可选项 */
 async function loadThinkingOptions(idx: number) {
   const pid = effectiveProviderId(idx)
   if (!pid) return
@@ -112,12 +112,12 @@ async function loadThinkingOptions(idx: number) {
 /** provider 切换：更新 provider、重置思考档位、重载思考选项 */
 function onProviderChange(idx: number, e: Event) {
   const val = (e.target as HTMLSelectElement).value
-  form.patchAgent(idx, { provider: val, thinking: '' })
+  form.patchCharacter(idx, { provider: val, thinking: '' })
   loadThinkingOptions(idx)
 }
 
 onMounted(() => {
-  values.value.agents.forEach((_agent, idx) => loadThinkingOptions(idx))
+  values.value.characters.forEach((_character, idx) => loadThinkingOptions(idx))
 })
 </script>
 
@@ -132,13 +132,13 @@ onMounted(() => {
     <div class="flex flex-col gap-3 px-3 pb-3 pt-1">
       <!-- 每个角色的 Provider 选择（动态） -->
       <div
-        v-for="(agent, idx) in values.agents"
+        v-for="(character, idx) in values.characters"
         :key="idx"
         class="flex flex-col gap-1"
       >
-        <label class="text-xs text-text-dim">角色 {{ agentLabel(idx) }} 模型</label>
+        <label class="text-xs text-text-dim">角色 {{ characterLabel(idx) }} 模型</label>
         <select
-          :value="agent.provider"
+          :value="character.provider"
           class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
           @change="onProviderChange(idx, $event)"
         >
@@ -148,12 +148,12 @@ onMounted(() => {
           </option>
         </select>
         <!-- 思考档位（动态获取该 provider 模型的可选项） -->
-        <label class="mt-1 text-xs text-text-dim">角色 {{ agentLabel(idx) }} 思考</label>
+        <label class="mt-1 text-xs text-text-dim">角色 {{ characterLabel(idx) }} 思考</label>
         <select
           v-if="thinkingStates[idx]?.supported"
-          :value="agent.thinking"
+          :value="character.thinking"
           class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
-          @change="form.patchAgent(idx, { thinking: ($event.target as HTMLSelectElement).value })"
+          @change="form.patchCharacter(idx, { thinking: ($event.target as HTMLSelectElement).value })"
         >
           <option value="">
             默认（{{

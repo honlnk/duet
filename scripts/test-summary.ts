@@ -2,15 +2,15 @@
 import { createSession, saveSession, loadSession } from '../server/src/store/sessionStore.js'
 import WebSocket from 'ws'
 
-const WS_URL = process.env.WS_URL || 'ws://localhost:3001'
+const WS_URL = process.env.WS_URL || 'ws://localhost:23892'
 
 async function main() {
   // keepRecent=2 让消息数很快超过阈值，summaryEveryN=1 每轮触发
   const session = createSession({
     topic: '是否应该每天早起锻炼（简短辩论）',
-    agents: [
-      { name: '晨型人', persona: '你坚信早起锻炼让人精力充沛。' },
-      { name: '夜型人', persona: '你认为晚上锻炼更符合人体节律。' },
+    characters: [
+      { name: '晨型人', description: '你坚信早起锻炼让人精力充沛。' },
+      { name: '夜型人', description: '你认为晚上锻炼更符合人体节律。' },
     ],
     config: { maxRounds: 2, temperature: 0.7, summaryEveryN: 1, keepRecent: 2 },
   })
@@ -26,7 +26,7 @@ async function main() {
       if (msg.type === 'summary') {
         summarySeen = true
         const summary = msg.summary as string | undefined
-        console.log(`[test] 摘要事件 ${msg.agentId} ${msg.phase}${summary ? ' (' + summary.length + '字)' : ''}`)
+        console.log(`[test] 摘要事件 ${msg.characterId} ${msg.phase}${summary ? ' (' + summary.length + '字)' : ''}`)
         if (summary) console.log(`  内容: ${summary.slice(0, 120)}...`)
       } else if (msg.type === 'finished') {
         console.log(`[test] 结束: ${msg.reason}`)

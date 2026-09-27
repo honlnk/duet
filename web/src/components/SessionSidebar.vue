@@ -42,7 +42,7 @@ const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return sorted.value
   return sorted.value.filter((s) => {
-    const hay = (s.topic + ' ' + s.agents.join(' ')).toLowerCase()
+    const hay = (s.topic + ' ' + s.characters.join(' ')).toLowerCase()
     return hay.includes(kw)
   })
 })

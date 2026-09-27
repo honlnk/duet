@@ -5,7 +5,7 @@
  * 对应 server/src/routes/sessions.ts 和 health.ts。
  */
 import type {
-  AgentId,
+  CharacterId,
   ApiProtocol,
   ConfigLimits,
   CreateSessionPayload,
@@ -126,16 +126,16 @@ export function updateSessionConfig(
 
 /**
  * 查询某会话最近发给 LLM 的完整 Prompt 历史。
- * GET /api/sessions/:id/prompts?agentId=A&limit=20
- * 内存态，进程重启后丢失；未指定 agentId 则返回全部角色的快照。
+ * GET /api/sessions/:id/prompts?characterId=A&limit=20
+ * 内存态，进程重启后丢失；未指定 characterId 则返回全部角色的快照。
  */
 export async function getRecentPrompts(
   id: string,
-  agentId?: AgentId,
+  characterId?: CharacterId,
   limit?: number,
 ): Promise<PromptHistoryResponse> {
   const params = new URLSearchParams()
-  if (agentId) params.set('agentId', agentId)
+  if (characterId) params.set('characterId', characterId)
   if (limit) params.set('limit', String(limit))
   const qs = params.toString()
   return request<PromptHistoryResponse>(`/api/sessions/${id}/prompts${qs ? `?${qs}` : ''}`)

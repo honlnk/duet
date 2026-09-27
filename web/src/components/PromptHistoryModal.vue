@@ -11,22 +11,22 @@
  */
 import { computed, ref, watch } from 'vue'
 import { getRecentPrompts } from '@/services/api'
-import { resolveColor, colorHex } from '@/utils/agentColor'
-import type { Agent, AgentId, PromptSnapshot } from '@/types/api'
+import { resolveColor, colorHex } from '@/utils/characterColor'
+import type { Character, CharacterId, PromptSnapshot } from '@/types/api'
 
 const props = defineProps<{
   sessionId: string
-  agents: Agent[]
+  characters: Character[]
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 
-const MAX_PER_AGENT = 20
+const MAX_PER_CHARACTER = 20
 
 /** 当前选中的角色 */
-const selectedAgentId = ref<AgentId | null>(props.agents[0]?.id ?? null)
+const selectedCharacterId = ref<CharacterId | null>(props.characters[0]?.id ?? null)
 
-/** 全部快照（未按 agent 过滤，一次性拉取，本地过滤，避免频繁请求） */
+/** 全部快照（未按 character 过滤，一次性拉取，本地过滤，避免频繁请求） */
 const snapshots = ref<PromptSnapshot[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
@@ -35,17 +35,17 @@ const expanded = ref<Set<number>>(new Set())
 
 /** 选中角色的快照（按时间倒序，最新在前） */
 const filteredSnapshots = computed(() => {
-  if (!selectedAgentId.value) return []
+  if (!selectedCharacterId.value) return []
   return snapshots.value
-    .filter((s) => s.agentId === selectedAgentId.value)
+    .filter((s) => s.characterId === selectedCharacterId.value)
     .slice()
     .sort((a, b) => b.timestamp - a.timestamp)
 })
 
 /** 角色名 → 是否有快照（左侧列表显示徽标） */
-const agentHasPrompts = computed(() => {
-  const map = new Map<AgentId, boolean>()
-  for (const s of snapshots.value) map.set(s.agentId, true)
+const characterHasPrompts = computed(() => {
+  const map = new Map<CharacterId, boolean>()
+  for (const s of snapshots.value) map.set(s.characterId, true)
   return map
 })
 
@@ -54,7 +54,7 @@ async function fetchAll() {
   loading.value = true
   loadError.value = null
   try {
-    const res = await getRecentPrompts(props.sessionId, undefined, MAX_PER_AGENT * props.agents.length)
+    const res = await getRecentPrompts(props.sessionId, undefined, MAX_PER_CHARACTER * props.characters.length)
     snapshots.value = res.prompts
   } catch (e) {
     loadError.value = (e as Error).message
@@ -70,7 +70,7 @@ async function refresh() {
 }
 
 /** 切换角色时收起所有展开项 */
-watch(selectedAgentId, () => {
+watch(selectedCharacterId, () => {
   expanded.value = new Set()
 })
 
@@ -120,7 +120,7 @@ function roleLabel(role: string): string {
 }
 
 /** 角色颜色（左侧列表 dot，统一走 inline hex 背景，兼容预设/自定义） */
-function agentDot(a: Agent, index: number) {
+function characterDot(a: Character, index: number) {
   const c = resolveColor(a.color, index)
   return { style: { backgroundColor: colorHex(c) } }
 }
@@ -146,7 +146,7 @@ fetchAll()
     @mousedown="onOverlayMouseDown"
     @click="onOverlayClick"
   >
-    <!-- 模态卡片（左 agent 列表 + 右内容） -->
+    <!-- 模态卡片（左 character 列表 + 右内容） -->
     <div
       class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
     >
@@ -180,27 +180,27 @@ fetchAll()
         </div>
       </div>
 
-      <!-- 主体：左 agent 列表 + 右内容 -->
+      <!-- 主体：左 character 列表 + 右内容 -->
       <div class="flex min-h-0 flex-1">
         <!-- 左侧：角色列表 -->
         <nav class="w-44 shrink-0 overflow-y-auto border-r border-border-subtle bg-bg-soft p-2">
           <button
-            v-for="(agent, i) in agents"
-            :key="agent.id"
+            v-for="(character, i) in characters"
+            :key="character.id"
             type="button"
             class="mb-1 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors"
-            :class="selectedAgentId === agent.id
+            :class="selectedCharacterId === character.id
               ? 'border-focus bg-bg-hover text-text-main'
               : 'border-transparent text-text-dim hover:bg-bg-hover'"
-            @click="selectedAgentId = agent.id"
+            @click="selectedCharacterId = character.id"
           >
             <span
               class="h-2.5 w-2.5 shrink-0 rounded-full"
-              :style="agentDot(agent, i).style"
+              :style="characterDot(character, i).style"
             />
-            <span class="flex-1 truncate">{{ agent.name }}</span>
+            <span class="flex-1 truncate">{{ character.name }}</span>
             <span
-              v-if="agentHasPrompts.get(agent.id)"
+              v-if="characterHasPrompts.get(character.id)"
               class="h-1.5 w-1.5 rounded-full bg-focus"
               title="有记录"
             />

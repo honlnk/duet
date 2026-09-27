@@ -2,14 +2,14 @@
 import { createSession, saveSession, loadSession } from '../server/src/store/sessionStore.js'
 import WebSocket from 'ws'
 
-const WS_URL = process.env.WS_URL || 'ws://localhost:3001'
+const WS_URL = process.env.WS_URL || 'ws://localhost:23892'
 
 async function main() {
   const session = createSession({
     topic: '宇宙的终极意义（无限讨论，测试停止）',
-    agents: [
-      { name: '哲学家', persona: '你从存在主义角度思考。' },
-      { name: '科学家', persona: '你从物理实证角度思考。' },
+    characters: [
+      { name: '哲学家', description: '你从存在主义角度思考。' },
+      { name: '科学家', description: '你从物理实证角度思考。' },
     ],
     config: { maxRounds: 0, temperature: 0.7, summaryEveryN: 50, keepRecent: 8 }, // 无限
   })
@@ -27,7 +27,7 @@ async function main() {
         if (chunkCount === 1) console.log('[test] 收到第一个 chunk，准备 1.5s 后停止')
       } else if (msg.type === 'message_done') {
         const m = msg.message as { content: string; truncated: boolean }
-        console.log(`[test] 消息完成: ${msg.agentId} (${m.content.length}字, truncated=${m.truncated})`)
+        console.log(`[test] 消息完成: ${msg.characterId} (${m.content.length}字, truncated=${m.truncated})`)
       } else if (msg.type === 'finished') {
         console.log(`[test] 对话结束: ${msg.reason}`)
         resolve()

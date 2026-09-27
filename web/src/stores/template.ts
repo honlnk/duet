@@ -7,10 +7,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import {
-  loadAgentTemplates,
-  addAgentTemplate,
-  updateAgentTemplate,
-  removeAgentTemplate,
+  loadCharacterTemplates,
+  addCharacterTemplate,
+  updateCharacterTemplate,
+  removeCharacterTemplate,
   loadTopicTemplates,
   addTopicTemplate,
   updateTopicTemplate,
@@ -19,13 +19,13 @@ import {
   addWorldviewTemplate,
   updateWorldviewTemplate,
   removeWorldviewTemplate,
-  type AgentTemplate,
+  type CharacterTemplate,
   type TopicTemplate,
   type WorldviewTemplate,
 } from '@/services/templates'
 
 export const useTemplateStore = defineStore('template', () => {
-  const agents = ref<AgentTemplate[]>(loadAgentTemplates())
+  const characters = ref<CharacterTemplate[]>(loadCharacterTemplates())
   const topics = ref<TopicTemplate[]>(loadTopicTemplates())
   const worldviews = ref<WorldviewTemplate[]>(loadWorldviewTemplates())
 
@@ -37,34 +37,34 @@ export const useTemplateStore = defineStore('template', () => {
 
   /** 重新从 localStorage 拉取（外部修改后同步） */
   function refresh() {
-    agents.value = loadAgentTemplates()
+    characters.value = loadCharacterTemplates()
     topics.value = loadTopicTemplates()
     worldviews.value = loadWorldviewTemplates()
   }
 
   /** 新增角色模板，返回新列表 */
-  function addAgent(
+  function addCharacter(
     name: string,
     description: string = '',
     personality: string = '',
-  ): AgentTemplate[] {
-    agents.value = addAgentTemplate(name, description, personality)
-    return agents.value
+  ): CharacterTemplate[] {
+    characters.value = addCharacterTemplate(name, description, personality)
+    return characters.value
   }
 
   /** 更新角色模板 */
-  function updateAgent(
+  function updateCharacter(
     id: string,
-    patch: Partial<Pick<AgentTemplate, 'name' | 'description' | 'personality'>>,
-  ): AgentTemplate[] {
-    agents.value = updateAgentTemplate(id, patch)
-    return agents.value
+    patch: Partial<Pick<CharacterTemplate, 'name' | 'description' | 'personality'>>,
+  ): CharacterTemplate[] {
+    characters.value = updateCharacterTemplate(id, patch)
+    return characters.value
   }
 
   /** 删除角色模板 */
-  function removeAgent(id: string): AgentTemplate[] {
-    agents.value = removeAgentTemplate(id)
-    return agents.value
+  function removeCharacter(id: string): CharacterTemplate[] {
+    characters.value = removeCharacterTemplate(id)
+    return characters.value
   }
 
   /** 新增话题模板 */
@@ -110,9 +110,9 @@ export const useTemplateStore = defineStore('template', () => {
   }
 
   /** 按 id 查找角色模板 */
-  function findAgent(id: string | undefined | null): AgentTemplate | undefined {
+  function findCharacter(id: string | undefined | null): CharacterTemplate | undefined {
     if (!id) return undefined
-    return agents.value.find((t) => t.id === id)
+    return characters.value.find((t) => t.id === id)
   }
 
   /** 按 id 查找世界观模板 */
@@ -127,21 +127,21 @@ export const useTemplateStore = defineStore('template', () => {
   }
 
   return {
-    agents,
+    characters,
     topics,
     worldviews,
     pendingNewChat,
     refresh,
-    addAgent,
-    updateAgent,
-    removeAgent,
+    addCharacter,
+    updateCharacter,
+    removeCharacter,
     addTopic,
     updateTopic,
     removeTopic,
     addWorldview,
     updateWorldview,
     removeWorldview,
-    findAgent,
+    findCharacter,
     findWorldview,
     requestNewChat,
   }

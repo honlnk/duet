@@ -7,12 +7,12 @@
 import { defineStore } from 'pinia'
 import { computed, reactive } from 'vue'
 import type { CreateSessionPayload, SessionConfig } from '@/types/api'
-import { MAX_AGENTS, MIN_AGENTS } from '@/types/api'
+import { MAX_CHARACTERS, MIN_CHARACTERS } from '@/types/api'
 import {
   defaultValues,
-  makeAgent,
+  makeCharacter,
   normalizeValues,
-  type AgentFormValues,
+  type CharacterFormValues,
   type FormValues,
 } from '@/services/storage'
 import { loadRelationships, translateRelationshipsForSession } from '@/services/relationships'
@@ -21,8 +21,8 @@ export const useFormStore = defineStore('form', () => {
   const values = reactive<FormValues>(defaultValues())
 
   /** 更新第 idx 个角色的部分字段（如颜色、provider） */
-  function patchAgent(idx: number, patch: Partial<AgentFormValues>) {
-    const a = values.agents[idx]
+  function patchCharacter(idx: number, patch: Partial<CharacterFormValues>) {
+    const a = values.characters[idx]
     if (a) Object.assign(a, patch)
   }
 
@@ -61,7 +61,7 @@ export const useFormStore = defineStore('form', () => {
     description?: string,
     personality?: string,
   ) {
-    const a = values.agents[idx]
+    const a = values.characters[idx]
     if (!a) return
     a.templateId = templateId
     a.name = name
@@ -71,7 +71,7 @@ export const useFormStore = defineStore('form', () => {
 
   /** 清空第 idx 个角色的模板选择（回到未选占位） */
   function clearTemplate(idx: number) {
-    const a = values.agents[idx]
+    const a = values.characters[idx]
     if (!a) return
     a.templateId = ''
     a.name = ''
@@ -79,16 +79,16 @@ export const useFormStore = defineStore('form', () => {
     a.personality = ''
   }
 
-  /** 追加一个空角色（不超过 MAX_AGENTS） */
-  function addAgent() {
-    if (values.agents.length >= MAX_AGENTS) return
-    values.agents.push(makeAgent(values.agents.length))
+  /** 追加一个空角色（不超过 MAX_CHARACTERS） */
+  function addCharacter() {
+    if (values.characters.length >= MAX_CHARACTERS) return
+    values.characters.push(makeCharacter(values.characters.length))
   }
 
-  /** 移除指定位置角色（不少于 MIN_AGENTS） */
-  function removeAgent(idx: number) {
-    if (values.agents.length <= MIN_AGENTS) return
-    values.agents.splice(idx, 1)
+  /** 移除指定位置角色（不少于 MIN_CHARACTERS） */
+  function removeCharacter(idx: number) {
+    if (values.characters.length <= MIN_CHARACTERS) return
+    values.characters.splice(idx, 1)
   }
 
   /** 用任意值对象覆盖部分字段（标量） */
@@ -109,7 +109,7 @@ export const useFormStore = defineStore('form', () => {
     values.durationSec = normalized.durationSec
     values.summaryEveryN = normalized.summaryEveryN
     values.keepRecent = normalized.keepRecent
-    values.agents.splice(0, values.agents.length, ...normalized.agents)
+    values.characters.splice(0, values.characters.length, ...normalized.characters)
     values.relationships = normalized.relationships
   }
 
@@ -126,7 +126,7 @@ export const useFormStore = defineStore('form', () => {
     values.durationSec = def.durationSec
     values.summaryEveryN = def.summaryEveryN
     values.keepRecent = def.keepRecent
-    values.agents.splice(0, values.agents.length, ...def.agents)
+    values.characters.splice(0, values.characters.length, ...def.characters)
     values.relationships = {}
   }
 
@@ -141,27 +141,27 @@ export const useFormStore = defineStore('form', () => {
 
   /** 转为后端 POST 请求体 */
   const payload = computed<CreateSessionPayload>(() => {
-    // A/B/C 走专用字段，D~J 走 agentProviders 映射
-    const providerA = values.agents[0]?.provider || undefined
-    const providerB = values.agents[1]?.provider || undefined
-    const providerC = values.agents[2]?.provider || undefined
-    // 思考档位：与 provider 同构的 A/B/C + agentThinking 映射
-    const thinkingA = values.agents[0]?.thinking || undefined
-    const thinkingB = values.agents[1]?.thinking || undefined
-    const thinkingC = values.agents[2]?.thinking || undefined
-    const agentProviders: Record<string, string> = {}
-    const agentThinking: Record<string, string> = {}
+    // A/B/C 走专用字段，D~J 走 characterProviders 映射
+    const providerA = values.characters[0]?.provider || undefined
+    const providerB = values.characters[1]?.provider || undefined
+    const providerC = values.characters[2]?.provider || undefined
+    // 思考档位：与 provider 同构的 A/B/C + characterThinking 映射
+    const thinkingA = values.characters[0]?.thinking || undefined
+    const thinkingB = values.characters[1]?.thinking || undefined
+    const thinkingC = values.characters[2]?.thinking || undefined
+    const characterProviders: Record<string, string> = {}
+    const characterThinking: Record<string, string> = {}
     const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
-    for (let i = 3; i < values.agents.length; i++) {
-      const p = values.agents[i]?.provider
-      if (p) agentProviders[ids[i]!] = p
-      const t = values.agents[i]?.thinking
-      if (t) agentThinking[ids[i]!] = t
+    for (let i = 3; i < values.characters.length; i++) {
+      const p = values.characters[i]?.provider
+      if (p) characterProviders[ids[i]!] = p
+      const t = values.characters[i]?.thinking
+      if (t) characterThinking[ids[i]!] = t
     }
     const scenario = values.scenario.trim() || undefined
     return {
       topic: values.topic.trim(),
-      agents: values.agents.map((a, i) => ({
+      characters: values.characters.map((a, i) => ({
         name: a.name.trim() || `角色 ${i + 1}`,
         description: a.description.trim() || undefined,
         personality: a.personality.trim() || undefined,
@@ -177,19 +177,19 @@ export const useFormStore = defineStore('form', () => {
         providerA,
         providerB,
         providerC,
-        agentProviders: Object.keys(agentProviders).length > 0 ? agentProviders : undefined,
+        characterProviders: Object.keys(characterProviders).length > 0 ? characterProviders : undefined,
         thinkingA,
         thinkingB,
         thinkingC,
-        agentThinking: Object.keys(agentThinking).length > 0 ? agentThinking : undefined,
+        characterThinking: Object.keys(characterThinking).length > 0 ? characterThinking : undefined,
         scenario,
       } satisfies SessionConfig,
       // 从全局关系图自动注入：把基于 templateId 的关系翻译为会话内 A/B/C 关系
       relationships: (() => {
-        // 构建 templateId → 会话 AgentId 映射
+        // 构建 templateId → 会话 CharacterId 映射
         const idMap: Record<string, string> = {}
         const ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
-        values.agents.forEach((a, i) => {
+        values.characters.forEach((a, i) => {
           if (a.templateId && ids[i]) idMap[a.templateId] = ids[i]!
         })
         const globalRels = loadRelationships()
@@ -203,31 +203,31 @@ export const useFormStore = defineStore('form', () => {
   const hasTopic = computed(() => values.topic.trim().length > 0)
 
   /** 所有角色是否都已选择模板（校验用） */
-  const allAgentsSelected = computed(() =>
-    values.agents.every((a) => a.templateId !== '' && a.name.trim() !== ''),
+  const allCharactersSelected = computed(() =>
+    values.characters.every((a) => a.templateId !== '' && a.name.trim() !== ''),
   )
 
   /** 是否可提交：话题非空且所有角色都已选择 */
-  const canSubmit = computed(() => hasTopic.value && allAgentsSelected.value)
+  const canSubmit = computed(() => hasTopic.value && allCharactersSelected.value)
 
   return {
     values,
-    patchAgent,
+    patchCharacter,
     selectTopic,
     clearTopic,
     selectWorldview,
     clearWorldview,
     selectTemplate,
     clearTemplate,
-    addAgent,
-    removeAgent,
+    addCharacter,
+    removeCharacter,
     setValues,
     replace,
     reset,
     num,
     payload,
     hasTopic,
-    allAgentsSelected,
+    allCharactersSelected,
     canSubmit,
   }
 })

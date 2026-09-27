@@ -6,7 +6,7 @@
  * templateId → A/B/C 映射自动注入到会话的 relationships 字段。
  *
  * Key 规范："{fromTemplateId}->{toTemplateId}"
- *   - fromId / toId 均为角色模板 id（AgentTemplate.id）
+ *   - fromId / toId 均为角色模板 id（CharacterTemplate.id）
  *   - 同一对双向关系对应两个 key（A→B 和 B→A）
  *
  * 节点位置（nodePositions）也在此持久化，key 同样为 templateId。
@@ -162,7 +162,7 @@ export function removeNodePositionOf(templateId: string): void {
  * 仅返回当前会话选中的角色之间存在的关系。
  *
  * @param globalRels 全局关系图
- * @param idMap templateId → 会话内 AgentId 的映射（如 { 'a_xx': 'A', 'a_yy': 'B' }）
+ * @param idMap templateId → 会话内 CharacterId 的映射（如 { 'a_xx': 'A', 'a_yy': 'B' }）
  */
 export function translateRelationshipsForSession(
   globalRels: Record<string, string>,

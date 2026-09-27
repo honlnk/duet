@@ -6,17 +6,17 @@
  * v2：角色配置从固定 A/B 改为动态数组（2~3 个，含颜色与各自 Provider）。
  */
 
-import type { AgentColor } from '@/types/api'
-import { DEFAULT_AGENT_COLORS, MAX_AGENTS, MIN_AGENTS } from '@/types/api'
+import type { CharacterColor } from '@/types/api'
+import { DEFAULT_CHARACTER_COLORS, MAX_CHARACTERS, MIN_CHARACTERS } from '@/types/api'
 
 /** 单个角色的表单字段（草稿/历史中的形态） */
-export interface AgentFormValues {
+export interface CharacterFormValues {
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
   description: string
   /** 性格关键词摘要 */
   personality: string
-  color: AgentColor
+  color: CharacterColor
   /** Provider id（空串 = 默认 Provider） */
   provider: string
   /** 思考档位 key（空串 = 用 Provider 默认配置） */
@@ -41,12 +41,12 @@ export interface FormValues {
   summaryEveryN: string
   keepRecent: string
   /** 角色列表（长度 2~3） */
-  agents: AgentFormValues[]
+  characters: CharacterFormValues[]
   /** 非对称关系图：Key "{fromId}->{toId}" */
   relationships: Record<string, string>
 }
 
-/** 通用配置字段的键（不含 agents，agents 是数组单独管理） */
+/** 通用配置字段的键（不含 characters，characters 是数组单独管理） */
 export const SCALAR_FIELD_KEYS = [
   'topic',
   'scenario',
@@ -81,12 +81,12 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 }
 
 /** 生成一个默认角色表单项（未选模板的占位） */
-export function makeAgent(index: number, over?: Partial<AgentFormValues>): AgentFormValues {
+export function makeCharacter(index: number, over?: Partial<CharacterFormValues>): CharacterFormValues {
   return {
     name: '',
     description: '',
     personality: '',
-    color: over?.color || DEFAULT_AGENT_COLORS[index] || 'blue',
+    color: over?.color || DEFAULT_CHARACTER_COLORS[index] || 'blue',
     provider: '',
     thinking: '',
     templateId: '',
@@ -107,7 +107,7 @@ export function defaultValues(): FormValues {
     durationSec: '',
     summaryEveryN: '10',
     keepRecent: '8',
-    agents: [makeAgent(0), makeAgent(1)],
+    characters: [makeCharacter(0), makeCharacter(1)],
     relationships: {},
   }
 }
@@ -168,13 +168,13 @@ function genId(): string {
 
 /** 用关键字段拼接签名用于去重 */
 function signature(v: FormValues): string {
-  const agentsSig = v.agents.map((a) => `${a.name}|${a.description}`).join('||')
-  return `${v.topic}|${agentsSig}`.trim()
+  const charactersSig = v.characters.map((a) => `${a.name}|${a.description}`).join('||')
+  return `${v.topic}|${charactersSig}`.trim()
 }
 
 /** 预设显示标签 */
 export function labelOf(v: FormValues): string {
-  const names = v.agents.map((a) => a.name || '?').join(' vs ')
+  const names = v.characters.map((a) => a.name || '?').join(' vs ')
   const topicPrefix = (v.topic || '').slice(0, 20)
   return topicPrefix ? `${names} · ${topicPrefix}` : names
 }
@@ -210,7 +210,7 @@ export function clearHistory(): void {
 /**
  * 归一化表单值（容错）：
  * - 补全缺失的标量字段为字符串；
- * - agents 数组至少 MIN_AGENTS、至多 MAX_AGENTS，缺字段补默认。
+ * - characters 数组至少 MIN_CHARACTERS、至多 MAX_CHARACTERS，缺字段补默认。
  *
  * 入参用宽松类型，兼容 FormValues 与未知结构混合输入。
  */
@@ -228,18 +228,22 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
     durationSec: str(anyInput.durationSec, def.durationSec),
     summaryEveryN: str(anyInput.summaryEveryN, def.summaryEveryN),
     keepRecent: str(anyInput.keepRecent, def.keepRecent),
-    agents: [],
+    characters: [],
     relationships: obj(anyInput.relationships) as Record<string, string>,
   }
 
-  if (Array.isArray(anyInput.agents) && anyInput.agents.length > 0) {
-    out.agents = (anyInput.agents as Array<Partial<AgentFormValues>>)
-      .slice(0, MAX_AGENTS)
+  // 新字段优先；旧草稿/历史（智能体概念时期）存的是 agents 数组，自动迁移
+  const rawCharacters = Array.isArray(anyInput.characters) && anyInput.characters.length > 0
+    ? anyInput.characters
+    : anyInput.agents
+  if (Array.isArray(rawCharacters) && rawCharacters.length > 0) {
+    out.characters = (rawCharacters as Array<Partial<CharacterFormValues>>)
+      .slice(0, MAX_CHARACTERS)
       .map((a, i) => ({
         name: str(a?.name, ''),
         description: str(a?.description, ''),
         personality: str(a?.personality, ''),
-        color: (isValidColor(a?.color) ? a?.color : def.agents[i]?.color || 'blue') as AgentColor,
+        color: (isValidColor(a?.color) ? a?.color : def.characters[i]?.color || 'blue') as CharacterColor,
         provider: str(a?.provider, ''),
         thinking: str(a?.thinking, ''),
         templateId: str(a?.templateId, ''),
@@ -247,8 +251,8 @@ export function normalizeValues(input: FormValues | Record<string, unknown>): Fo
   }
 
   // 保证长度合法
-  while (out.agents.length < MIN_AGENTS) out.agents.push(makeAgent(out.agents.length))
-  out.agents = out.agents.slice(0, MAX_AGENTS)
+  while (out.characters.length < MIN_CHARACTERS) out.characters.push(makeCharacter(out.characters.length))
+  out.characters = out.characters.slice(0, MAX_CHARACTERS)
   return out
 }
 
@@ -266,7 +270,7 @@ function obj(v: unknown): Record<string, string> {
 
 /** 合法颜色：预设 key 或 hex（#rgb / #rrggbb） */
 const HEX_RE = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/
-function isValidColor(c: unknown): c is AgentColor {
+function isValidColor(c: unknown): c is CharacterColor {
   if (typeof c !== 'string') return false
   if (['blue', 'pink', 'green', 'amber', 'purple', 'teal'].includes(c)) return true
   return HEX_RE.test(c)
