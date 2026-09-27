@@ -524,7 +524,7 @@ function fillExample(text: string): void {
         <select
           v-if="thinkingSupported && thinkingOpts.length > 0"
           v-model="thinking"
-          class="w-24 shrink-0 rounded-md border border-border-subtle bg-bg-card px-2 py-1.5 text-xs text-text-main outline-none focus:border-focus"
+          class="w-28 shrink-0 truncate rounded-md border border-border-subtle bg-bg-card px-2 py-1.5 text-xs text-text-main outline-none focus:border-focus"
           aria-label="思考强度"
         >
           <option value="">思考:默认</option>
