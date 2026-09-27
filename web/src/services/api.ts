@@ -127,7 +127,7 @@ export function updateSessionConfig(
 /**
  * 查询某会话最近发给 LLM 的完整 Prompt 历史。
  * GET /api/sessions/:id/prompts?agentId=A&limit=20
- * 内存态，进程重启后丢失；未指定 agentId 则返回全部智能体的快照。
+ * 内存态，进程重启后丢失；未指定 agentId 则返回全部角色的快照。
  */
 export async function getRecentPrompts(
   id: string,

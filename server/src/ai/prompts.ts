@@ -11,7 +11,7 @@ interface AgentSystemParams {
   description?: string
   /** 性格关键词摘要 */
   personality?: string
-  /** 本会话中除自己以外的所有其他智能体（完整角色信息） */
+  /** 本会话中除自己以外的所有其他角色（完整角色信息） */
   others: AgentRef[]
   /** 当前 agent 对所有他人的关系描述（已提取为「我与某人的关系」条目） */
   relationships?: string[]
@@ -41,7 +41,7 @@ export function buildAgentSystem({
 }: AgentSystemParams): string {
   const sections: string[] = []
 
-  // ─── 全局设定（话题恒在最前，确保所有智能体都明确对话主题）───
+  // ─── 全局设定（话题恒在最前，确保所有角色都明确对话主题）───
   sections.push('─── 全局设定 ───')
   sections.push('[话题]')
   sections.push(topic)
@@ -203,15 +203,15 @@ export function buildDirectorInjection(
 /* ----------------------- 颜色辅助（与前端共享） ----------------------- */
 
 /**
- * 智能体默认颜色顺序（按 A/B/C... 依次循环分配）。
- * 超出预设数量时从头部循环复用，保证相邻智能体不撞色。
+ * 角色默认颜色顺序（按 A/B/C... 依次循环分配）。
+ * 超出预设数量时从头部循环复用，保证相邻角色不撞色。
  */
 export const DEFAULT_AGENT_COLORS: AgentColor[] = [
   'blue', 'pink', 'green', 'amber', 'purple', 'teal',
 ]
 
 /**
- * 取智能体颜色，缺省时按其在 agents 数组中的索引回退到默认色。
+ * 取角色颜色，缺省时按其在 agents 数组中的索引回退到默认色。
  */
 export function agentColorOf(agent: AgentRef, fallbackIndex: number): AgentColor {
   return agent.color || DEFAULT_AGENT_COLORS[fallbackIndex] || 'blue'

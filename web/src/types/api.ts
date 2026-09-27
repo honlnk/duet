@@ -7,11 +7,11 @@
  */
 
 /**
- * 智能体 ID。支持 2~10 个智能体：A、B 为必选，C~J 按需追加。
+ * 角色 ID。支持 2~10 个角色：A、B 为必选，C~J 按需追加。
  */
 export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
 
-/** 所有可能的智能体 ID */
+/** 所有可能的角色 ID */
 export const ALL_AGENT_IDS: readonly AgentId[] = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 ] as const
@@ -23,7 +23,7 @@ export const ALL_AGENT_IDS: readonly AgentId[] = [
 export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
 
 /**
- * 智能体颜色值：预设 key 或自定义 hex（如 '#ff5533'）。
+ * 角色颜色值：预设 key 或自定义 hex（如 '#ff5533'）。
  * - 预设色走 Tailwind class（text-agent-blue 等）
  * - 自定义色走 inline style + CSS 变量（运行时注入，非构建期）
  */
@@ -49,14 +49,14 @@ export function isPresetColor(c: string): c is AgentPresetColor {
 }
 
 /**
- * 智能体默认颜色顺序（按 A/B/C... 依次循环分配）。
+ * 角色默认颜色顺序（按 A/B/C... 依次循环分配）。
  * 超出预设数量时从头部循环复用。
  */
 export const DEFAULT_AGENT_COLORS: AgentPresetColor[] = [
   'blue', 'pink', 'green', 'amber', 'purple', 'teal',
 ]
 
-/** 会话允许的智能体数量区间 */
+/** 会话允许的角色数量区间 */
 export const MIN_AGENTS = 2
 export const MAX_AGENTS = 10
 
@@ -88,7 +88,7 @@ export interface DirectorInstruction {
   durationRounds: number
 }
 
-/** 智能体定义（完整会话中的形态） */
+/** 角色定义（完整会话中的形态） */
 export interface Agent {
   id: AgentId
   name: string
@@ -114,21 +114,21 @@ export interface SessionConfig {
   summaryEveryN: number
   /** 压缩后保留最近消息数 */
   keepRecent: number
-  /** 智能体 A 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 A 使用的 Provider id（空 = 默认 Provider） */
   providerA?: string
-  /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 B 使用的 Provider id（空 = 默认 Provider） */
   providerB?: string
-  /** 智能体 C 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 C 使用的 Provider id（空 = 默认 Provider） */
   providerC?: string
-  /** D~J 等智能体的 Provider 映射（优先级高于默认） */
+  /** D~J 等角色的 Provider 映射（优先级高于默认） */
   agentProviders?: Record<string, string>
-  /** 智能体 A 的思考档位（空 = 用 Provider 默认） */
+  /** 角色 A 的思考档位（空 = 用 Provider 默认） */
   thinkingA?: string
-  /** 智能体 B 的思考档位（空 = 用 Provider 默认） */
+  /** 角色 B 的思考档位（空 = 用 Provider 默认） */
   thinkingB?: string
-  /** 智能体 C 的思考档位（空 = 用 Provider 默认） */
+  /** 角色 C 的思考档位（空 = 用 Provider 默认） */
   thinkingC?: string
-  /** D~J 智能体的思考档位映射（优先级同 agentProviders） */
+  /** D~J 角色的思考档位映射（优先级同 agentProviders） */
   agentThinking?: Record<string, string>
   /** 场景设定 / 世界观（与 topic 职责分离） */
   scenario?: string
@@ -177,7 +177,7 @@ export interface SessionStats {
  * 完整的会话对象
  * 对应 createSession() 的返回，以及 GET /api/sessions/:id 和 WS sync 事件。
  * - agents：长度 2 或 3（第 0 个恒为 A、第 1 个为 B，第 2 个（可选）为 C）
- * - memory：A/B 必有；C 仅在三智能体会话时存在
+ * - memory：A/B 必有；C 仅在三角色会话时存在
  */
 export interface Session {
   id: string
@@ -216,7 +216,7 @@ export interface SessionSummary {
   agents: string[]
 }
 
-/** POST /api/sessions 请求体（支持 2~3 个智能体，每个可带颜色） */
+/** POST /api/sessions 请求体（支持 2~3 个角色，每个可带颜色） */
 export interface CreateSessionPayload {
   topic: string
   agents: Array<{

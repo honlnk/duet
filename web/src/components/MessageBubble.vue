@@ -15,7 +15,7 @@ const props = defineProps<{ message: ViewMessage }>()
 const session = useSessionStore()
 
 const agent = computed(() => session.findAgent(props.message.agentId))
-/** 该消息的智能体在 agents 数组中的索引（用于回退默认色） */
+/** 该消息的角色在 agents 数组中的索引（用于回退默认色） */
 const agentIndex = computed(() => {
   const idx = session.session?.agents.findIndex((a) => a.id === props.message.agentId)
   return idx ?? 0
@@ -23,7 +23,7 @@ const agentIndex = computed(() => {
 const color = computed(() => resolveColor(agent.value?.color, agentIndex.value))
 const name = computed(() => session.agentName(props.message.agentId))
 
-/** 是否靠右显示：当前视角智能体的消息靠右，其余靠左 */
+/** 是否靠右显示：当前视角角色的消息靠右，其余靠左 */
 const isRight = computed(() => session.isRightSide(props.message.agentId))
 
 /** 气泡对齐 */

@@ -76,7 +76,7 @@ function openNewChat() {
   showNewChat.value = true
 }
 
-/** 关闭设置模态时刷新模板缓存（用户可能在设置里增删了智能体/话题模板） */
+/** 关闭设置模态时刷新模板缓存（用户可能在设置里增删了角色/话题模板） */
 function onSettingsClose() {
   template.refresh()
   showSettings.value = false

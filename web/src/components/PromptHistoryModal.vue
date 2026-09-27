@@ -3,8 +3,8 @@
  * Prompt 历史查看模态框
  *
  * 展示当前会话「最近发给 LLM 的完整 Prompt」快照。
- * 左侧：智能体列表（可切换查看不同智能体的 prompt）。
- * 右侧：选中智能体的快照列表，按时间倒序（最新在前），每条可展开查看完整 messages。
+ * 左侧：角色列表（可切换查看不同角色的 prompt）。
+ * 右侧：选中角色的快照列表，按时间倒序（最新在前），每条可展开查看完整 messages。
  *
  * 数据来源：GET /api/sessions/:id/prompts
  * 后端在每次 buildApiMessages 之后、chatCompletion 之前捕获，所见即所发。
@@ -23,7 +23,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const MAX_PER_AGENT = 20
 
-/** 当前选中的智能体 */
+/** 当前选中的角色 */
 const selectedAgentId = ref<AgentId | null>(props.agents[0]?.id ?? null)
 
 /** 全部快照（未按 agent 过滤，一次性拉取，本地过滤，避免频繁请求） */
@@ -33,7 +33,7 @@ const loadError = ref<string | null>(null)
 /** 当前展开查看的快照 timestamp（同时展开多个用 Set） */
 const expanded = ref<Set<number>>(new Set())
 
-/** 选中智能体的快照（按时间倒序，最新在前） */
+/** 选中角色的快照（按时间倒序，最新在前） */
 const filteredSnapshots = computed(() => {
   if (!selectedAgentId.value) return []
   return snapshots.value
@@ -42,14 +42,14 @@ const filteredSnapshots = computed(() => {
     .sort((a, b) => b.timestamp - a.timestamp)
 })
 
-/** 智能体名 → 是否有快照（左侧列表显示徽标） */
+/** 角色名 → 是否有快照（左侧列表显示徽标） */
 const agentHasPrompts = computed(() => {
   const map = new Map<AgentId, boolean>()
   for (const s of snapshots.value) map.set(s.agentId, true)
   return map
 })
 
-/** 拉取全部智能体的 prompt 历史（一次拉取，本地过滤） */
+/** 拉取全部角色的 prompt 历史（一次拉取，本地过滤） */
 async function fetchAll() {
   loading.value = true
   loadError.value = null
@@ -69,7 +69,7 @@ async function refresh() {
   await fetchAll()
 }
 
-/** 切换智能体时收起所有展开项 */
+/** 切换角色时收起所有展开项 */
 watch(selectedAgentId, () => {
   expanded.value = new Set()
 })
@@ -119,7 +119,7 @@ function roleLabel(role: string): string {
   return 'assistant'
 }
 
-/** 智能体颜色（左侧列表 dot，统一走 inline hex 背景，兼容预设/自定义） */
+/** 角色颜色（左侧列表 dot，统一走 inline hex 背景，兼容预设/自定义） */
 function agentDot(a: Agent, index: number) {
   const c = resolveColor(a.color, index)
   return { style: { backgroundColor: colorHex(c) } }
@@ -182,7 +182,7 @@ fetchAll()
 
       <!-- 主体：左 agent 列表 + 右内容 -->
       <div class="flex min-h-0 flex-1">
-        <!-- 左侧：智能体列表 -->
+        <!-- 左侧：角色列表 -->
         <nav class="w-44 shrink-0 overflow-y-auto border-r border-border-subtle bg-bg-soft p-2">
           <button
             v-for="(agent, i) in agents"

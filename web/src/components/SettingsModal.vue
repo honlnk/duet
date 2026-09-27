@@ -4,7 +4,7 @@
  *
  * 四个 tab：
  *  1. Provider —— 内嵌 ProviderPanel（embedded 模式，多协议模型连接管理）
- *  2. 智能体模板 —— 可复用的角色卡模板，供新建对话点选；含「新建会话」快速入口
+ *  2. 角色模板 —— 可复用的角色卡模板，供新建对话点选；含「新建会话」快速入口
  *  3. 话题模板 —— 常用话题
  *  4. 历史预设 —— 历史表单预设管理
  */
@@ -25,7 +25,7 @@ const tab = ref<Tab>('provider')
 
 const tabs: Array<{ key: Tab; label: string }> = [
   { key: 'provider', label: 'API 配置' },
-  { key: 'agent', label: '智能体模板' },
+  { key: 'agent', label: '角色模板' },
   { key: 'relationship', label: '关系图' },
   { key: 'topic', label: '话题模板' },
   { key: 'worldview', label: '世界观模板' },
@@ -47,7 +47,7 @@ const template = useTemplateStore()
 const { agents: agentTemplates, topics: topicTemplates, worldviews: worldviewTemplates } = storeToRefs(template)
 const relationshipStore = useRelationshipStore()
 
-/* --------------------------- 智能体模板 tab --------------------------- */
+/* --------------------------- 角色模板 tab --------------------------- */
 const agentDraft = ref({ name: '', description: '', personality: '' })
 
 function addAgent() {
@@ -64,7 +64,7 @@ function addAgent() {
   agentDraft.value = { name: '', description: '', personality: '' }
 }
 
-/** 当前编辑中的智能体模板 id（空串 = 未在编辑） */
+/** 当前编辑中的角色模板 id（空串 = 未在编辑） */
 const editingAgentId = ref('')
 const agentEditDraft = ref({ name: '', description: '', personality: '' })
 
@@ -93,7 +93,7 @@ function delAgent(id: string) {
   if (editingAgentId.value === id) editingAgentId.value = ''
 }
 
-/** 智能体模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
+/** 角色模板 tab 的「新建会话」快速入口：发信号给 App 打开新建对话 */
 function startNewChat() {
   template.requestNewChat()
 }
@@ -251,18 +251,18 @@ const hasHistory = computed(() => history.value.length > 0)
             <ProviderPanel embedded />
           </div>
 
-          <!-- 智能体模板 tab -->
+          <!-- 角色模板 tab -->
           <div v-else-if="tab === 'agent'" class="flex flex-col gap-4 p-5">
             <div class="flex items-center justify-between gap-2">
               <p class="text-xs text-text-dim">
-                保存常用的智能体身份设定，新建对话时直接点选使用。
+                保存常用的角色身份设定，新建对话时直接点选使用。
               </p>
               <!-- 新建会话快速入口 -->
               <button
                 type="button"
                 class="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-40"
                 :disabled="agentTemplates.length < 2"
-                :title="agentTemplates.length < 2 ? '至少需要 2 个智能体模板' : ''"
+                :title="agentTemplates.length < 2 ? '至少需要 2 个角色模板' : ''"
                 @click="startNewChat"
               >
                 + 新建会话
@@ -294,12 +294,12 @@ const hasHistory = computed(() => history.value.length > 0)
                 :disabled="!agentDraft.name.trim() && !agentDraft.description.trim() && !agentDraft.personality.trim()"
                 @click="addAgent"
               >
-                + 添加模板
+                + 新建角色
               </button>
             </div>
-            <!-- 模板列表 -->
+            <!-- 角色列表 -->
             <div v-if="agentTemplates.length === 0" class="py-6 text-center text-xs text-text-muted">
-              还没有模板
+              还没有角色
             </div>
             <div v-else class="flex flex-col gap-2">
               <div
@@ -485,7 +485,7 @@ const hasHistory = computed(() => history.value.length > 0)
                 :disabled="!worldviewDraft.name.trim() && !worldviewDraft.scenario.trim()"
                 @click="addWorldview"
               >
-                + 添加模板
+                + 新建世界观
               </button>
             </div>
             <!-- 模板列表 -->

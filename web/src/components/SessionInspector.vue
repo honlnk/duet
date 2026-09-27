@@ -2,7 +2,7 @@
 /**
  * 会话详情右侧栏
  *
- * 聚合当前会话的「状态 + 控制 / 统计 / 智能体设定 / 事件日志」四区，
+ * 聚合当前会话的「状态 + 控制 / 统计 / 角色设定 / 事件日志」四区，
  * 取代原 SessionView 底部那组控制条 + StatsBar + EventLog。
  *
  * 布局参考 NovAI ContentPanel：默认收起（w-0），展开为 w-80；
@@ -75,11 +75,11 @@ const isRunning = computed(() => status.value === 'running')
 
 const topic = computed(() => current.value?.topic ?? '（未设定话题）')
 
-/** 智能体列表（2~3 个），带颜色 dot */
+/** 角色列表（2~3 个），带颜色 dot */
 const agents = computed(() => current.value?.agents ?? [])
 
 /**
- * 各智能体使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
+ * 各角色使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
  * 解析优先级与后端 chatHandler.providerIdOf 保持一致：
  *   A/B/C → providerA/B/C；D~J → agentProviders[id]；均缺省回退默认 Provider。
  */
@@ -101,14 +101,14 @@ const agentProviders = computed<Record<string, string>>(() => {
   return out
 })
 
-/** 智能体颜色 dot（按 agent.color 解析，预设→class / 自定义→style） */
+/** 角色颜色 dot（按 agent.color 解析，预设→class / 自定义→style） */
 function agentDot(id: AgentId) {
   const idx = agents.value.findIndex((a) => a.id === id)
   const color = resolveColor(agents.value[idx]?.color, idx)
   return bgColor(color)
 }
 
-/** 智能体名称颜色 */
+/** 角色名称颜色 */
 function agentText(id: AgentId) {
   const idx = agents.value.findIndex((a) => a.id === id)
   const color = resolveColor(agents.value[idx]?.color, idx)
@@ -398,12 +398,12 @@ async function handleBufferChange(e: Event) {
         </div>
       </section>
 
-      <!-- ⑥ 智能体视角（选择哪个智能体消息靠右显示） -->
+      <!-- ⑥ 角色视角（选择哪个角色消息靠右显示） -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-          智能体视角
+          角色视角
         </h3>
-        <p class="mb-2 text-xs text-text-muted">选中智能体的消息靠右显示</p>
+        <p class="mb-2 text-xs text-text-muted">选中角色的消息靠右显示</p>
         <div class="flex flex-col gap-1.5">
           <button
             v-for="agent in agents"
@@ -425,10 +425,10 @@ async function handleBufferChange(e: Event) {
         </div>
       </section>
 
-      <!-- ⑦ 智能体设定 -->
+      <!-- ⑦ 角色设定 -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-          智能体
+          角色
         </h3>
         <!-- 话题 -->
         <div class="mb-2 rounded-lg bg-bg-hover px-3 py-2">
@@ -444,7 +444,7 @@ async function handleBufferChange(e: Event) {
           <div class="mb-1.5 flex items-center gap-2">
             <span class="h-2 w-2 rounded-full" :class="agentDot(agent.id).class" :style="agentDot(agent.id).style" />
             <span class="text-sm font-medium" :class="agentText(agent.id).class" :style="agentText(agent.id).style">{{ agent.name }}</span>
-            <span class="text-xs text-text-muted">智能体 {{ agent.id }}</span>
+            <span class="text-xs text-text-muted">角色 {{ agent.id }}</span>
           </div>
           <p
             v-if="agent.description"

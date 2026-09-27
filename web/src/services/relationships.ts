@@ -1,12 +1,12 @@
 /**
  * 全局关系图持久化层（localStorage）
  *
- * 管理智能体模板之间的非对称关系，独立于会话存在。
+ * 管理角色模板之间的非对称关系，独立于会话存在。
  * 关系在「设置 → 关系图」面板中预先定义，新建对话时按
  * templateId → A/B/C 映射自动注入到会话的 relationships 字段。
  *
  * Key 规范："{fromTemplateId}->{toTemplateId}"
- *   - fromId / toId 均为智能体模板 id（AgentTemplate.id）
+ *   - fromId / toId 均为角色模板 id（AgentTemplate.id）
  *   - 同一对双向关系对应两个 key（A→B 和 B→A）
  *
  * 节点位置（nodePositions）也在此持久化，key 同样为 templateId。
@@ -159,7 +159,7 @@ export function removeNodePositionOf(templateId: string): void {
 
 /**
  * 把全局关系（基于 templateId）翻译为会话关系（基于 A/B/C）。
- * 仅返回当前会话选中的智能体之间存在的关系。
+ * 仅返回当前会话选中的角色之间存在的关系。
  *
  * @param globalRels 全局关系图
  * @param idMap templateId → 会话内 AgentId 的映射（如 { 'a_xx': 'A', 'a_yy': 'B' }）

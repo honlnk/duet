@@ -18,7 +18,7 @@ import type {
 } from '../types/index.js'
 import type { NormalizedUsage } from '../ai/providers/types.js'
 
-/** 会话允许的智能体数量区间 */
+/** 会话允许的角色数量区间 */
 export const MIN_AGENTS = 2
 export const MAX_AGENTS = 10
 
@@ -58,28 +58,28 @@ export function defaultConfig(overrides: Partial<SessionConfig> = {}): SessionCo
 
 /**
  * 创建新会话对象。
- * 支持 2~3 个智能体：agents[0/1/2] 对应 A/B/C。
- * 颜色缺省时按 A/B/C 顺序分配默认色（蓝/粉/绿），避免相邻智能体撞色。
+ * 支持 2~3 个角色：agents[0/1/2] 对应 A/B/C。
+ * 颜色缺省时按 A/B/C 顺序分配默认色（蓝/粉/绿），避免相邻角色撞色。
  */
 export function createSession({ topic, agents, config: cfg, relationships }: CreateSessionInput): Session {
   const now = Date.now()
-  // 规范化智能体列表：补 id/name/description/personality/color，截断到 MAX_AGENTS。
+  // 规范化角色列表：补 id/name/description/personality/color，截断到 MAX_AGENTS。
   const inputs = agents.slice(0, MAX_AGENTS).filter(
     (a): a is NonNullable<typeof a> => a != null,
   )
   const refs: AgentRef[] = inputs.map((a, i) => ({
     id: agentIdAt(i),
-    name: a.name?.trim() || `智能体 ${agentIdAt(i)}`,
+    name: a.name?.trim() || `角色 ${agentIdAt(i)}`,
     description: a.description?.trim() || undefined,
     personality: a.personality?.trim() || undefined,
     color: (a.color?.trim() as AgentRef['color']) || DEFAULT_AGENT_COLORS[i % DEFAULT_AGENT_COLORS.length] || 'blue',
   }))
 
-  // 每个智能体的「其他人」列表（排除自己）
+  // 每个角色的「其他人」列表（排除自己）
   const othersOf = (selfIdx: number): AgentRef[] =>
     refs.filter((_, i) => i !== selfIdx)
 
-  // 为每个智能体构建独立记忆（动态，支持 2~10 个）
+  // 为每个角色构建独立记忆（动态，支持 2~10 个）
   const memory = {} as Session['memory']
   refs.forEach((ref, i) => {
     memory[ref.id] = new AgentMemory(ref, othersOf(i), topic, relationships).toJSON()
@@ -252,7 +252,7 @@ export function addStats(
 
 /**
  * 计算当前 round。
- * 1 round = 所有智能体各发言一次（2 人场景 = 2 条 message/轮，3 人场景 = 3 条/轮）。
+ * 1 round = 所有角色各发言一次（2 人场景 = 2 条 message/轮，3 人场景 = 3 条/轮）。
  */
 export function currentRound(session: Session): number {
   const n = session.agents.length || MIN_AGENTS

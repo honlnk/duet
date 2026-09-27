@@ -550,7 +550,7 @@ export async function runLoop(
           if (rt.stopRequested) {
             break
           }
-          continue // 重试同一智能体（currentAgentId 未前进）
+          continue // 重试同一角色（currentAgentId 未前进）
         }
         // 重试耗尽 → error 状态
         session.status = 'error'

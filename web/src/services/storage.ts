@@ -3,13 +3,13 @@
  *
  * 草稿自动保存 + 历史预设管理。零 DOM、零网络。
  *
- * v2：智能体配置从固定 A/B 改为动态数组（2~3 个，含颜色与各自 Provider）。
+ * v2：角色配置从固定 A/B 改为动态数组（2~3 个，含颜色与各自 Provider）。
  */
 
 import type { AgentColor } from '@/types/api'
 import { DEFAULT_AGENT_COLORS, MAX_AGENTS, MIN_AGENTS } from '@/types/api'
 
-/** 单个智能体的表单字段（草稿/历史中的形态） */
+/** 单个角色的表单字段（草稿/历史中的形态） */
 export interface AgentFormValues {
   name: string
   /** 综合身份描述（背景/外貌/核心设定） */
@@ -21,7 +21,7 @@ export interface AgentFormValues {
   provider: string
   /** 思考档位 key（空串 = 用 Provider 默认配置） */
   thinking: string
-  /** 所选智能体模板 id（空串 = 未选择模板，手填或待选） */
+  /** 所选角色模板 id（空串 = 未选择模板，手填或待选） */
   templateId: string
 }
 
@@ -40,7 +40,7 @@ export interface FormValues {
   durationSec: string
   summaryEveryN: string
   keepRecent: string
-  /** 智能体列表（长度 2~3） */
+  /** 角色列表（长度 2~3） */
   agents: AgentFormValues[]
   /** 非对称关系图：Key "{fromId}->{toId}" */
   relationships: Record<string, string>
@@ -80,7 +80,7 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-/** 生成一个默认智能体表单项（未选模板的占位） */
+/** 生成一个默认角色表单项（未选模板的占位） */
 export function makeAgent(index: number, over?: Partial<AgentFormValues>): AgentFormValues {
   return {
     name: '',
@@ -94,7 +94,7 @@ export function makeAgent(index: number, over?: Partial<AgentFormValues>): Agent
   }
 }
 
-/** 默认表单值（2 个空智能体） */
+/** 默认表单值（2 个空角色） */
 export function defaultValues(): FormValues {
   return {
     topic: '',

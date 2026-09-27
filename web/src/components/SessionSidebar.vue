@@ -5,7 +5,7 @@
  * 取代旧版「新建对话表单侧栏」。结构参考 gpt-image-studio ConversationSidebar：
  *  - 左上角品牌区：logo 图标 + 主副标题 + 设置按钮（齿轮）
  *  - 新建会话按钮（整行，半透明底）
- *  - 搜索框：按话题/智能体名过滤
+ *  - 搜索框：按话题/角色名过滤
  *  - 列表：SessionListItem，点击路由跳转，hover 可删除
  *
  * 响应式：移动端抽屉（fixed 滑入），桌面内联（w-65）。
@@ -37,7 +37,7 @@ const { sorted, currentId, loading } = storeToRefs(sessions)
 
 const keyword = ref('')
 
-/** 按关键词过滤（话题 / 智能体名） */
+/** 按关键词过滤（话题 / 角色名） */
 const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return sorted.value
@@ -87,7 +87,7 @@ async function removeSession(id: string) {
         </span>
         <div class="min-w-0">
           <div class="truncate text-sm font-semibold text-white">Duet</div>
-          <div class="truncate text-xs text-gray-500">多智能体自主对话</div>
+          <div class="truncate text-xs text-gray-500">多角色自主对话</div>
         </div>
       </div>
       <button
@@ -173,7 +173,7 @@ async function removeSession(id: string) {
       <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/10 text-white">
         <AppLogo :size="13" />
       </span>
-      <span class="text-xs text-gray-500">Duet · 多智能体对话 · honlnk</span>
+      <span class="text-xs text-gray-500">Duet · 多角色对话 · honlnk</span>
     </div>
   </aside>
 </template>

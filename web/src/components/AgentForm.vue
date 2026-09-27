@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * 单个智能体选择卡（从智能体模板中选择，而非手填）。
+ * 单个角色选择卡（从角色模板中选择，而非手填）。
  *
  * 两种态：
  *  - 未选择：搜索框 + 下拉列表，输入时按名字筛选，点击即选中。
- *  - 已选择：展示该智能体名 + description 摘要 + 颜色选择器 + 更换/移除。
+ *  - 已选择：展示该角色名 + description 摘要 + 颜色选择器 + 更换/移除。
  *
  * 通过 index 绑定 form store 的 agents 数组对应项。
  */
@@ -16,7 +16,7 @@ import { bgColor, textColor, resolveColor } from '@/utils/agentColor'
 import type { AgentTemplate } from '@/services/templates'
 
 const props = defineProps<{
-  /** 该智能体在 agents 数组中的索引 */
+  /** 该角色在 agents 数组中的索引 */
   index: number
 }>()
 
@@ -24,13 +24,13 @@ const form = useFormStore()
 const template = useTemplateStore()
 
 const agent = computed(() => form.values.agents[props.index])
-const label = computed(() => `智能体 ${String.fromCharCode(65 + props.index)}`)
+const label = computed(() => `角色 ${String.fromCharCode(65 + props.index)}`)
 const color = computed(() => resolveColor(agent.value?.color, props.index))
 /** 当前是否为自定义颜色（非预设 key） */
 const isCustomColor = computed(() => !isPresetColor(color.value))
 const canRemove = computed(() => form.values.agents.length > MIN_AGENTS)
 
-/** 已被其它槽位占用的模板 id（避免同一会话重复选同一智能体） */
+/** 已被其它槽位占用的模板 id（避免同一会话重复选同一角色） */
 const usedTemplateIds = computed(() => {
   const set = new Set<string>()
   form.values.agents.forEach((a, i) => {
@@ -127,14 +127,14 @@ function pickCustomHex(e: Event) {
         v-if="canRemove"
         type="button"
         class="rounded-md px-1.5 py-0.5 text-xs text-text-muted hover:bg-danger/10 hover:text-danger"
-        aria-label="移除该智能体"
+        aria-label="移除该角色"
         @click="remove"
       >
         移除
       </button>
     </div>
 
-    <!-- 已选择：展示智能体卡片 -->
+    <!-- 已选择：展示角色卡片 -->
     <div
       v-if="selected"
       class="flex flex-col gap-2 rounded-lg border border-border-subtle bg-bg-card p-3"
@@ -216,7 +216,7 @@ function pickCustomHex(e: Event) {
         v-if="availableTemplates.length === 0"
         class="rounded-lg bg-bg-hover px-3 py-2 text-xs text-text-muted"
       >
-        没有可选模板，请先在「设置」中添加智能体。
+        没有可选模板，请先在「设置」中添加角色。
       </p>
       <template v-else>
         <!-- 搜索输入框 -->
@@ -224,7 +224,7 @@ function pickCustomHex(e: Event) {
           ref="searchInputEl"
           v-model="searchQuery"
           type="text"
-          placeholder="搜索智能体…"
+          placeholder="搜索角色…"
           class="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
           @focus="openDropdown"
           @blur="closeDropdown"
@@ -248,7 +248,7 @@ function pickCustomHex(e: Event) {
             v-if="filteredTemplates.length === 0"
             class="px-3 py-2 text-xs text-text-muted"
           >
-            没有匹配「{{ searchQuery }}」的智能体
+            没有匹配「{{ searchQuery }}」的角色
           </p>
         </div>
       </template>

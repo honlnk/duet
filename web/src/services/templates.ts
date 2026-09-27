@@ -2,7 +2,7 @@
  * 模板持久化层（localStorage）
  *
  * 管理三类可复用模板，供「新建对话」时一键填充：
- *  - 智能体模板（AgentTemplate）：名称 + 身份设定
+ *  - 角色模板（AgentTemplate）：名称 + 身份设定
  *  - 话题模板（TopicTemplate）：话题文本
  *  - 世界观模板（WorldviewTemplate）：场景 + 导演指令
  *
@@ -13,7 +13,7 @@ const AGENT_TPL_KEY = 'duet:agent-templates:v1'
 const TOPIC_TPL_KEY = 'duet:topic-templates:v1'
 const WORLDVIEW_TPL_KEY = 'duet:worldview-templates:v1'
 
-/** 智能体模板 */
+/** 角色模板 */
 export interface AgentTemplate {
   id: string
   name: string
@@ -54,7 +54,7 @@ function genId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
-/* --------------------------- 智能体模板 --------------------------- */
+/* --------------------------- 角色模板 --------------------------- */
 
 export function loadAgentTemplates(): AgentTemplate[] {
   try {

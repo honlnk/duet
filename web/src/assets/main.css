@@ -33,8 +33,8 @@
   --color-focus: #3b82f6; /* blue-500 */
 
   /*
-   * 智能体配色（调色板）。
-   * 每个智能体在创建会话时从预设颜色中选择一个 key，
+   * 角色配色（调色板）。
+   * 每个角色在创建会话时从预设颜色中选择一个 key，
    * 前端按 key 映射到对应 token：text-agent-<key> / bg-agent-<key> / border-...。
    * agent-a / agent-b 保留为旧别名（蓝/粉），向后兼容。
    */

@@ -1,5 +1,5 @@
 /**
- * 智能体颜色 → Tailwind class / inline style 映射工具。
+ * 角色颜色 → Tailwind class / inline style 映射工具。
  *
  * 两套着色路径：
  *  - 预设色（blue/pink/...）：走 Tailwind 字面量 class（text-agent-blue 等），
@@ -127,7 +127,7 @@ export function borderRColor(color: AgentColorValue): { class: string; style: Re
 }
 
 /**
- * 取智能体颜色值；缺省时按索引回退默认色（循环）。
+ * 取角色颜色值；缺省时按索引回退默认色（循环）。
  */
 export function resolveColor(color: AgentColorValue | undefined, index: number): AgentColorValue {
   return color || DEFAULT_AGENT_COLORS[index % DEFAULT_AGENT_COLORS.length] || 'blue'

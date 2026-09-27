@@ -1,7 +1,7 @@
 /**
- * 智能体模板 & 话题模板 & 世界观模板 Store
+ * 角色模板 & 话题模板 & 世界观模板 Store
  *
- * 集中管理 localStorage 中的可复用模板，供「新建对话」选择智能体、
+ * 集中管理 localStorage 中的可复用模板，供「新建对话」选择角色、
  * 以及「设置」页编辑模板时共享同一份数据源。
  */
 import { defineStore } from 'pinia'
@@ -30,7 +30,7 @@ export const useTemplateStore = defineStore('template', () => {
   const worldviews = ref<WorldviewTemplate[]>(loadWorldviewTemplates())
 
   /**
-   * 跨组件信号：在设置页（智能体模板 tab）点「新建会话」后置 true，
+   * 跨组件信号：在设置页（角色模板 tab）点「新建会话」后置 true，
    * App.vue 监听到后关闭设置、打开新建对话模态。
    */
   const pendingNewChat = ref(false)
@@ -42,7 +42,7 @@ export const useTemplateStore = defineStore('template', () => {
     worldviews.value = loadWorldviewTemplates()
   }
 
-  /** 新增智能体模板，返回新列表 */
+  /** 新增角色模板，返回新列表 */
   function addAgent(
     name: string,
     description: string = '',
@@ -52,7 +52,7 @@ export const useTemplateStore = defineStore('template', () => {
     return agents.value
   }
 
-  /** 更新智能体模板 */
+  /** 更新角色模板 */
   function updateAgent(
     id: string,
     patch: Partial<Pick<AgentTemplate, 'name' | 'description' | 'personality'>>,
@@ -61,7 +61,7 @@ export const useTemplateStore = defineStore('template', () => {
     return agents.value
   }
 
-  /** 删除智能体模板 */
+  /** 删除角色模板 */
   function removeAgent(id: string): AgentTemplate[] {
     agents.value = removeAgentTemplate(id)
     return agents.value
@@ -109,7 +109,7 @@ export const useTemplateStore = defineStore('template', () => {
     return worldviews.value
   }
 
-  /** 按 id 查找智能体模板 */
+  /** 按 id 查找角色模板 */
   function findAgent(id: string | undefined | null): AgentTemplate | undefined {
     if (!id) return undefined
     return agents.value.find((t) => t.id === id)

@@ -13,11 +13,11 @@ export function genId(): string {
 }
 
 /**
- * 智能体 ID。支持 2~10 个智能体：A、B 为必选，C~J 按需追加。
+ * 角色 ID。支持 2~10 个角色：A、B 为必选，C~J 按需追加。
  */
 export type AgentId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J'
 
-/** 所有可能的智能体 ID */
+/** 所有可能的角色 ID */
 export const ALL_AGENT_IDS: readonly AgentId[] = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
 ] as const
@@ -28,7 +28,7 @@ export const ALL_AGENT_IDS: readonly AgentId[] = [
  */
 export type AgentPresetColor = 'blue' | 'pink' | 'green' | 'amber' | 'purple' | 'teal'
 
-/** 智能体颜色值：预设 key 或自定义 hex 字符串 */
+/** 角色颜色值：预设 key 或自定义 hex 字符串 */
 export type AgentColor = AgentPresetColor | string
 
 /** 前端调色板（label 供 UI 展示，key 与 CSS token 对应） */
@@ -75,7 +75,7 @@ export type FinishedReason =
 
 /* ============================== 实体类型 ============================== */
 
-/** 智能体引用 */
+/** 角色引用 */
 export interface AgentRef {
   id: AgentId
   name: string
@@ -117,7 +117,7 @@ export interface ApiMessage {
 
 /**
  * AgentMemory.toJSON() 的持久化形态。
- * others 为本会话中除自己外的所有其他智能体（2 智能体场景含 1 个，3 智能体含 2 个）。
+ * others 为本会话中除自己外的所有其他角色（2 角色场景含 1 个，3 角色含 2 个）。
  * relationships 为会话级关系图（Key "{fromId}->{toId}"），供每个 agent 读取自己视角的关系。
  */
 export interface AgentMemoryData {
@@ -161,25 +161,25 @@ export interface SessionConfig {
   summaryEveryN: number
   /** 压缩后保留最近消息数 */
   keepRecent: number
-  /** 智能体 A 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 A 使用的 Provider id（空 = 默认 Provider） */
   providerA?: string
-  /** 智能体 B 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 B 使用的 Provider id（空 = 默认 Provider） */
   providerB?: string
-  /** 智能体 C 使用的 Provider id（空 = 默认 Provider） */
+  /** 角色 C 使用的 Provider id（空 = 默认 Provider） */
   providerC?: string
   /**
-   * 智能体 → Provider id 映射（D~J 等超出 A/B/C 的智能体用此字段）。
+   * 角色 → Provider id 映射（D~J 等超出 A/B/C 的角色用此字段）。
    * 优先级：agentProviders[id] > providerA/B/C > 默认。
    */
   agentProviders?: Record<string, string>
-  /** 智能体 A 的思考档位 key（空 = 用 Provider 默认配置） */
+  /** 角色 A 的思考档位 key（空 = 用 Provider 默认配置） */
   thinkingA?: string
-  /** 智能体 B 的思考档位 key（空 = 用 Provider 默认配置） */
+  /** 角色 B 的思考档位 key（空 = 用 Provider 默认配置） */
   thinkingB?: string
-  /** 智能体 C 的思考档位 key（空 = 用 Provider 默认配置） */
+  /** 角色 C 的思考档位 key（空 = 用 Provider 默认配置） */
   thinkingC?: string
   /**
-   * 智能体 → 思考档位映射（D~J）。
+   * 角色 → 思考档位映射（D~J）。
    * 优先级与 provider 绑定一致：agentThinking[id] > thinkingA/B/C > Provider 默认。
    */
   agentThinking?: Record<string, string>
@@ -212,7 +212,7 @@ export interface SessionStats {
 /**
  * 完整会话对象（写盘 JSON 形状）。
  * - agents：AgentRef[]（长度 2~10），按 A,B,C... 顺序。
- * - memory：每个智能体各一份；至少含 A/B，其余按实际智能体数动态存在。
+ * - memory：每个角色各一份；至少含 A/B，其余按实际角色数动态存在。
  * - relationships：非对称关系图，Key "{fromId}->{toId}"，值: from 视角对 to 的关系描述。
  */
 export interface Session {
@@ -227,7 +227,7 @@ export interface Session {
   messageCount: number
   currentAgentId: AgentId
   messages: PersistedMessage[]
-  /** 每个智能体的独立记忆，key 为 AgentId */
+  /** 每个角色的独立记忆，key 为 AgentId */
   memory: Record<AgentId, AgentMemoryData>
   stats: SessionStats
   error: string | null
@@ -263,7 +263,7 @@ export interface AgentInput {
   color?: AgentColor
 }
 
-/** createSession 入参（支持 2~10 个智能体） */
+/** createSession 入参（支持 2~10 个角色） */
 export interface CreateSessionInput {
   topic: string
   /** 至少 2 个，最多 MAX_AGENTS 个；前两个恒为 A/B */

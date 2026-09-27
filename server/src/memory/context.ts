@@ -13,7 +13,7 @@ import type {
  * 一个 AgentMemory 维护：
  *   - messages: 该 AI 视角的对话历史（自己是 assistant，其他人是 user）
  *   - summary:  当前摘要（第一人称视角）
- *   - others:   本会话中除自己以外的所有其他智能体（2~3 人）
+ *   - others:   本会话中除自己以外的所有其他角色（2~3 人）
  *   - relationships: 会话级非对称关系图（Key "{fromId}->{toId}"）
  *
  * 「组装发给 LLM 的 messages」时：
@@ -21,9 +21,9 @@ import type {
  *   [system: 摘要注入（若有）]
  *   [...messages]（已按 keepRecent 裁剪）
  *
- * 多智能体下，「对方」的发言一律以 user 角色追加（带发言者名前缀），
- * 自己的发言以 assistant 角色追加。这样每个智能体都拥有独立的、
- * 第一人称视角的历史，与其它智能体物理隔离。
+ * 多角色下，「对方」的发言一律以 user 角色追加（带发言者名前缀），
+ * 自己的发言以 assistant 角色追加。这样每个角色都拥有独立的、
+ * 第一人称视角的历史，与其它角色物理隔离。
  */
 export class AgentMemory {
   agent: AgentRef

@@ -29,8 +29,8 @@ export interface SummaryResult {
  * 输入：该 AI 视角的最近 messages（assistant/user 翻转过的）+ 旧摘要。
  * 输出：新摘要文本（第一人称视角）+ 本次调用 usage（供成本统计）。
  *
- * 多智能体下，user 角色的消息已带「[名字]:」前缀；这里按 messages 的 role
- * 区分：assistant 标注为本智能体名，user 标注为「（其他参与者）」。
+ * 多角色下，user 角色的消息已带「[名字]:」前缀；这里按 messages 的 role
+ * 区分：assistant 标注为本角色名，user 标注为「（其他参与者）」。
  *
  * 注意：调用 LLM 时只取 content，丢弃 reasoning_content（chatComplete 已处理）。
  */
@@ -48,7 +48,7 @@ export async function summarizeConversation({
   // 把 messages 格式化为可读对话
   const recentText = messages
     .map((m) => {
-      // assistant 是本智能体；user 是其他人（content 已带 [名字]: 前缀）
+      // assistant 是本角色；user 是其他人（content 已带 [名字]: 前缀）
       const who = m.role === 'assistant' ? agentName : '其他参与者'
       return `${who}:\n${m.content}`
     })

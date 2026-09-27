@@ -3,7 +3,7 @@
  * 关系图画布（全局，设置页内嵌）
  *
  * 功能：
- *  - 渲染所有智能体模板为节点（自定义卡片：name + description 摘要）
+ *  - 渲染所有角色模板为节点（自定义卡片：name + description 摘要）
  *  - 拖拽节点定位（持久化到 localStorage，key = templateId）
  *  - 从节点 handle 拖拽创建连线 → 建立双向关系
  *  - 点击连线打开 RelationshipEdgeDialog 编辑两个视角的关系描述
@@ -334,7 +334,7 @@ function nodeTextStyle(color: string) {
       >
         <div class="flex items-center gap-2 text-xs text-text-muted">
           <span>
-            {{ agentCount }} 个智能体 · {{ edgeCount }} 条关系
+            {{ agentCount }} 个角色 · {{ edgeCount }} 条关系
           </span>
           <span class="hidden sm:inline">·</span>
           <span class="hidden sm:inline">
@@ -375,18 +375,18 @@ function nodeTextStyle(color: string) {
 
       <!-- 画布区 -->
       <div class="relative min-h-0 flex-1 bg-bg-card">
-        <!-- 空态：无智能体模板 -->
+        <!-- 空态：无角色模板 -->
         <div
           v-if="agentCount === 0"
           class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center"
         >
-          <p class="text-sm text-text-dim">还没有智能体模板</p>
+          <p class="text-sm text-text-dim">还没有角色模板</p>
           <p class="text-xs text-text-muted">
-            先在「智能体模板」中添加至少 2 个角色，再回到这里建立关系
+            先在「角色模板」中添加至少 2 个角色，再回到这里建立关系
           </p>
         </div>
 
-        <!-- 空态：有智能体但无关系 -->
+        <!-- 空态：有角色但无关系 -->
         <div
           v-else-if="edgeCount === 0 && agentCount >= 2"
           class="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-white/90 px-4 py-2 text-xs text-text-muted shadow"

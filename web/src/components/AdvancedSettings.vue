@@ -66,7 +66,7 @@ function labelOf(id: string): string {
   return `${p.name}（${p.model}）${star}`
 }
 
-/** 智能体字母标签（A/B/C…） */
+/** 角色字母标签（A/B/C…） */
 function agentLabel(idx: number): string {
   return String.fromCharCode(65 + idx)
 }
@@ -130,13 +130,13 @@ onMounted(() => {
       <span class="transition-transform group-open:rotate-90">▸</span>
     </summary>
     <div class="flex flex-col gap-3 px-3 pb-3 pt-1">
-      <!-- 每个智能体的 Provider 选择（动态） -->
+      <!-- 每个角色的 Provider 选择（动态） -->
       <div
         v-for="(agent, idx) in values.agents"
         :key="idx"
         class="flex flex-col gap-1"
       >
-        <label class="text-xs text-text-dim">智能体 {{ agentLabel(idx) }} 模型</label>
+        <label class="text-xs text-text-dim">角色 {{ agentLabel(idx) }} 模型</label>
         <select
           :value="agent.provider"
           class="w-full rounded-md border border-border-subtle bg-bg-card px-2.5 py-1.5 text-sm text-text-main outline-none focus:border-focus focus:ring-1 focus:ring-focus"
@@ -148,7 +148,7 @@ onMounted(() => {
           </option>
         </select>
         <!-- 思考档位（动态获取该 provider 模型的可选项） -->
-        <label class="mt-1 text-xs text-text-dim">智能体 {{ agentLabel(idx) }} 思考</label>
+        <label class="mt-1 text-xs text-text-dim">角色 {{ agentLabel(idx) }} 思考</label>
         <select
           v-if="thinkingStates[idx]?.supported"
           :value="agent.thinking"

@@ -68,7 +68,7 @@ const { sidebarCollapsed } = storeToRefs(session)
         >
           <AppLogo :size="40" />
         </div>
-        <h2 class="text-lg font-semibold text-text-main">Duet · 多智能体自主对话</h2>
+        <h2 class="text-lg font-semibold text-text-main">Duet · 多角色自主对话</h2>
         <p class="mt-2 text-sm leading-relaxed text-text-dim">
           给多个 AI 一个话题与身份，让它们自主对话。<br />
           从左侧选择历史会话，或新建一段对话开始。
@@ -83,7 +83,7 @@ const { sidebarCollapsed } = storeToRefs(session)
         </button>
 
         <p class="mt-8 text-xs text-text-muted">
-          在左侧「设置」中管理 Provider、智能体模板与话题模板。
+          在左侧「设置」中管理 Provider、角色模板与话题模板。
         </p>
       </div>
     </div>

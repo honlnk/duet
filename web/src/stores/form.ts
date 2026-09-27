@@ -1,7 +1,7 @@
 /**
  * 表单 Store —— 设置区单一数据源
  *
- * v2：智能体从固定 A/B 改为动态数组（2~10 个，每个含 name/description/color/provider）。
+ * v2：角色从固定 A/B 改为动态数组（2~10 个，每个含 name/description/color/provider）。
  * 标量字段（temperature 等）仍以字符串存储，提交时再转换。
  */
 import { defineStore } from 'pinia'
@@ -20,7 +20,7 @@ import { loadRelationships, translateRelationshipsForSession } from '@/services/
 export const useFormStore = defineStore('form', () => {
   const values = reactive<FormValues>(defaultValues())
 
-  /** 更新第 idx 个智能体的部分字段（如颜色、provider） */
+  /** 更新第 idx 个角色的部分字段（如颜色、provider） */
   function patchAgent(idx: number, patch: Partial<AgentFormValues>) {
     const a = values.agents[idx]
     if (a) Object.assign(a, patch)
@@ -51,7 +51,7 @@ export const useFormStore = defineStore('form', () => {
   }
 
   /**
-   * 为第 idx 个智能体选择一个模板：把模板的 name/description/personality 填入，
+   * 为第 idx 个角色选择一个模板：把模板的 name/description/personality 填入，
    * 记录 templateId。颜色保留当前选择（用户可在下方单独调）。
    */
   function selectTemplate(
@@ -69,7 +69,7 @@ export const useFormStore = defineStore('form', () => {
     a.personality = personality ?? ''
   }
 
-  /** 清空第 idx 个智能体的模板选择（回到未选占位） */
+  /** 清空第 idx 个角色的模板选择（回到未选占位） */
   function clearTemplate(idx: number) {
     const a = values.agents[idx]
     if (!a) return
@@ -79,13 +79,13 @@ export const useFormStore = defineStore('form', () => {
     a.personality = ''
   }
 
-  /** 追加一个空智能体（不超过 MAX_AGENTS） */
+  /** 追加一个空角色（不超过 MAX_AGENTS） */
   function addAgent() {
     if (values.agents.length >= MAX_AGENTS) return
     values.agents.push(makeAgent(values.agents.length))
   }
 
-  /** 移除指定位置智能体（不少于 MIN_AGENTS） */
+  /** 移除指定位置角色（不少于 MIN_AGENTS） */
   function removeAgent(idx: number) {
     if (values.agents.length <= MIN_AGENTS) return
     values.agents.splice(idx, 1)
@@ -162,7 +162,7 @@ export const useFormStore = defineStore('form', () => {
     return {
       topic: values.topic.trim(),
       agents: values.agents.map((a, i) => ({
-        name: a.name.trim() || `智能体 ${i + 1}`,
+        name: a.name.trim() || `角色 ${i + 1}`,
         description: a.description.trim() || undefined,
         personality: a.personality.trim() || undefined,
         color: a.color,
@@ -202,12 +202,12 @@ export const useFormStore = defineStore('form', () => {
   /** 话题是否非空（校验用） */
   const hasTopic = computed(() => values.topic.trim().length > 0)
 
-  /** 所有智能体是否都已选择模板（校验用） */
+  /** 所有角色是否都已选择模板（校验用） */
   const allAgentsSelected = computed(() =>
     values.agents.every((a) => a.templateId !== '' && a.name.trim() !== ''),
   )
 
-  /** 是否可提交：话题非空且所有智能体都已选择 */
+  /** 是否可提交：话题非空且所有角色都已选择 */
   const canSubmit = computed(() => hasTopic.value && allAgentsSelected.value)
 
   return {

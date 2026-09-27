@@ -2,7 +2,7 @@
  * Prompt 历史记录（内存态环形缓冲）。
  *
  * 在每次「拼装好 ApiMessage[] 准备发给 LLM 之前」捕获一条快照，
- * 按 sessionId → agentId 二级索引存放，每个智能体保留最近 {@link MAX_PER_AGENT} 条。
+ * 按 sessionId → agentId 二级索引存放，每个角色保留最近 {@link MAX_PER_AGENT} 条。
  *
  * 设计要点：
  * - 纯内存、模块级单例（与 chatHandler 的 runtimes Map、pricing/exchange 的 cache 同构），
@@ -15,14 +15,14 @@
 
 import type { AgentId, ApiMessage } from '../types/index.js'
 
-/** 每个智能体保留的最近 prompt 条数 */
+/** 每个角色保留的最近 prompt 条数 */
 export const MAX_PER_AGENT = 20
 
 /** 单条 prompt 快照 */
 export interface PromptSnapshot {
-  /** 发言智能体 id */
+  /** 发言角色 id */
   agentId: AgentId
-  /** 发言智能体名（冗余，便于前端展示） */
+  /** 发言角色名（冗余，便于前端展示） */
   agentName: string
   /** 该次发言所在的轮次（由 messageCount 派生） */
   round: number
@@ -64,7 +64,7 @@ export function recordPrompt(sessionId: string, entry: PromptSnapshot): void {
 /**
  * 查询某个会话的 prompt 历史。
  * @param sessionId 会话 id
- * @param agentId   指定智能体；省略则返回全部智能体的快照（合并后按时间倒序）
+ * @param agentId   指定角色；省略则返回全部角色的快照（合并后按时间倒序）
  * @param limit     最多返回条数（默认 MAX_PER_AGENT）
  * @returns 按时间倒序（最新在前）的快照数组
  */

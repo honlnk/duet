@@ -1,10 +1,10 @@
 /**
- * 多智能体单元测试（node:test）
+ * 多角色单元测试（node:test）
  *
  * 纯逻辑验证：不依赖真实网络/Provider，覆盖
- *  - createSession 支持 2/3 智能体与默认颜色分配
- *  - nextAgentId 循环顺序（2/3 智能体）
- *  - currentRound 按智能体数计算
+ *  - createSession 支持 2/3 角色与默认颜色分配
+ *  - nextAgentId 循环顺序（2/3 角色）
+ *  - currentRound 按角色数计算
  *  - AgentMemory 多对手视角（others 数组、buildApiMessages）
  *  - 结构化角色卡（description + personality）
  *  - 非对称关系图（relationships）
@@ -31,7 +31,7 @@ const { buildAgentSystem, buildDirectorInjection } = await import('./ai/prompts.
 
 /* --------------------------- createSession --------------------------- */
 
-test('createSession：2 智能体，默认颜色 蓝/粉', () => {
+test('createSession：2 角色，默认颜色 蓝/粉', () => {
   const s = createSession({
     topic: '测试话题',
     agents: [
@@ -52,7 +52,7 @@ test('createSession：2 智能体，默认颜色 蓝/粉', () => {
   assert.equal(s.memory.C, undefined)
 })
 
-test('createSession：3 智能体，默认颜色 蓝/粉/绿，memory.C 存在', () => {
+test('createSession：3 角色，默认颜色 蓝/粉/绿，memory.C 存在', () => {
   const s = createSession({
     topic: '三方讨论',
     agents: [
@@ -64,7 +64,7 @@ test('createSession：3 智能体，默认颜色 蓝/粉/绿，memory.C 存在',
   assert.equal(s.agents.length, 3)
   assert.equal(s.agents[2]!.id, 'C')
   assert.equal(s.agents[2]!.color, 'green')
-  assert.ok(s.memory.C, '三智能体 memory.C 应存在')
+  assert.ok(s.memory.C, '三角色 memory.C 应存在')
   // C 的 others 应包含 A 和 B
   const cOthers = s.memory.C.others.map((o) => o.id)
   assert.deepEqual([...cOthers].sort(), ['A', 'B'])
@@ -82,7 +82,7 @@ test('createSession：用户自定义颜色覆盖默认', () => {
   assert.equal(s.agents[1]!.color, 'teal')
 })
 
-test('createSession：5 智能体（A-E），memory 全存在，默认色循环', () => {
+test('createSession：5 角色（A-E），memory 全存在，默认色循环', () => {
   const s = createSession({
     topic: '五方讨论',
     agents: [
@@ -123,8 +123,8 @@ test('createSession：缺省 name 时按字母补默认名', () => {
     topic: 't',
     agents: [{ name: '' }, { name: '' }],
   })
-  assert.equal(s.agents[0]!.name, '智能体 A')
-  assert.equal(s.agents[1]!.name, '智能体 B')
+  assert.equal(s.agents[0]!.name, '角色 A')
+  assert.equal(s.agents[1]!.name, '角色 B')
 })
 
 test('createSession：memory 视角隔离——A 的 others 不含自己', () => {
@@ -146,7 +146,7 @@ test('createSession：memory 视角隔离——A 的 others 不含自己', () =>
 
 /* --------------------------- nextAgentId 循环 --------------------------- */
 
-test('nextAgentId：2 智能体 A→B→A 循环', () => {
+test('nextAgentId：2 角色 A→B→A 循环', () => {
   const s = createSession({
     topic: 't',
     agents: [{ name: 'A' }, { name: 'B' }],
@@ -157,7 +157,7 @@ test('nextAgentId：2 智能体 A→B→A 循环', () => {
   assert.equal(nextAgentId(s), 'A')
 })
 
-test('nextAgentId：3 智能体 A→B→C→A 循环', () => {
+test('nextAgentId：3 角色 A→B→C→A 循环', () => {
   const s = createSession({
     topic: 't',
     agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
@@ -170,7 +170,7 @@ test('nextAgentId：3 智能体 A→B→C→A 循环', () => {
   assert.equal(nextAgentId(s), 'A')
 })
 
-test('nextAgentId：5 智能体 A→B→C→D→E→A 循环', () => {
+test('nextAgentId：5 角色 A→B→C→D→E→A 循环', () => {
   const s = createSession({
     topic: 't',
     agents: [
@@ -189,7 +189,7 @@ test('nextAgentId：5 智能体 A→B→C→D→E→A 循环', () => {
 
 /* --------------------------- currentRound --------------------------- */
 
-test('currentRound：2 智能体时 2 条/轮', () => {
+test('currentRound：2 角色时 2 条/轮', () => {
   const s = createSession({
     topic: 't',
     agents: [{ name: 'A' }, { name: 'B' }],
@@ -204,7 +204,7 @@ test('currentRound：2 智能体时 2 条/轮', () => {
   assert.equal(currentRound(s), 2)
 })
 
-test('currentRound：3 智能体时 3 条/轮', () => {
+test('currentRound：3 角色时 3 条/轮', () => {
   const s = createSession({
     topic: 't',
     agents: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],

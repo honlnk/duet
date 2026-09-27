@@ -2,8 +2,8 @@
 /**
  * 新建对话模态框
  *
- * 话题 + 智能体（2~3 个，从模板中选择）+ 高级设置。
- * 智能体不再手填，而是从「设置」中预配置的智能体模板里点选。
+ * 话题 + 角色（2~3 个，从模板中选择）+ 高级设置。
+ * 角色不再手填，而是从「设置」中预配置的角色模板里点选。
  * 提交：创建会话 → 保存草稿/历史 → 设置 pendingStart → 路由跳转。
  */
 import { computed, ref } from 'vue'
@@ -33,10 +33,10 @@ const { values } = storeToRefs(form)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
-/** 是否还能再添加智能体 */
+/** 是否还能再添加角色 */
 const canAddAgent = computed(() => values.value.agents.length < MAX_AGENTS)
 
-/** 是否完全没有智能体模板（引导用户去设置） */
+/** 是否完全没有角色模板（引导用户去设置） */
 const hasNoTemplates = computed(() => template.agents.length === 0)
 
 /** 点遮罩关闭（防误触：按下和松开都在遮罩才关） */
@@ -55,7 +55,7 @@ async function handleSubmit() {
     if (!form.hasTopic) {
       errorMsg.value = '请选择一个话题'
     } else if (!form.allAgentsSelected) {
-      errorMsg.value = '请为每个智能体选择一个模板'
+      errorMsg.value = '请为每个角色选择一个模板'
     }
     return
   }
@@ -114,21 +114,21 @@ async function handleSubmit() {
         <!-- 世界观（从模板选择，可选） -->
         <WorldviewPicker @open-settings="emit('open-settings')" />
 
-        <!-- 智能体列表（2~3 个） -->
+        <!-- 角色列表（2~3 个） -->
         <div class="flex flex-col gap-4">
           <!-- 无模板引导 -->
           <div
             v-if="hasNoTemplates"
             class="flex flex-col gap-2 rounded-lg border border-dashed border-border-subtle bg-bg-card px-3 py-3 text-center"
           >
-            <p class="text-sm text-text-dim">还没有智能体模板</p>
-            <p class="text-xs text-text-muted">先去设置添加几个智能体，才能在这里选择</p>
+            <p class="text-sm text-text-dim">还没有角色模板</p>
+            <p class="text-xs text-text-muted">先去设置添加几个角色，才能在这里选择</p>
             <button
               type="button"
               class="self-center rounded-lg border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-dim hover:bg-bg-hover"
               @click="emit('open-settings')"
             >
-              去设置添加智能体
+              去设置添加角色
             </button>
           </div>
           <AgentForm
@@ -138,14 +138,14 @@ async function handleSubmit() {
           />
         </div>
 
-        <!-- 添加智能体按钮 -->
+        <!-- 添加角色按钮 -->
         <button
           v-if="canAddAgent"
           type="button"
           class="self-start rounded-lg border border-dashed border-border-subtle px-3 py-1.5 text-sm text-text-dim transition-colors hover:bg-bg-hover hover:text-text-main"
           @click="form.addAgent()"
         >
-          + 添加智能体（最多 {{ MAX_AGENTS }} 个）
+          + 添加角色（最多 {{ MAX_AGENTS }} 个）
         </button>
 
         <!-- 高级设置（折叠） -->

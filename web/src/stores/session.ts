@@ -1,5 +1,5 @@
 /**
- * 会话 Store —— 多智能体自主对话的核心状态机
+ * 会话 Store —— 多角色自主对话的核心状态机
  *
  * 管理：当前会话、状态、消息流、流式累积、统计、事件日志、视角。
  *
@@ -9,9 +9,9 @@
  * 3. stats 事件字段在顶层展开（msg.totalTokens），非嵌套。
  * 4. finished 后需重拉 GET /api/sessions/:id 取权威终态。
  *
- * 视角（viewSide）：用户在右侧面板选择的「右侧显示」智能体 id。
- *   - 选中的智能体消息靠右对齐（强调条在右），其余靠左（强调条在左）。
- *   - 默认为会话的第二个智能体（B）。
+ * 视角（viewSide）：用户在右侧面板选择的「右侧显示」角色 id。
+ *   - 选中的角色消息靠右对齐（强调条在右），其余靠左（强调条在左）。
+ *   - 默认为会话的第二个角色（B）。
  */
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
@@ -142,12 +142,12 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /**
-   * 智能体视角：选中的智能体 id，其消息靠右显示，其余靠左。
-   * 默认为会话第二个智能体（B）；加载会话时按 agents 重置。
+   * 角色视角：选中的角色 id，其消息靠右显示，其余靠左。
+   * 默认为会话第二个角色（B）；加载会话时按 agents 重置。
    */
   const viewSide = ref<AgentId>('B')
 
-  /** 切换视角（右侧面板的智能体选择器调用） */
+  /** 切换视角（右侧面板的角色选择器调用） */
   function setViewSide(id: AgentId) {
     viewSide.value = id
   }
@@ -180,18 +180,18 @@ export const useSessionStore = defineStore('session', () => {
     return messages.value.find((m) => m.agentId === agentId && m.streaming)
   }
 
-  /** 智能体显示名 */
+  /** 角色显示名 */
   function agentName(agentId: AgentId): string {
     const a = session.value?.agents.find((x) => x.id === agentId)
     return a?.name ?? agentId
   }
 
-  /** 查找智能体对象 */
+  /** 查找角色对象 */
   function findAgent(agentId: AgentId): Agent | undefined {
     return session.value?.agents.find((x) => x.id === agentId)
   }
 
-  /** 判断某智能体消息是否靠右显示（即是否为当前视角） */
+  /** 判断某角色消息是否靠右显示（即是否为当前视角） */
   function isRightSide(agentId: AgentId): boolean {
     return agentId === viewSide.value
   }
@@ -238,7 +238,7 @@ export const useSessionStore = defineStore('session', () => {
     stats.value = { ...s.stats }
     directors.value = s.directors
     streamingAgentId = null
-    // 视角默认为第二个智能体（B）；若会话已切换视角且仍有效则保留
+    // 视角默认为第二个角色（B）；若会话已切换视角且仍有效则保留
     const validIds = s.agents.map((a) => a.id)
     if (!validIds.includes(viewSide.value)) {
       viewSide.value = s.agents[1]?.id ?? s.agents[0]!.id
@@ -251,7 +251,7 @@ export const useSessionStore = defineStore('session', () => {
       truncated: m.truncated,
       streaming: false,
     }))
-    // round = 所有智能体各说一句算 1 轮
+    // round = 所有角色各说一句算 1 轮
     const n = s.agents.length || 2
     round.value = Math.floor(s.messageCount / n)
     if (s.error) errorMessage.value = s.error
