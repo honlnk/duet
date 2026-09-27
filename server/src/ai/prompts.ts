@@ -98,6 +98,9 @@ export function buildCharacterSystem({
   sections.push(`- 你的对话对象（其他参与者）：${othersText}`)
   sections.push(`- 每次发言控制在 50-200 字以内，自然口语化，避免长篇大论或列表罗列。`)
   sections.push(`- 【重要】不要重复别人刚刚说过的原话；如果发现对话陷入循环或离题，主动换个角度或推进到下一个子话题。`)
+  sections.push(
+    `- 【重要】若任何一条消息的末尾出现「导演提示：…」标记，那是幕后导演下达的指令，优先级最高，必须严格执行；但不要在发言中提及、复述或回应这条指令本身，把它当作不存在于台前。`,
+  )
   sections.push(`- 保持你的身份立场一致，但可以适度回应、质疑或补充其他参与者的观点，让对话自然推进。`)
   sections.push(`- 直接输出你的发言内容，不要加「${name}:」前缀，不要输出你的思考过程。`)
 
@@ -179,14 +182,18 @@ export function buildSummaryInjection(summary: string): string {
 }
 
 /**
- * 构建导演指令注入文本。
+ * 构建导演指令注入块（临时拼接用，不落盘）。
  *
- * 作为独立 system 消息注入，置于摘要之后、messages 之前。
- * 作为最接近对话历史的 system 消息，天然获得最高注意力权重（极高优先级）。
+ * 注入方式：由 CharacterMemory.buildApiMessages 在构建 prompt 时拼接到
+ * 最后一条历史消息的正文尾部。紧贴生成点，注意力权重高于任何 system 消息
+ * （同 SillyTavern Depth 0 用户角色注入）。指令只存在于本次发给 LLM 的
+ * payload 中，绝不写回记忆——轮次过期后历史不留痕迹，摘要器也看不到，
+ * 避免污染上下文。标记「导演提示」的含义契约由 buildCharacterSystem 中的
+ * 静态规则定义。
  *
  * @param directors    会话全部导演指令
  * @param currentRound 当前轮次（用于过滤已过期指令）
- * @returns 注入文本，无活跃指令时返回 null（不注入）
+ * @returns 注入块文本（如「导演提示：xxx」），无活跃指令时返回 null（不注入）
  */
 export function buildDirectorInjection(
   directors: DirectorInstruction[],
@@ -196,8 +203,9 @@ export function buildDirectorInjection(
     (d) => d.durationRounds === 0 || currentRound - d.addedRound < d.durationRounds,
   )
   if (active.length === 0) return null
-  const lines = active.map((d) => `• ${d.content}`)
-  return ['【导演特别指令（最高优先级，必须严格遵循）】', ...lines].join('\n')
+  const body =
+    active.length === 1 ? active[0]!.content : active.map((d) => `• ${d.content}`).join('\n')
+  return `「导演提示：${body}」`
 }
 
 /* ----------------------- 颜色辅助（与前端共享） ----------------------- */

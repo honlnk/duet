@@ -20,6 +20,7 @@ import type {
  *   [system: 全局设定 + 主角设定 + 在场角色 + 关系 + 规则（含所有对手名）]
  *   [system: 摘要注入（若有）]
  *   [...messages]（已按 keepRecent 裁剪）
+ *   活跃导演指令临时拼接到最后一条 message 尾部（不落盘，见 buildApiMessages）
  *
  * 多角色下，「对方」的发言一律以 user 角色追加（带发言者名前缀），
  * 自己的发言以 assistant 角色追加。这样每个角色都拥有独立的、
@@ -81,10 +82,12 @@ export class CharacterMemory {
    * 注入顺序（从远到近）：
    *   1. [system] buildCharacterSystem（全局设定 + 主角设定 + 在场角色 + 关系 + 对话规则）
    *   2. [system] 摘要注入（若有）
-   *   3. [system] 导演指令注入（若有，极高优先级，最接近对话）
-   *   4. [...messages]
+   *   3. [...messages]
+   *   4. 活跃导演指令拼接到最后一条 message 的正文尾部（瞬态，不写回记忆）
    *
-   * 导演指令作为最接近对话的 system 消息，获得最高注意力权重。
+   * 导演指令紧贴生成点（最后一条消息尾部），获得最高注意力权重；
+   * 由于只改 payload 最后一条消息，system 与历史前缀保持字节稳定，
+   * 不破坏上下文缓存。
    *
    * @param _keepRecent  已废弃，保留签名仅为向后兼容；裁剪改由摘要流程负责。
    * @param scenario     场景设定 / 世界观
@@ -110,14 +113,19 @@ export class CharacterMemory {
     if (this.summary) {
       out.push({ role: 'system', content: buildSummaryInjection(this.summary) })
     }
-    // 导演指令注入（极高优先级：作为最接近对话的 system 消息）
-    if (directors && directors.length > 0 && currentRound !== undefined) {
+    out.push(...this.messages)
+
+    // 导演指令注入：临时拼接到最后一条历史消息的正文尾部（紧贴生成点，
+    // 注意力权重最高，且指令增删不影响 system 前缀的缓存命中）。
+    // 必须克隆替换而非原地修改——out 中的元素是 this.messages 的对象引用，
+    // 原地改 content 会把导演指令写进真实记忆，污染上下文。
+    if (directors && directors.length > 0 && currentRound !== undefined && out.length > 0) {
       const injection = buildDirectorInjection(directors, currentRound)
       if (injection) {
-        out.push({ role: 'system', content: injection })
+        const last = out[out.length - 1]!
+        out[out.length - 1] = { role: last.role, content: `${last.content}\n\n${injection}` }
       }
     }
-    out.push(...this.messages)
     return out
   }
 

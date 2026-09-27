@@ -455,17 +455,17 @@ test('buildApiMessages：scenario 通过参数注入', () => {
 
 /* --------------------------- 导演指令 --------------------------- */
 
-test('buildDirectorInjection：活跃指令注入到独立 system 消息', () => {
+test('buildDirectorInjection：活跃指令合并为一个注入块', () => {
   const directors = [
     { id: '1', content: '让话题转向哲学', addedAt: 0, addedRound: 0, durationRounds: 5 },
     { id: '2', content: '加入意外事件', addedAt: 0, addedRound: 0, durationRounds: 0 },
   ]
   const injection = buildDirectorInjection(directors, 3)
   assert.ok(injection, '应有注入文本')
-  assert.ok(injection!.includes('导演特别指令'), '应含标题')
+  assert.ok(injection!.startsWith('「导演提示'), '应以「导演提示」标记开头')
+  assert.ok(injection!.endsWith('」'), '应以」结尾')
   assert.ok(injection!.includes('哲学'), '应含第一条指令')
   assert.ok(injection!.includes('意外事件'), '应含第二条指令')
-  assert.ok(injection!.includes('最高优先级'), '应标注最高优先级')
 })
 
 test('buildDirectorInjection：过期指令被过滤', () => {
@@ -500,7 +500,7 @@ test('buildDirectorInjection：无活跃指令返回 null', () => {
   assert.equal(buildDirectorInjection(expired, 10), null)
 })
 
-test('buildApiMessages：导演指令作为独立 system 消息注入（极高优先级位置）', () => {
+test('buildApiMessages：导演指令临时拼到最后一条消息尾部，不污染记忆', () => {
   const directors = [
     { id: '1', content: '让甲表达愤怒', addedAt: 0, addedRound: 0, durationRounds: 0 },
   ]
@@ -509,19 +509,18 @@ test('buildApiMessages：导演指令作为独立 system 消息注入（极高�
     [{ id: 'B', name: '乙' }],
     't',
   )
-  mem.pushSelf('我说了一句')
+  mem.pushOther('[乙]: 我说了一句')
   const msgs = mem.buildApiMessages(8, undefined, directors, 1)
-  // system(主) + system(导演) + assistant = 3
-  assert.equal(msgs.length, 3)
-  assert.equal(msgs[0]!.role, 'system')
-  assert.equal(msgs[1]!.role, 'system')
-  assert.ok(msgs[1]!.content.includes('导演特别指令'), '第二条 system 应为导演指令')
-  assert.ok(msgs[1]!.content.includes('让甲表达愤怒'), '应含指令内容')
-  // 导演指令 system 应在 messages 之前
-  assert.equal(msgs[2]!.role, 'assistant')
+  // system + user = 2，不新增 system 消息，注入拼在最后一条尾部
+  assert.equal(msgs.length, 2)
+  assert.equal(msgs[1]!.role, 'user')
+  assert.ok(msgs[1]!.content.includes('[乙]: 我说了一句'), '原内容保留')
+  assert.ok(msgs[1]!.content.endsWith('「导演提示：让甲表达愤怒」'), '尾部应拼接导演提示块')
+  // 注入仅存在于 payload，不得写回真实记忆
+  assert.ok(!mem.messages[0]!.content.includes('导演提示'), '存储记忆不应含导演提示')
 })
 
-test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
+test('buildApiMessages：摘要 + 导演指令共存时的注入位置', () => {
   const directors = [
     { id: '1', content: '指令A', addedAt: 0, addedRound: 0, durationRounds: 0 },
   ]
@@ -533,10 +532,37 @@ test('buildApiMessages：摘要 + 导演指令共存时的注入顺序', () => {
   mem.summary = '这是摘要'
   mem.pushSelf('发言')
   const msgs = mem.buildApiMessages(8, undefined, directors, 1)
-  // system(主) + system(摘要) + system(导演) + assistant = 4
-  assert.equal(msgs.length, 4)
+  // system(主) + system(摘要) + assistant(尾部拼导演提示) = 3
+  assert.equal(msgs.length, 3)
   assert.ok(msgs[1]!.content.includes('摘要'), '第二条应为摘要')
-  assert.ok(msgs[2]!.content.includes('导演'), '第三条应为导演指令')
+  assert.ok(msgs[2]!.content.includes('发言'), '最后一条消息原内容保留')
+  assert.ok(msgs[2]!.content.endsWith('「导演提示：指令A」'), '导演提示应拼在最后一条消息尾部')
+})
+
+test('buildApiMessages：无活跃导演指令时最后一条消息保持原样', () => {
+  const directors = [
+    { id: '1', content: '过期指令', addedAt: 0, addedRound: 0, durationRounds: 2 },
+  ]
+  const mem = new CharacterMemory(
+    { id: 'A', name: '甲' },
+    [{ id: 'B', name: '乙' }],
+    't',
+  )
+  mem.pushOther('[乙]: 原话')
+  const msgs = mem.buildApiMessages(8, undefined, directors, 10)
+  assert.equal(msgs.length, 2)
+  assert.equal(msgs[1]!.content, '[乙]: 原话', '无活跃指令时不得拼接')
+})
+
+test('buildCharacterSystem：system 规则中定义「导演提示」标记契约', () => {
+  const sys = buildCharacterSystem({
+    name: '甲',
+    others: [{ id: 'B', name: '乙' }],
+    topic: 't',
+  })
+  assert.ok(sys.includes('「导演提示'), 'system 应包含导演提示标记的执行规则')
+  assert.ok(sys.includes('优先级最高'), '应声明最高优先级')
+  assert.ok(sys.includes('不要在发言中提及'), '应禁止在台前复述指令')
 })
 
 test('createSession：默认初始化 directors 空数组 + pacing 默认值', () => {
