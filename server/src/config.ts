@@ -46,6 +46,11 @@ const config: AppConfig = {
     process.env.DATA_DIR
       ? path.join(path.dirname(path.resolve(process.env.DATA_DIR)), 'providers.json')
       : path.join(projectRoot, 'data', 'providers.json'),
+  // 资产库（角色/话题/世界观模板 + 关系）：与 providers.json 同目录同模式
+  libraryFile:
+    process.env.DATA_DIR
+      ? path.join(path.dirname(path.resolve(process.env.DATA_DIR)), 'library.json')
+      : path.join(projectRoot, 'data', 'library.json'),
   // 前端构建产物（生产模式托管）
   staticDir: path.join(__dirname, '..', 'public'),
 }

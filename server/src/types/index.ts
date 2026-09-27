@@ -47,8 +47,31 @@ export function isPresetColor(c: string): c is CharacterPresetColor {
     c === 'amber' || c === 'purple' || c === 'teal'
 }
 
-/** 消息角色（发给 LLM 的完整消息） */
+/** 消息角色（发给 LLM 的完整消息）。tool 角色 = 工具执行结果回灌（Agent 循环用） */
 export type MessageRole = 'system' | 'user' | 'assistant'
+
+/** Agent 循环的消息角色（比对话循环多一个 tool） */
+export type ApiMessageRole = MessageRole | 'tool'
+
+/** 模型发起的一次工具调用（各协议解析后的归一化形态） */
+export interface AgentToolCall {
+  /** 调用 id（Gemini 无原生 id，适配器生成合成 id） */
+  id: string
+  name: string
+  /** 已解析的参数对象（arguments 字符串解析失败的工具调用会被丢弃） */
+  input: Record<string, unknown>
+}
+
+/** 工具 schema（OpenAI function-calling 格式，各协议适配器自行转线格式） */
+export interface AgentToolSchema {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    /** JSON Schema 参数定义（object 类型） */
+    parameters: Record<string, unknown>
+  }
+}
 
 /**
  * 支持的 API 协议。
@@ -109,10 +132,16 @@ export interface MemoryMessage {
   content: string
 }
 
-/** 发给 LLM 的消息 */
+/** 发给 LLM 的消息（Agent 循环会用到 tool 角色与 assistant.toolCalls，均为可选扩展字段） */
 export interface ApiMessage {
-  role: MessageRole
+  role: ApiMessageRole
   content: string
+  /** assistant 消息携带的工具调用（Agent 循环回传历史时用） */
+  toolCalls?: AgentToolCall[]
+  /** tool 角色消息对应的调用 id */
+  toolCallId?: string
+  /** tool 角色消息的工具名（Gemini 协议回传 functionResponse 时需要） */
+  name?: string
 }
 
 /**
@@ -401,6 +430,89 @@ export interface ProvidersFile {
   defaultId: string
 }
 
+/* ============================== 资产库（模板 + 关系） ============================== */
+
+/** 角色模板（与前端 localStorage 时期的 CharacterTemplate 字段完全一致） */
+export interface CharacterTemplate {
+  id: string
+  name: string
+  /** 综合身份描述（背景/外貌/核心设定） */
+  description: string
+  /** 性格关键词摘要 */
+  personality: string
+  createdAt: number
+}
+
+/** 话题模板 */
+export interface TopicTemplate {
+  id: string
+  content: string
+  createdAt: number
+}
+
+/** 世界观模板（场景设定） */
+export interface WorldviewTemplate {
+  id: string
+  /** 模板名（如「校园日常」「赛博朋克」） */
+  name: string
+  /** 场景设定 */
+  scenario: string
+  createdAt: number
+}
+
+/** 关系图节点坐标 */
+export interface NodePosition {
+  x: number
+  y: number
+}
+
+/** 资产库文件（data/library.json）整体结构 */
+export interface LibraryData {
+  characterTemplates: CharacterTemplate[]
+  topicTemplates: TopicTemplate[]
+  worldviewTemplates: WorldviewTemplate[]
+  /** Key: "{fromTemplateId}->{toTemplateId}"，值为 from 视角对 to 的关系描述 */
+  relationships: Record<string, string>
+  /** Key: templateId，关系画布节点位置 */
+  nodePositions: Record<string, NodePosition>
+}
+
+/** 资产库写入输入（id 缺省 = 新建，服务端生成） */
+export interface CharacterTemplateInput {
+  id?: string
+  name: string
+  description?: string
+  personality?: string
+}
+
+export interface TopicTemplateInput {
+  id?: string
+  content: string
+}
+
+export interface WorldviewTemplateInput {
+  id?: string
+  name: string
+  scenario?: string
+}
+
+/** 一次性迁移导入载荷（前端 localStorage → 服务端，按 id upsert；无 id 的脏数据项被跳过） */
+export interface LibraryImportPayload {
+  characterTemplates?: Array<Partial<CharacterTemplate>>
+  topicTemplates?: Array<Partial<TopicTemplate>>
+  worldviewTemplates?: Array<Partial<WorldviewTemplate>>
+  relationships?: Record<string, string>
+  nodePositions?: Record<string, NodePosition>
+}
+
+/** 导入结果计数 */
+export interface LibraryImportResult {
+  characters: number
+  topics: number
+  worldviews: number
+  relationships: number
+}
+
 /* ============================== 配置 ============================== */
 
 /** AppConfig 的环境（宽松，不强制枚举） */
@@ -417,6 +529,8 @@ export interface AppConfig {
   dataDir: string
   /** Provider 配置文件路径（单文件 JSON） */
   providersFile: string
+  /** 资产库文件路径（模板 + 关系，单文件 JSON） */
+  libraryFile: string
   staticDir: string
 }
 

@@ -13,6 +13,7 @@
  * 注意：Gemini 流式端点用 alt=sse 返回标准 SSE；否则返回 JSON 数组流。这里强制 alt=sse。
  */
 import { trimBaseUrl, withTimeout, readSSE, readErrorBody, AiError, EMPTY_USAGE } from './shared.js'
+import { ToolCallAssembler } from './tool-support.js'
 import type { ChatOpts, ChatResult, NormalizedUsage, ProviderAdapter } from './types.js'
 import type { ApiMessage } from '../../types/index.js'
 
@@ -27,7 +28,7 @@ interface GeminiUsage {
 /** Gemini 流式/非流式响应 */
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string; thought?: boolean }> }
+    content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name?: string; args?: unknown } }> }
     finishReason?: string
   }>
   usageMetadata?: GeminiUsage
@@ -47,21 +48,42 @@ function normalizeUsage(u: GeminiUsage | undefined): NormalizedUsage {
   }
 }
 
-/** 把通用 messages 转成 Gemini 的 contents + systemInstruction */
+/** Gemini content part（text / functionCall / functionResponse 三态） */
+type GeminiPart = Record<string, unknown>
+
+/** 把通用 messages 转成 Gemini 的 contents + systemInstruction（含工具调用/结果回传） */
 function toGeminiInput(messages: ApiMessage[]): {
-  systemInstruction?: { parts: Array<{ text: string }> }
-  contents: Array<{ role: string; parts: Array<{ text: string }> }>
+  systemInstruction?: { parts: GeminiPart[] }
+  contents: Array<{ role: string; parts: GeminiPart[] }>
 } {
   const systemParts: string[] = []
-  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+  const contents: Array<{ role: string; parts: GeminiPart[] }> = []
   for (const m of messages) {
     if (m.role === 'system') {
       systemParts.push(m.content)
-    } else {
-      // assistant → model，user → user
-      const role = m.role === 'assistant' ? 'model' : 'user'
-      contents.push({ role, parts: [{ text: m.content }] })
+      continue
     }
+    // assistant 携带工具调用 → model 角色 functionCall parts
+    if (m.role === 'assistant' && m.toolCalls?.length) {
+      const parts: GeminiPart[] = []
+      if (m.content) parts.push({ text: m.content })
+      for (const c of m.toolCalls) {
+        parts.push({ functionCall: { name: c.name, args: c.input } })
+      }
+      contents.push({ role: 'model', parts })
+      continue
+    }
+    // 工具结果 → user 角色 functionResponse part（Gemini 靠 name 匹配，不用 id）
+    if (m.role === 'tool') {
+      contents.push({
+        role: 'user',
+        parts: [{ functionResponse: { name: m.name ?? '', response: { result: m.content } } }],
+      })
+      continue
+    }
+    // assistant → model，user → user
+    const role = m.role === 'assistant' ? 'model' : 'user'
+    contents.push({ role, parts: [{ text: m.content }] })
   }
   const result: ReturnType<typeof toGeminiInput> = { contents }
   if (systemParts.length > 0) {
@@ -99,9 +121,21 @@ function applyThinking(
   }
 }
 
+/** 把工具表转成 Gemini 线格式（functionDeclarations；剥离 Gemini 不认的 additionalProperties） */
+function toGeminiTools(
+  tools: NonNullable<ChatOpts['tools']>,
+): Array<Record<string, unknown>> {
+  const declarations = tools.map((t) => {
+    const params = { ...(t.function.parameters as Record<string, unknown>) }
+    delete params.additionalProperties
+    return { name: t.function.name, description: t.function.description, parameters: params }
+  })
+  return [{ functionDeclarations: declarations }]
+}
+
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, tools, signal } = opts
   const { systemInstruction, contents } = toGeminiInput(messages)
   const base = trimBaseUrl(conn.baseUrl)
   const url = `${base}/v1beta/models/${conn.model}:streamGenerateContent?alt=sse&key=${conn.apiKey}`
@@ -110,6 +144,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     generationConfig: { temperature, maxOutputTokens: maxTokens },
   }
   if (systemInstruction) body.systemInstruction = systemInstruction
+  if (tools?.length) body.tools = toGeminiTools(tools)
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -127,6 +162,8 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
   let content = ''
   let rawUsage: GeminiUsage | undefined
+  // functionCall 在 parts 中整块到达（无 id，用合成 id 回传时靠 name 匹配）
+  const assembler = new ToolCallAssembler()
 
   await readSSE(
     resp.body,
@@ -143,6 +180,10 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
       const parts = json.candidates?.[0]?.content?.parts
       if (parts) {
         for (const p of parts) {
+          if (p.functionCall?.name) {
+            assembler.pushComplete({ name: p.functionCall.name, input: p.functionCall.args })
+            continue
+          }
           if (!p.text) continue
           if (p.thought) {
             // 思考片段：不进正文，走思维链回调
@@ -157,12 +198,12 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     signal,
   )
 
-  return { content, usage: normalizeUsage(rawUsage) }
+  return { content, usage: normalizeUsage(rawUsage), toolCalls: assembler.finalize('gemini') }
 }
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, tools, signal } = opts
   const { systemInstruction, contents } = toGeminiInput(messages)
   const base = trimBaseUrl(conn.baseUrl)
   const url = `${base}/v1beta/models/${conn.model}:generateContent?key=${conn.apiKey}`
@@ -171,6 +212,7 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     generationConfig: { temperature, maxOutputTokens: maxTokens },
   }
   if (systemInstruction) body.systemInstruction = systemInstruction
+  if (tools?.length) body.tools = toGeminiTools(tools)
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -187,14 +229,19 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
   const parts = json.candidates?.[0]?.content?.parts
   let content = ''
   let reasoning = ''
+  const assembler = new ToolCallAssembler()
   if (parts) {
     for (const p of parts) {
+      if (p.functionCall?.name) {
+        assembler.pushComplete({ name: p.functionCall.name, input: p.functionCall.args })
+        continue
+      }
       if (!p.text) continue
       if (p.thought) reasoning += p.text
       else content += p.text
     }
   }
-  return { content, reasoning, usage: normalizeUsage(json.usageMetadata) }
+  return { content, reasoning, usage: normalizeUsage(json.usageMetadata), toolCalls: assembler.finalize('gemini') }
 }
 
 /** 拉取模型列表：GET /v1beta/models → models[].name（去 models/ 前缀） */

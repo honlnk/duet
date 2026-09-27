@@ -1,5 +1,5 @@
 /**
- * 全局关系图持久化层（localStorage）
+ * 全局关系图服务层（REST，服务端 data/library.json）
  *
  * 管理角色模板之间的非对称关系，独立于会话存在。
  * 关系在「设置 → 关系图」面板中预先定义，新建对话时按
@@ -9,11 +9,24 @@
  *   - fromId / toId 均为角色模板 id（CharacterTemplate.id）
  *   - 同一对双向关系对应两个 key（A→B 和 B→A）
  *
- * 节点位置（nodePositions）也在此持久化，key 同样为 templateId。
+ * 节点位置（nodePositions）也在此管理，key 同样为 templateId。
+ * v2：持久化从 localStorage 迁到服务端（GET/PUT /api/relationships），
+ * 所有读写函数变为 async；单条/成对修改采用「读-改-写」整体覆盖。
  */
+import { request } from './api'
 
-const RELATIONSHIPS_KEY = 'duet:relationships:v1'
-const NODE_POSITIONS_KEY = 'duet:node-positions:v1'
+interface RelationshipBundle {
+  relationships: Record<string, string>
+  nodePositions: Record<string, { x: number; y: number }>
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }
+}
 
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback
@@ -27,59 +40,33 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 /* --------------------------- 关系数据 --------------------------- */
 
 /** 读取全部关系（Record<"{fromId}->{toId}", 描述>） */
-export function loadRelationships(): Record<string, string> {
-  try {
-    return safeParse<Record<string, string>>(
-      localStorage.getItem(RELATIONSHIPS_KEY),
-      {},
-    )
-  } catch {
-    return {}
-  }
+export async function loadRelationships(): Promise<Record<string, string>> {
+  return (await request<RelationshipBundle>('/api/relationships')).relationships
 }
 
-function saveRelationships(rels: Record<string, string>): void {
-  try {
-    localStorage.setItem(RELATIONSHIPS_KEY, JSON.stringify(rels))
-  } catch {
-    /* ignore */
-  }
+/** 读取全部节点位置 */
+export async function loadNodePositions(): Promise<Record<string, { x: number; y: number }>> {
+  return (await request<RelationshipBundle>('/api/relationships')).nodePositions
 }
 
 /**
- * 保存完整的关系对象（整体覆盖）。
- * 用于关系图画布批量更新。
+ * 保存完整的关系对象（整体覆盖，不动节点位置）。
  */
-export function setRelationships(rels: Record<string, string>): Record<string, string> {
-  const cleaned = cleanRelationships(rels)
-  saveRelationships(cleaned)
-  return cleaned
-}
-
-/**
- * 清理关系：移除指向自身的、值为 undefined 的条目。
- * （空字符串视为「已连线但未填写描述」，保留以便画布显示连线）
- */
-function cleanRelationships(rels: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [key, val] of Object.entries(rels)) {
-    const [from, to] = key.split('->')
-    if (!from || !to || from === to) continue
-    out[key] = typeof val === 'string' ? val : ''
-  }
-  return out
+export async function setRelationships(rels: Record<string, string>): Promise<Record<string, string>> {
+  return (await request<RelationshipBundle>('/api/relationships', jsonInit('PUT', { relationships: rels }))).relationships
 }
 
 /**
  * 设置一对关系（两个方向）。传 null 值表示删除。
  */
-export function setPairRelationship(
+export async function setPairRelationship(
   fromId: string,
   toId: string,
   fromToOther: string | null,
   otherToFrom?: string | null,
-): Record<string, string> {
-  const rels = loadRelationships()
+): Promise<Record<string, string>> {
+  const bundle = await request<RelationshipBundle>('/api/relationships')
+  const rels = bundle.relationships
   const k1 = `${fromId}->${toId}`
   const k2 = `${toId}->${fromId}`
   if (fromToOther === null) {
@@ -92,70 +79,50 @@ export function setPairRelationship(
   } else if (otherToFrom !== undefined) {
     rels[k2] = otherToFrom
   }
-  saveRelationships(rels)
-  return rels
+  return (await request<RelationshipBundle>('/api/relationships', jsonInit('PUT', { relationships: rels }))).relationships
 }
 
 /**
  * 删除一对关系（两个方向都移除）。
  */
-export function removePairRelationship(
+export async function removePairRelationship(
   fromId: string,
   toId: string,
-): Record<string, string> {
-  const rels = loadRelationships()
+): Promise<Record<string, string>> {
+  const bundle = await request<RelationshipBundle>('/api/relationships')
+  const rels = bundle.relationships
   delete rels[`${fromId}->${toId}`]
   delete rels[`${toId}->${fromId}`]
-  saveRelationships(rels)
-  return rels
+  return (await request<RelationshipBundle>('/api/relationships', jsonInit('PUT', { relationships: rels }))).relationships
 }
 
 /**
- * 删除某个模板参与的所有关系（模板删除时调用）。
+ * 删除某个模板参与的所有关系（本地迁移清理用；服务端删除角色模板时也会级联清理）。
  */
-export function removeRelationshipsOf(templateId: string): Record<string, string> {
-  const rels = loadRelationships()
+export async function removeRelationshipsOf(templateId: string): Promise<Record<string, string>> {
+  const bundle = await request<RelationshipBundle>('/api/relationships')
+  const rels = bundle.relationships
   for (const key of Object.keys(rels)) {
     const [from, to] = key.split('->')
     if (from === templateId || to === templateId) {
       delete rels[key]
     }
   }
-  saveRelationships(rels)
-  return rels
+  return (await request<RelationshipBundle>('/api/relationships', jsonInit('PUT', { relationships: rels }))).relationships
 }
 
 /* --------------------------- 节点位置 --------------------------- */
 
-/** 读取全部节点位置 */
-export function loadNodePositions(): Record<string, { x: number; y: number }> {
-  try {
-    return safeParse<Record<string, { x: number; y: number }>>(
-      localStorage.getItem(NODE_POSITIONS_KEY),
-      {},
-    )
-  } catch {
-    return {}
-  }
+/** 保存全部节点位置（整体覆盖，保留现有关系） */
+export async function saveNodePositions(positions: Record<string, { x: number; y: number }>): Promise<void> {
+  const bundle = await request<RelationshipBundle>('/api/relationships')
+  await request<RelationshipBundle>('/api/relationships', jsonInit('PUT', {
+    relationships: bundle.relationships,
+    nodePositions: positions,
+  }))
 }
 
-/** 保存全部节点位置（整体覆盖） */
-export function saveNodePositions(positions: Record<string, { x: number; y: number }>): void {
-  try {
-    localStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(positions))
-  } catch {
-    /* ignore */
-  }
-}
-
-/** 删除某个模板的节点位置（模板删除时调用） */
-export function removeNodePositionOf(templateId: string): void {
-  const positions = loadNodePositions()
-  delete positions[templateId]
-  saveNodePositions(positions)
-}
-
-/* --------------------------- 会话注入 --------------------------- */
+/* --------------------------- 会话注入（纯函数） --------------------------- */
 
 /**
  * 把全局关系（基于 templateId）翻译为会话关系（基于 A/B/C）。
@@ -180,4 +147,20 @@ export function translateRelationshipsForSession(
     }
   }
   return out
+}
+
+/* --------------------------- localStorage 读取（迁移专用） --------------------------- */
+
+/** 旧 localStorage key（迁移读取用，写入路径已全部移除） */
+export const LEGACY_RELATIONSHIPS_KEY = 'duet:relationships:v1'
+export const LEGACY_NODE_POSITIONS_KEY = 'duet:node-positions:v1'
+
+/** 读取旧 localStorage 关系（迁移专用，只读） */
+export function readLegacyRelationships(): Record<string, string> {
+  return safeParse<Record<string, string>>(localStorage.getItem(LEGACY_RELATIONSHIPS_KEY), {})
+}
+
+/** 读取旧 localStorage 节点位置（迁移专用，只读） */
+export function readLegacyNodePositions(): Record<string, { x: number; y: number }> {
+  return safeParse<Record<string, { x: number; y: number }>>(localStorage.getItem(LEGACY_NODE_POSITIONS_KEY), {})
 }

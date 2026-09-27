@@ -1,8 +1,10 @@
 /**
  * 角色模板 & 话题模板 & 世界观模板 Store
  *
- * 集中管理 localStorage 中的可复用模板，供「新建对话」选择角色、
+ * 集中管理服务端资产库中的可复用模板，供「新建对话」选择角色、
  * 以及「设置」页编辑模板时共享同一份数据源。
+ * v2：数据源从 localStorage 换为服务端 REST，所有变更方法变为 async，
+ * 本地 ref 即时更新（单次往返），失败时回退刷新。
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -25,9 +27,9 @@ import {
 } from '@/services/templates'
 
 export const useTemplateStore = defineStore('template', () => {
-  const characters = ref<CharacterTemplate[]>(loadCharacterTemplates())
-  const topics = ref<TopicTemplate[]>(loadTopicTemplates())
-  const worldviews = ref<WorldviewTemplate[]>(loadWorldviewTemplates())
+  const characters = ref<CharacterTemplate[]>([])
+  const topics = ref<TopicTemplate[]>([])
+  const worldviews = ref<WorldviewTemplate[]>([])
 
   /**
    * 跨组件信号：在设置页（角色模板 tab）点「新建会话」后置 true，
@@ -35,78 +37,138 @@ export const useTemplateStore = defineStore('template', () => {
    */
   const pendingNewChat = ref(false)
 
-  /** 重新从 localStorage 拉取（外部修改后同步） */
-  function refresh() {
-    characters.value = loadCharacterTemplates()
-    topics.value = loadTopicTemplates()
-    worldviews.value = loadWorldviewTemplates()
+  /** 重新从服务端拉取（外部修改后同步，如 Agent 助手改动资产） */
+  async function refresh(): Promise<void> {
+    const [c, t, w] = await Promise.all([
+      loadCharacterTemplates(),
+      loadTopicTemplates(),
+      loadWorldviewTemplates(),
+    ])
+    characters.value = c
+    topics.value = t
+    worldviews.value = w
   }
 
-  /** 新增角色模板，返回新列表 */
-  function addCharacter(
+  /** 新增角色模板 */
+  async function addCharacter(
     name: string,
     description: string = '',
     personality: string = '',
-  ): CharacterTemplate[] {
-    characters.value = addCharacterTemplate(name, description, personality)
-    return characters.value
+  ): Promise<void> {
+    try {
+      const created = await addCharacterTemplate(name, description, personality)
+      characters.value = [created, ...characters.value]
+    } catch (e) {
+      console.warn('[template] 新增角色模板失败', e)
+      await refresh()
+    }
   }
 
   /** 更新角色模板 */
-  function updateCharacter(
+  async function updateCharacter(
     id: string,
     patch: Partial<Pick<CharacterTemplate, 'name' | 'description' | 'personality'>>,
-  ): CharacterTemplate[] {
-    characters.value = updateCharacterTemplate(id, patch)
-    return characters.value
+  ): Promise<void> {
+    const existing = characters.value.find((t) => t.id === id)
+    try {
+      const updated = await updateCharacterTemplate(id, {
+        // name 必填：patch 未提供时沿用现有值
+        name: patch.name?.trim() || existing?.name || '',
+        description: patch.description ?? existing?.description ?? '',
+        personality: patch.personality ?? existing?.personality ?? '',
+      })
+      characters.value = characters.value.map((t) => (t.id === id ? updated : t))
+    } catch (e) {
+      console.warn('[template] 更新角色模板失败', e)
+      await refresh()
+    }
   }
 
   /** 删除角色模板 */
-  function removeCharacter(id: string): CharacterTemplate[] {
-    characters.value = removeCharacterTemplate(id)
-    return characters.value
+  async function removeCharacter(id: string): Promise<void> {
+    try {
+      await removeCharacterTemplate(id)
+      characters.value = characters.value.filter((t) => t.id !== id)
+    } catch (e) {
+      console.warn('[template] 删除角色模板失败', e)
+      await refresh()
+    }
   }
 
   /** 新增话题模板 */
-  function addTopic(content: string): TopicTemplate[] {
-    topics.value = addTopicTemplate(content)
-    return topics.value
+  async function addTopic(content: string): Promise<void> {
+    try {
+      const created = await addTopicTemplate(content)
+      topics.value = [created, ...topics.value]
+    } catch (e) {
+      console.warn('[template] 新增话题模板失败', e)
+      await refresh()
+    }
   }
 
   /** 删除话题模板 */
-  function removeTopic(id: string): TopicTemplate[] {
-    topics.value = removeTopicTemplate(id)
-    return topics.value
+  async function removeTopic(id: string): Promise<void> {
+    try {
+      await removeTopicTemplate(id)
+      topics.value = topics.value.filter((t) => t.id !== id)
+    } catch (e) {
+      console.warn('[template] 删除话题模板失败', e)
+      await refresh()
+    }
   }
 
   /** 更新话题模板内容 */
-  function updateTopic(id: string, content: string): TopicTemplate[] {
-    topics.value = updateTopicTemplate(id, content)
-    return topics.value
+  async function updateTopic(id: string, content: string): Promise<void> {
+    try {
+      const updated = await updateTopicTemplate(id, content)
+      topics.value = topics.value.map((t) => (t.id === id ? updated : t))
+    } catch (e) {
+      console.warn('[template] 更新话题模板失败', e)
+      await refresh()
+    }
   }
 
   /** 新增世界观模板 */
-  function addWorldview(
+  async function addWorldview(
     name: string,
     scenario: string,
-  ): WorldviewTemplate[] {
-    worldviews.value = addWorldviewTemplate(name, scenario)
-    return worldviews.value
+  ): Promise<void> {
+    try {
+      const created = await addWorldviewTemplate(name, scenario)
+      worldviews.value = [created, ...worldviews.value]
+    } catch (e) {
+      console.warn('[template] 新增世界观模板失败', e)
+      await refresh()
+    }
   }
 
   /** 删除世界观模板 */
-  function removeWorldview(id: string): WorldviewTemplate[] {
-    worldviews.value = removeWorldviewTemplate(id)
-    return worldviews.value
+  async function removeWorldview(id: string): Promise<void> {
+    try {
+      await removeWorldviewTemplate(id)
+      worldviews.value = worldviews.value.filter((t) => t.id !== id)
+    } catch (e) {
+      console.warn('[template] 删除世界观模板失败', e)
+      await refresh()
+    }
   }
 
   /** 更新世界观模板 */
-  function updateWorldview(
+  async function updateWorldview(
     id: string,
     patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario'>>,
-  ): WorldviewTemplate[] {
-    worldviews.value = updateWorldviewTemplate(id, patch)
-    return worldviews.value
+  ): Promise<void> {
+    const existing = worldviews.value.find((t) => t.id === id)
+    try {
+      const updated = await updateWorldviewTemplate(id, {
+        name: patch.name?.trim() || existing?.name || '',
+        scenario: patch.scenario ?? existing?.scenario ?? '',
+      })
+      worldviews.value = worldviews.value.map((t) => (t.id === id ? updated : t))
+    } catch (e) {
+      console.warn('[template] 更新世界观模板失败', e)
+      await refresh()
+    }
   }
 
   /** 按 id 查找角色模板 */

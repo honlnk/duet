@@ -15,10 +15,12 @@ import {
   type CharacterFormValues,
   type FormValues,
 } from '@/services/storage'
-import { loadRelationships, translateRelationshipsForSession } from '@/services/relationships'
+import { translateRelationshipsForSession } from '@/services/relationships'
+import { useRelationshipStore } from '@/stores/relationship'
 
 export const useFormStore = defineStore('form', () => {
   const values = reactive<FormValues>(defaultValues())
+  const relationshipStore = useRelationshipStore()
 
   /** 更新第 idx 个角色的部分字段（如颜色、provider） */
   function patchCharacter(idx: number, patch: Partial<CharacterFormValues>) {
@@ -192,7 +194,7 @@ export const useFormStore = defineStore('form', () => {
         values.characters.forEach((a, i) => {
           if (a.templateId && ids[i]) idMap[a.templateId] = ids[i]!
         })
-        const globalRels = loadRelationships()
+        const globalRels = relationshipStore.relationships
         const sessionRels = translateRelationshipsForSession(globalRels, idMap)
         return Object.keys(sessionRels).length > 0 ? sessionRels : undefined
       })(),

@@ -13,6 +13,8 @@ import sessionRoutes from './routes/sessions.js'
 import providerRoutes from './routes/providers.js'
 import pricingRoutes from './routes/pricing.js'
 import exchangeRoutes from './routes/exchange.js'
+import libraryRoutes from './routes/library.js'
+import agentRoutes from './routes/agent.js'
 import wsRoutes from './ws/wsRoutes.js'
 import {
   recoverSessions,
@@ -55,6 +57,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   await fastify.register(providerRoutes)
   await fastify.register(pricingRoutes)
   await fastify.register(exchangeRoutes)
+  await fastify.register(libraryRoutes)
+  await fastify.register(agentRoutes)
   await fastify.register(wsRoutes)
 
   // 静态托管前端

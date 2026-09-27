@@ -1,19 +1,15 @@
 /**
- * 模板持久化层（localStorage）
+ * 模板服务层（REST，服务端 data/library.json）
  *
  * 管理三类可复用模板，供「新建对话」时一键填充：
  *  - 角色模板（CharacterTemplate）：名称 + 身份设定
  *  - 话题模板（TopicTemplate）：话题文本
- *  - 世界观模板（WorldviewTemplate）：场景 + 导演指令
+ *  - 世界观模板（WorldviewTemplate）：场景设定
  *
- * 与 storage.ts（草稿/历史）同模式：零 DOM、零网络，try/catch 容错。
+ * v2：持久化从 localStorage 迁到服务端（GET/POST/PUT/DELETE /api/templates/*），
+ * 所有函数变为 async；旧 localStorage 数据由 services/libraryMigration.ts 一次性导入。
  */
-
-const CHARACTER_TPL_KEY = 'duet:character-templates:v1'
-/** 旧版键（智能体概念时期），首次读取时一次性迁移到新键 */
-const LEGACY_CHARACTER_TPL_KEY = 'duet:agent-templates:v1'
-const TOPIC_TPL_KEY = 'duet:topic-templates:v1'
-const WORLDVIEW_TPL_KEY = 'duet:worldview-templates:v1'
+import { request } from './api'
 
 /** 角色模板 */
 export interface CharacterTemplate {
@@ -43,175 +39,95 @@ export interface WorldviewTemplate {
   createdAt: number
 }
 
-function safeParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   }
-}
-
-function genId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
 /* --------------------------- 角色模板 --------------------------- */
 
-export function loadCharacterTemplates(): CharacterTemplate[] {
-  try {
-    const raw = localStorage.getItem(CHARACTER_TPL_KEY)
-    if (raw == null) {
-      // 旧键迁移：把智能体时期的模板搬到新键，然后移除旧键
-      const legacy = localStorage.getItem(LEGACY_CHARACTER_TPL_KEY)
-      if (legacy != null) {
-        const list = safeParse<CharacterTemplate[]>(legacy, [])
-        saveCharacterTemplates(list)
-        localStorage.removeItem(LEGACY_CHARACTER_TPL_KEY)
-        return list
-      }
-      return []
-    }
-    return safeParse<CharacterTemplate[]>(raw, [])
-  } catch {
-    return []
-  }
-}
-
-function saveCharacterTemplates(list: CharacterTemplate[]): void {
-  try {
-    localStorage.setItem(CHARACTER_TPL_KEY, JSON.stringify(list))
-  } catch {
-    /* ignore */
-  }
+export function loadCharacterTemplates(): Promise<CharacterTemplate[]> {
+  return request<CharacterTemplate[]>('/api/templates/characters')
 }
 
 export function addCharacterTemplate(
   name: string,
   description: string = '',
   personality: string = '',
-): CharacterTemplate[] {
-  const list = loadCharacterTemplates()
-  const item: CharacterTemplate = {
-    id: genId('a'),
+): Promise<CharacterTemplate> {
+  return request<CharacterTemplate>('/api/templates/characters', jsonInit('POST', {
     name: name.trim(),
     description: description.trim(),
     personality: personality.trim(),
-    createdAt: Date.now(),
-  }
-  const next = [item, ...list]
-  saveCharacterTemplates(next)
-  return next
+  }))
 }
 
 export function updateCharacterTemplate(
   id: string,
   patch: Partial<Pick<CharacterTemplate, 'name' | 'description' | 'personality'>>,
-): CharacterTemplate[] {
-  const list = loadCharacterTemplates().map((t) =>
-    t.id === id ? { ...t, ...patch } : t,
-  )
-  saveCharacterTemplates(list)
-  return list
+): Promise<CharacterTemplate> {
+  return request<CharacterTemplate>(`/api/templates/characters/${id}`, jsonInit('PUT', {
+    name: patch.name?.trim(),
+    description: patch.description?.trim() ?? '',
+    personality: patch.personality?.trim() ?? '',
+  }))
 }
 
-export function removeCharacterTemplate(id: string): CharacterTemplate[] {
-  const list = loadCharacterTemplates().filter((t) => t.id !== id)
-  saveCharacterTemplates(list)
-  return list
+export function removeCharacterTemplate(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/templates/characters/${id}`, { method: 'DELETE' })
 }
 
 /* --------------------------- 话题模板 --------------------------- */
 
-export function loadTopicTemplates(): TopicTemplate[] {
-  try {
-    return safeParse<TopicTemplate[]>(localStorage.getItem(TOPIC_TPL_KEY), [])
-  } catch {
-    return []
-  }
+export function loadTopicTemplates(): Promise<TopicTemplate[]> {
+  return request<TopicTemplate[]>('/api/templates/topics')
 }
 
-function saveTopicTemplates(list: TopicTemplate[]): void {
-  try {
-    localStorage.setItem(TOPIC_TPL_KEY, JSON.stringify(list))
-  } catch {
-    /* ignore */
-  }
-}
-
-export function addTopicTemplate(content: string): TopicTemplate[] {
-  const list = loadTopicTemplates()
-  const item: TopicTemplate = {
-    id: genId('t'),
+export function addTopicTemplate(content: string): Promise<TopicTemplate> {
+  return request<TopicTemplate>('/api/templates/topics', jsonInit('POST', {
     content: content.trim(),
-    createdAt: Date.now(),
-  }
-  const next = [item, ...list]
-  saveTopicTemplates(next)
-  return next
+  }))
 }
 
-export function removeTopicTemplate(id: string): TopicTemplate[] {
-  const list = loadTopicTemplates().filter((t) => t.id !== id)
-  saveTopicTemplates(list)
-  return list
+export function updateTopicTemplate(id: string, content: string): Promise<TopicTemplate> {
+  return request<TopicTemplate>(`/api/templates/topics/${id}`, jsonInit('PUT', {
+    content: content.trim(),
+  }))
 }
 
-export function updateTopicTemplate(id: string, content: string): TopicTemplate[] {
-  const list = loadTopicTemplates().map((t) =>
-    t.id === id ? { ...t, content: content.trim() } : t,
-  )
-  saveTopicTemplates(list)
-  return list
+export function removeTopicTemplate(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/templates/topics/${id}`, { method: 'DELETE' })
 }
 
 /* --------------------------- 世界观模板 --------------------------- */
 
-export function loadWorldviewTemplates(): WorldviewTemplate[] {
-  try {
-    return safeParse<WorldviewTemplate[]>(localStorage.getItem(WORLDVIEW_TPL_KEY), [])
-  } catch {
-    return []
-  }
-}
-
-function saveWorldviewTemplates(list: WorldviewTemplate[]): void {
-  try {
-    localStorage.setItem(WORLDVIEW_TPL_KEY, JSON.stringify(list))
-  } catch {
-    /* ignore */
-  }
+export function loadWorldviewTemplates(): Promise<WorldviewTemplate[]> {
+  return request<WorldviewTemplate[]>('/api/templates/worldviews')
 }
 
 export function addWorldviewTemplate(
   name: string,
   scenario: string,
-): WorldviewTemplate[] {
-  const list = loadWorldviewTemplates()
-  const item: WorldviewTemplate = {
-    id: genId('w'),
+): Promise<WorldviewTemplate> {
+  return request<WorldviewTemplate>('/api/templates/worldviews', jsonInit('POST', {
     name: name.trim(),
     scenario: scenario.trim(),
-    createdAt: Date.now(),
-  }
-  const next = [item, ...list]
-  saveWorldviewTemplates(next)
-  return next
-}
-
-export function removeWorldviewTemplate(id: string): WorldviewTemplate[] {
-  const list = loadWorldviewTemplates().filter((t) => t.id !== id)
-  saveWorldviewTemplates(list)
-  return list
+  }))
 }
 
 export function updateWorldviewTemplate(
   id: string,
   patch: Partial<Pick<WorldviewTemplate, 'name' | 'scenario'>>,
-): WorldviewTemplate[] {
-  const list = loadWorldviewTemplates().map((t) =>
-    t.id === id ? { ...t, ...patch } : t,
-  )
-  saveWorldviewTemplates(list)
-  return list
+): Promise<WorldviewTemplate> {
+  return request<WorldviewTemplate>(`/api/templates/worldviews/${id}`, jsonInit('PUT', {
+    name: patch.name?.trim(),
+    scenario: patch.scenario?.trim() ?? '',
+  }))
+}
+
+export function removeWorldviewTemplate(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/templates/worldviews/${id}`, { method: 'DELETE' })
 }

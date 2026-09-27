@@ -12,6 +12,7 @@
  * - usage: input_tokens / output_tokens / cache_read_input_tokens（缓存命中）/ cache_creation_input_tokens（缓存写入）
  */
 import { trimBaseUrl, withTimeout, readSSE, readErrorBody, AiError, EMPTY_USAGE } from './shared.js'
+import { ToolCallAssembler } from './tool-support.js'
 import type { ChatOpts, ChatResult, NormalizedUsage, ProviderAdapter } from './types.js'
 import type { ApiMessage } from '../../types/index.js'
 
@@ -26,14 +27,32 @@ interface AnthropicUsage {
 /** Anthropic 流式事件 data */
 interface AnthropicEvent {
   type: string
-  delta?: { type?: string; text?: string; thinking?: string; stop_reason?: string | null }
+  index?: number
+  /** content_block_start 携带块定义（tool_use 含 id/name） */
+  content_block?: { type?: string; id?: string; name?: string }
+  delta?: {
+    type?: string
+    text?: string
+    thinking?: string
+    /** tool_use 参数分片 */
+    partial_json?: string
+    stop_reason?: string | null
+  }
   message?: { usage?: AnthropicUsage }
   usage?: AnthropicUsage // message_delta 里 usage 在顶层
 }
 
 /** Anthropic 非流式响应 */
 interface AnthropicResponse {
-  content?: Array<{ type: string; text?: string; thinking?: string }>
+  content?: Array<{
+    type: string
+    text?: string
+    thinking?: string
+    /** tool_use 块 */
+    id?: string
+    name?: string
+    input?: unknown
+  }>
   usage?: AnthropicUsage
 }
 
@@ -54,16 +73,34 @@ function normalizeUsage(u: AnthropicUsage | undefined): NormalizedUsage {
   }
 }
 
-/** 把通用 messages 拆成 { system, messages }：system 抽到顶层，其余保留 user/assistant */
-function splitSystem(messages: ApiMessage[]): { system: string; messages: ApiMessage[] } {
+/** 把通用 messages 拆成 { system, messages }：system 抽到顶层，其余转 Anthropic 线格式 */
+function splitSystem(messages: ApiMessage[]): { system: string; messages: Array<Record<string, unknown>> } {
   const systemParts: string[] = []
-  const rest: ApiMessage[] = []
+  const rest: Array<Record<string, unknown>> = []
   for (const m of messages) {
     if (m.role === 'system') {
       systemParts.push(m.content)
-    } else {
-      rest.push(m)
+      continue
     }
+    // assistant 携带工具调用 → content 为块数组（text + tool_use）
+    if (m.role === 'assistant' && m.toolCalls?.length) {
+      const blocks: Array<Record<string, unknown>> = []
+      if (m.content) blocks.push({ type: 'text', text: m.content })
+      for (const c of m.toolCalls) {
+        blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: c.input })
+      }
+      rest.push({ role: 'assistant', content: blocks })
+      continue
+    }
+    // 工具结果 → user 角色的 tool_result 块（协议要求紧跟 assistant tool_use）
+    if (m.role === 'tool') {
+      rest.push({
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: m.toolCallId ?? '', content: m.content }],
+      })
+      continue
+    }
+    rest.push({ role: m.role, content: m.content })
   }
   return { system: systemParts.join('\n\n'), messages: rest }
 }
@@ -84,7 +121,7 @@ function applyThinking(
 
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, tools, signal } = opts
   const { system, messages: apiMessages } = splitSystem(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/v1/messages`
   const body: Record<string, unknown> = {
@@ -95,6 +132,15 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     stream: true,
   }
   if (system) body.system = system
+  if (tools?.length) {
+    // 线格式：{name, description, input_schema}（与 OpenAI 的嵌套 function 结构不同）
+    body.tools = tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters,
+    }))
+    body.tool_choice = { type: 'auto' }
+  }
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -116,6 +162,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
   let content = ''
   let rawUsage: AnthropicUsage | undefined
+  const assembler = new ToolCallAssembler()
 
   await readSSE(
     resp.body,
@@ -128,10 +175,22 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
       } catch {
         return
       }
-      // 增量按 delta.type 分流：thinking_delta 走思维链，text_delta 走正文
+      // tool_use 块开始：登记 id/name（input 在后续 input_json_delta 分片到达）
+      if (json.type === 'content_block_start' && json.index !== undefined) {
+        const block = json.content_block
+        if (block?.type === 'tool_use') {
+          assembler.push(json.index, { id: block.id, name: block.name })
+        }
+        return
+      }
+      // 增量按 delta.type 分流：thinking/text/input_json
       if (json.type === 'content_block_delta' && json.delta) {
         if (json.delta.type === 'thinking_delta' && json.delta.thinking) {
           onReasoning?.(json.delta.thinking)
+        } else if (json.delta.type === 'input_json_delta' && json.delta.partial_json) {
+          if (json.index !== undefined) {
+            assembler.push(json.index, { args: json.delta.partial_json })
+          }
         } else if (json.delta.text) {
           content += json.delta.text
           onContent?.(json.delta.text)
@@ -144,12 +203,12 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     signal,
   )
 
-  return { content, usage: normalizeUsage(rawUsage) }
+  return { content, usage: normalizeUsage(rawUsage), toolCalls: assembler.finalize('toolu') }
 }
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, tools, signal } = opts
   const { system, messages: apiMessages } = splitSystem(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/v1/messages`
   const body: Record<string, unknown> = {
@@ -160,6 +219,14 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     stream: false,
   }
   if (system) body.system = system
+  if (tools?.length) {
+    body.tools = tools.map((t) => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters,
+    }))
+    body.tool_choice = { type: 'auto' }
+  }
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -187,7 +254,14 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     .filter((b) => b.type === 'thinking' && b.thinking)
     .map((b) => b.thinking!)
     .join('')
-  return { content, reasoning, usage: normalizeUsage(json.usage) }
+  // tool_use 块（input 已是对象，整块收集）
+  const assembler = new ToolCallAssembler()
+  for (const b of json.content || []) {
+    if (b.type === 'tool_use' && b.name) {
+      assembler.pushComplete({ id: b.id, name: b.name, input: b.input })
+    }
+  }
+  return { content, reasoning, usage: normalizeUsage(json.usage), toolCalls: assembler.finalize('toolu') }
 }
 
 /** 拉取模型列表：GET /v1/models → data[].id */

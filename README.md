@@ -1,6 +1,7 @@
 # Duet ♪ 多角色自主对话聊天室
 
 > 给 2~10 个 AI 一个话题与各自的身份，让它们自己聊起来。
+> 聊天室走固定策略的对话循环；右下角「导演助手」是真正的 Agent Loop——用对话直接增删改查你的角色 / 话题 / 世界观与关系。
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
 > 每个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
@@ -15,7 +16,9 @@
   - 在页面内可视化维护 API Key、模型、价格，按需「获取列表」拉取上游模型；
   - 单价 / 缓存命中 / 缓存写入分维度计费，支持 CNY/USD/EUR 并按在线汇率换算。
 - **自定义颜色标识**：每个角色可指定 6 种预设色（蓝/粉/绿/琥珀/紫/青）或任意 `#hex` 自定义色，气泡、头像、强调条自动着色，长对话中一眼区分发言者。
-- **模板复用**：把常用的角色设定（名字 + persona）和话题保存为模板，新建对话时一键套用，在「设置」页集中管理。
+- **模板复用**：把常用的角色设定（名字 + persona）、话题和世界观保存为模板，新建对话时一键套用，在「设置」页集中管理。
+- **导演助手（Agent Loop）**：右下角机器人挂件打开弹框聊天，模型可调用 12 个内置工具对资产库做**真实的增删改查**（角色 / 话题 / 世界观模板 + 有向角色关系），工具调用过程内联展示、可展开看参数与结果；改动即时同步到设置页与关系画布。输入区可选择 Provider（模型）与思考强度，全部走设置里已有的模型配置。
+- **资产库服务端化**：模板与关系不再存浏览器 localStorage，统一落盘 `data/library.json`（与 `providers.json` 平级），旧数据首启自动迁移且保留原 id。
 - **灵活的停止条件**：
   - 设置「对话轮数上限」按轮停止；
   - 设置「持续时间上限」到点停止；
@@ -117,7 +120,7 @@ docker compose up -d --build
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `PORT` | `23892` | 服务端口（`0` = 自动分配） |
-| `DATA_DIR` | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定；`providers.json` 落盘到其父目录） |
+| `DATA_DIR` | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定；`providers.json`、`library.json` 落盘到其父目录） |
 | `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
 | `ABSOLUTE_MAX_DURATION_SEC` | `7200` | 全局硬熔断时长（秒） |
 | `REQUEST_TIMEOUT_MS` | `30000` | 单次 AI 调用超时（毫秒） |
@@ -149,12 +152,25 @@ docker compose up -d --build
 
 ### 模板管理
 
-在「设置」页可维护两类模板：
+在「设置」页可维护三类模板与关系（也可直接让导演助手用对话维护）：
 
 - **角色模板**：保存常用的名字 + persona，新建对话时一键填入，无需重复粘贴长设定。
 - **话题模板**：保存常用讨论话题，下次直接选用。
+- **世界观模板**：保存场景设定，会话创建时注入。
+- **角色关系**：关系画布中连线编辑，关系是**有向**的（A→B 与 B→A 各写一条视角描述），新建会话时自动按模板注入。
 
-模板存在浏览器 localStorage，随用随取。
+模板与关系持久化在服务端 `data/library.json`（浏览器 localStorage 中的旧数据首次启动自动迁移）。
+
+### 导演助手（Agent Loop）
+
+右下角机器人按钮 → 弹框聊天。与聊天室的固定轮转策略不同，这是一个**真正的工具调用 Agent 循环**：
+
+1. 你用自然语言下指令（如「帮我建一个角色：林小雨，大学生，性格内向」）；
+2. 模型决定调用哪个工具（`upsert_character_template` 等 12 个），参数与执行结果以内联工具行展示；
+3. 工具结果回灌给模型，它继续下一步或口头确认收尾；
+4. 任何写操作（`mutated`）都会即时刷新前端的模板 / 关系缓存——设置弹窗、关系画布同步更新。
+
+安全设计：Agent 只能调用封装好的内存工具（永远接触不到文件系统与任意代码）；单轮最多 30 次 LLM 调用防死循环；会话态仅存内存（2 小时空闲过期，刷新页面即新会话）。
 
 ### 右侧详情面板（Inspector）
 
@@ -174,8 +190,16 @@ docker compose up -d --build
 | 后端 | **TypeScript** + Node.js + **Fastify 5** + @fastify/websocket v11 + @fastify/static v10 |
 | AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖），内建 OpenAI 兼容 / Responses / Anthropic / Gemini 多协议适配器（`ai/providers/`）|
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
-| 持久化 | JSON 文件（每条消息同步落盘，原子替换）；Provider 凭证存 `providers.json` |
+| 持久化 | JSON 文件（每条消息同步落盘，原子替换）；Provider 凭证存 `providers.json`，资产库存 `library.json` |
 | 包管理 | **pnpm workspace**（`server` + `web` 两个工作区）|
+
+### 双 Loop 架构（核心）
+
+项目有两条独立的模型驱动循环：
+
+**对话循环（`ws/chatHandler.ts`）**：聊天室用。固定策略的自主轮转——调度器按 A→B→C 顺序逐个调用模型，各自以独立视角续写发言，无工具调用。
+
+**Agent 循环（`agent/query.ts`）**：导演助手用。标准 tool-use 循环——模型返回 `tool_calls` → 执行工具 → 结果回灌 → 继续下一轮，直到模型给出纯文本收尾。四协议适配器（`ai/providers/`）统一了两种循环的线格式差异（OpenAI / Responses / Anthropic / Gemini 的工具 schema 与消息回传）。
 
 ### 多角色独立记忆设计（核心）
 
@@ -208,25 +232,26 @@ duet/
 ├── docs/                  # 文档（开发计划、调研笔记、审核记录）
 ├── server/                # 后端（Fastify 5 + WS + 多协议 AI 客户端）
 │   └── src/
+│       ├── agent/         # Agent Loop：工具表 / 执行 / 循环 / 会话态 / 提示词
 │       ├── ai/            # 多协议流式适配器 + prompt 模板
-│       │   └── providers/ # openai / openai-responses / anthropic / gemini
+│       │   └── providers/ # openai / openai-responses / anthropic / gemini（含 tools 支持）
 │       ├── memory/        # 上下文管理 + 摘要器（第一人称视角）
-│       ├── store/         # 会话 + Provider 凭证持久化
-│       ├── ws/            # WebSocket 多角色调度
-│       ├── routes/        # REST 路由
+│       ├── store/         # 会话 + Provider 凭证 + 资产库（library）持久化
+│       ├── ws/            # WebSocket 多角色调度（对话循环）
+│       ├── routes/        # REST 路由（含 /api/agent/chat SSE、/api/templates 等）
 │       ├── types/         # 后端类型定义
 │       └── utils/         # 成本计算等工具
 ├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
 │   └── src/
 │       ├── assets/        # Tailwind 主题（@theme 设计 token）
 │       ├── types/         # 后端 API 契约类型
-│       ├── services/      # REST 封装 + localStorage 草稿与模板
+│       ├── services/      # REST 封装 + 资产迁移 + 草稿
 │       ├── composables/   # WebSocket 连接 + 计时器 + 响应式逻辑
-│       ├── stores/        # Pinia（session / sessions / form / draft / config / provider / template）
+│       ├── stores/        # Pinia（session / sessions / form / draft / config / provider / template / relationship）
 │       ├── utils/         # 角色颜色映射（characterColor）
 │       ├── router/        # Vue Router 路由
 │       ├── views/         # 页面（Home / Session）
-│       └── components/    # SFC 组件（Sidebar / Bubble / Inspector / Modal…）
+│       └── components/    # SFC 组件（Sidebar / Bubble / Inspector / Modal / AgentWidget…）
 ├── pnpm-workspace.yaml    # pnpm 工作区配置
 └── data/sessions/         # 运行时会话数据（gitignore）
 ```
@@ -238,7 +263,7 @@ duet/
 | 变量 | 说明 | 默认值 |
 |---|---|---|
 | `PORT` | 服务端口（0=自动）| `23892` |
-| `DATA_DIR` | 会话数据持久化目录（`providers.json` 落盘到其父目录）| `项目根/data/sessions` |
+| `DATA_DIR` | 会话数据持久化目录（`providers.json`、`library.json` 落盘到其父目录）| `项目根/data/sessions` |
 | `ABSOLUTE_MAX_ROUNDS` | 全局最大轮数熔断 | `200` |
 | `ABSOLUTE_MAX_DURATION_SEC` | 全局最大时长熔断(秒) | `7200` |
 | `REQUEST_TIMEOUT_MS` | 单次 AI 调用超时(毫秒) | `30000` |
@@ -255,6 +280,7 @@ duet/
 
 - [门户页](https://duet.honlnk.com/) — 项目介绍与快速开始（`site/`，由 GitHub Actions 自动发布）
 - [开发计划](docs/DEVELOPMENT_PLAN.md) — 初始设计文档（v1，部分已演进，见文首声明）
+- [Agent Loop 开发计划](docs/DEV_PLAN_AGENT_LOOP.md) — 双 Loop 架构改造：资产库服务端化 + 导演助手 Agent Loop（含决策记录与施工日志）
 - [调研笔记](docs/RESEARCH_NOTES.md) — DeepSeek API 实测数据
 - [审核记录](docs/REVIEW.md) — 计划审核与修订记录
 

@@ -10,13 +10,19 @@
  * 2. 流式响应中 content 与 reasoning_content 分阶段到达，每个 chunk 二者其一为 null。
  */
 import { trimBaseUrl, withTimeout, readSSE, readErrorBody, AiError, EMPTY_USAGE } from './shared.js'
+import { ToolCallAssembler } from './tool-support.js'
 import type { ChatOpts, ChatResult, NormalizedUsage, ProviderAdapter } from './types.js'
-import type { DeepSeekUsage } from '../../types/index.js'
+import type { AgentToolCall, ApiMessage, DeepSeekUsage } from '../../types/index.js'
 
 /** 流式响应中的 delta */
 interface StreamDelta {
   content?: string | null
   reasoning_content?: string | null
+  tool_calls?: Array<{
+    index?: number
+    id?: string
+    function?: { name?: string; arguments?: string }
+  }>
 }
 
 /** 流式响应 chunk */
@@ -31,9 +37,53 @@ interface ChatCompletionResponse {
     message?: {
       content?: string
       reasoning_content?: string
+      tool_calls?: Array<{
+        id?: string
+        function?: { name?: string; arguments?: string }
+      }>
     }
   }>
   usage?: DeepSeekUsage
+}
+
+/**
+ * 通用消息 → OpenAI 线格式：
+ * - assistant.toolCalls → tool_calls[]（arguments 序列化）
+ * - role 'tool' → { role:'tool', tool_call_id }
+ * - 其余原样（剥离可选扩展字段）
+ */
+function toWireMessages(messages: ApiMessage[]): Array<Record<string, unknown>> {
+  return messages.map((m) => {
+    if (m.role === 'assistant' && m.toolCalls?.length) {
+      return {
+        role: 'assistant',
+        content: m.content || '',
+        tool_calls: m.toolCalls.map((c) => ({
+          id: c.id,
+          type: 'function',
+          function: { name: c.name, arguments: JSON.stringify(c.input) },
+        })),
+      }
+    }
+    if (m.role === 'tool') {
+      return { role: 'tool', tool_call_id: m.toolCallId ?? '', content: m.content }
+    }
+    return { role: m.role, content: m.content }
+  })
+}
+
+/** 非流式 tool_calls 解析（arguments 已完整，直接 parse；坏块丢弃） */
+function parseFullToolCalls(raw: ChatCompletionResponse['choices']): AgentToolCall[] {
+  const assembler = new ToolCallAssembler()
+  for (const call of raw?.[0]?.message?.tool_calls ?? []) {
+    if (!call.function?.name) continue
+    assembler.pushComplete({
+      id: call.id,
+      name: call.function.name,
+      args: call.function.arguments ?? '',
+    })
+  }
+  return assembler.finalize()
 }
 
 /** 把 DeepSeek/OpenAI 原始 usage 归一化 */
@@ -64,15 +114,19 @@ function applyThinking(
 
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, tools, signal } = opts
   const url = `${trimBaseUrl(conn.baseUrl)}/chat/completions`
   const body: Record<string, unknown> = {
     model: conn.model,
-    messages,
+    messages: toWireMessages(messages),
     temperature,
     max_tokens: maxTokens,
     stream: true,
     stream_options: { include_usage: true },
+  }
+  if (tools?.length) {
+    body.tools = tools
+    body.tool_choice = 'auto'
   }
   applyThinking(body, conn, thinking)
 
@@ -95,6 +149,7 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
   let content = ''
   let reasoning = ''
   let rawUsage: DeepSeekUsage | undefined
+  const assembler = new ToolCallAssembler()
 
   await readSSE(
     resp.body,
@@ -118,23 +173,37 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
         content += delta.content
         onContent?.(delta.content)
       }
+      // tool_calls 分片：按 index 归位，id/name/arguments 各自增量累积
+      if (delta.tool_calls) {
+        for (const frag of delta.tool_calls) {
+          assembler.push(frag.index ?? 0, {
+            id: frag.id,
+            name: frag.function?.name,
+            args: frag.function?.arguments,
+          })
+        }
+      }
     },
     signal,
   )
 
-  return { content, reasoning, usage: normalizeUsage(rawUsage) }
+  return { content, reasoning, usage: normalizeUsage(rawUsage), toolCalls: assembler.finalize() }
 }
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, tools, signal } = opts
   const url = `${trimBaseUrl(conn.baseUrl)}/chat/completions`
   const body: Record<string, unknown> = {
     model: conn.model,
-    messages,
+    messages: toWireMessages(messages),
     temperature,
     max_tokens: maxTokens,
     stream: false,
+  }
+  if (tools?.length) {
+    body.tools = tools
+    body.tool_choice = 'auto'
   }
   applyThinking(body, conn, thinking)
 
@@ -156,6 +225,7 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     content: json.choices?.[0]?.message?.content || '',
     reasoning: json.choices?.[0]?.message?.reasoning_content || '',
     usage: normalizeUsage(json.usage),
+    toolCalls: parseFullToolCalls(json.choices),
   }
 }
 

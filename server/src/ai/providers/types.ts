@@ -5,7 +5,7 @@
  * 把不同协议的请求格式、流式解析、usage 字段统一归一化到 NormalizedUsage。
  * 这样 cost.ts / addStats 等上层逻辑无需感知协议差异。
  */
-import type { ApiMessage, ConnectionConfig } from '../../types/index.js'
+import type { AgentToolCall, AgentToolSchema, ApiMessage, ConnectionConfig } from '../../types/index.js'
 
 /**
  * 归一化后的 usage（对齐 DeepSeek/OpenAI 字段名）。
@@ -29,6 +29,8 @@ export interface ChatResult {
   /** 思维链（仅日志用，不进对方上下文） */
   reasoning?: string
   usage: NormalizedUsage
+  /** 模型发起的工具调用（未传 tools 时为空数组）。调用方据此执行工具并回灌 */
+  toolCalls: AgentToolCall[]
 }
 
 /** 调用参数（流式与非流式共用） */
@@ -44,6 +46,8 @@ export interface ChatOpts {
   onReasoning?: (chunk: string) => void
   /** 会话级思考档位 key（覆盖 conn.thinkingConfig；空 = 用 Provider 默认） */
   thinking?: string
+  /** 工具表（Agent 循环传入；缺省 = 纯文本对话，行为与旧版完全一致） */
+  tools?: AgentToolSchema[]
   /** 外部中止信号 */
   signal?: AbortSignal
 }

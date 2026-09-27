@@ -22,10 +22,13 @@ import { useDraftStore } from '@/stores/draft'
 import { useConfigStore } from '@/stores/config'
 import { useProviderStore } from '@/stores/provider'
 import { useTemplateStore } from '@/stores/template'
+import { useRelationshipStore } from '@/stores/relationship'
+import { migrateLocalStorageLibrary } from '@/services/libraryMigration'
 import { useBreakpoint } from '@/composables/useBreakpoint'
 import SessionSidebar from '@/components/SessionSidebar.vue'
 import NewChatModal from '@/components/NewChatModal.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
+import AgentWidget from '@/components/AgentWidget.vue'
 
 const route = useRoute()
 const session = useSessionStore()
@@ -35,6 +38,7 @@ const draft = useDraftStore()
 const config = useConfigStore()
 const provider = useProviderStore()
 const template = useTemplateStore()
+const relationship = useRelationshipStore()
 
 const { isMobile } = useBreakpoint()
 const { sidebarCollapsed, drawerOpen } = storeToRefs(session)
@@ -92,8 +96,20 @@ watch(
 /* --------------------------- 生命周期 --------------------------- */
 
 onMounted(async () => {
-  // 全局限制、Provider、会话列表
-  await Promise.all([config.load(), provider.load(), sessions.load()])
+  // 一次性迁移：localStorage 资产 → 服务端（幂等；失败下次启动重试）
+  try {
+    await migrateLocalStorageLibrary()
+  } catch (e) {
+    console.warn('[migration] 资产库迁移跳过（下次启动重试）', e)
+  }
+  // 全局限制、Provider、会话列表、模板与关系资产
+  await Promise.all([
+    config.load(),
+    provider.load(),
+    sessions.load(),
+    template.refresh(),
+    relationship.refresh(),
+  ])
   // 恢复草稿（供 NewChatModal 使用）
   const saved = draft.readDraft()
   if (saved) form.replace(saved)
@@ -122,6 +138,9 @@ onMounted(async () => {
 
     <!-- 主区：路由视图（HomeView / SessionView，各自含 header） -->
     <router-view @new-chat="openNewChat" />
+
+    <!-- 导演助手挂件（Agent Loop 入口，右下角悬浮） -->
+    <AgentWidget />
 
     <!-- 新建对话模态 -->
     <NewChatModal

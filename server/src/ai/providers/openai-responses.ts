@@ -12,6 +12,7 @@
  * reasoning 文本走 response.reasoning.delta 事件，这里透出到 onReasoning 供日志。
  */
 import { trimBaseUrl, withTimeout, readSSE, readErrorBody, AiError, EMPTY_USAGE } from './shared.js'
+import { ToolCallAssembler } from './tool-support.js'
 import type { ChatOpts, ChatResult, NormalizedUsage, ProviderAdapter } from './types.js'
 import type { ApiMessage } from '../../types/index.js'
 
@@ -27,6 +28,13 @@ interface ResponsesUsage {
 interface ResponsesEvent {
   type: string
   delta?: string
+  /** output_item.done 携带完整 output item（function_call 用） */
+  item?: {
+    type?: string
+    call_id?: string
+    name?: string
+    arguments?: string
+  }
   response?: { usage?: ResponsesUsage }
   usage?: ResponsesUsage
 }
@@ -37,6 +45,10 @@ interface ResponsesResponse {
   output?: Array<{
     type: string
     content?: Array<{ type: string; text?: string }>
+    /** function_call item */
+    call_id?: string
+    name?: string
+    arguments?: string
   }>
   usage?: ResponsesUsage
 }
@@ -55,18 +67,37 @@ function normalizeUsage(u: ResponsesUsage | undefined): NormalizedUsage {
   }
 }
 
-/** 把 system 抽到 instructions，其余转 input 数组（role: user/assistant/developer） */
+/**
+ * 把 system 抽到 instructions，其余转 input 数组：
+ * - 普通消息 → { role: user/assistant, content }
+ * - assistant.toolCalls → 追加 { type:'function_call', call_id, name, arguments } item
+ * - tool 结果 → { type:'function_call_output', call_id, output } item
+ */
 function toResponsesInput(messages: ApiMessage[]): {
   instructions?: string
-  input: Array<{ role: string; content: string }>
+  input: Array<Record<string, unknown>>
 } {
   const systemParts: string[] = []
-  const input: Array<{ role: string; content: string }> = []
+  const input: Array<Record<string, unknown>> = []
   for (const m of messages) {
     if (m.role === 'system') {
       systemParts.push(m.content)
-    } else {
-      input.push({ role: m.role, content: m.content })
+      continue
+    }
+    if (m.role === 'tool') {
+      input.push({ type: 'function_call_output', call_id: m.toolCallId ?? '', output: m.content })
+      continue
+    }
+    input.push({ role: m.role, content: m.content })
+    if (m.role === 'assistant' && m.toolCalls?.length) {
+      for (const c of m.toolCalls) {
+        input.push({
+          type: 'function_call',
+          call_id: c.id,
+          name: c.name,
+          arguments: JSON.stringify(c.input),
+        })
+      }
     }
   }
   const result: ReturnType<typeof toResponsesInput> = { input }
@@ -90,7 +121,7 @@ function applyThinking(
 
 /** 流式聊天 */
 async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, signal } = opts
+  const { messages, conn, temperature = 0.7, maxTokens = 1024, onContent, onReasoning, thinking, tools, signal } = opts
   const { instructions, input } = toResponsesInput(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/responses`
   const body: Record<string, unknown> = {
@@ -101,6 +132,16 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     stream: true,
   }
   if (instructions) body.instructions = instructions
+  if (tools?.length) {
+    // Responses 的工具是扁平结构（无嵌套 function 键）
+    body.tools = tools.map((t) => ({
+      type: 'function',
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }))
+    body.tool_choice = 'auto'
+  }
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -121,6 +162,8 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
 
   let content = ''
   let rawUsage: ResponsesUsage | undefined
+  // function_call 从 output_item.done 事件取完整 item（arguments 已拼好，无需分片组装）
+  const assembler = new ToolCallAssembler()
 
   await readSSE(
     resp.body,
@@ -142,6 +185,16 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
       if (json.type === 'response.reasoning_text.delta' && typeof json.delta === 'string') {
         onReasoning?.(json.delta)
       }
+      // 完整 function_call item
+      if (json.type === 'response.output_item.done' && json.item?.type === 'function_call') {
+        if (json.item.name) {
+          assembler.pushComplete({
+            id: json.item.call_id,
+            name: json.item.name,
+            args: json.item.arguments ?? '',
+          })
+        }
+      }
       // usage（response.completed 事件携带完整 usage）
       if (json.response?.usage) rawUsage = json.response.usage
       if (json.usage) rawUsage = json.usage
@@ -149,12 +202,12 @@ async function chatCompletion(opts: ChatOpts): Promise<ChatResult> {
     signal,
   )
 
-  return { content, usage: normalizeUsage(rawUsage) }
+  return { content, usage: normalizeUsage(rawUsage), toolCalls: assembler.finalize() }
 }
 
 /** 非流式聊天 */
 async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
-  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, signal } = opts
+  const { messages, conn, temperature = 0.3, maxTokens = 800, thinking, tools, signal } = opts
   const { instructions, input } = toResponsesInput(messages)
   const url = `${trimBaseUrl(conn.baseUrl)}/responses`
   const body: Record<string, unknown> = {
@@ -165,6 +218,15 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
     stream: false,
   }
   if (instructions) body.instructions = instructions
+  if (tools?.length) {
+    body.tools = tools.map((t) => ({
+      type: 'function',
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    }))
+    body.tool_choice = 'auto'
+  }
   applyThinking(body, conn, thinking)
 
   const resp = await fetch(url, {
@@ -191,7 +253,13 @@ async function chatComplete(opts: ChatOpts): Promise<ChatResult> {
       .map((c) => c.text!)
       .join('')
   }
-  return { content: content ?? '', usage: normalizeUsage(json.usage) }
+  const assembler = new ToolCallAssembler()
+  for (const item of json.output ?? []) {
+    if (item.type === 'function_call' && item.name) {
+      assembler.pushComplete({ id: item.call_id, name: item.name, args: item.arguments ?? '' })
+    }
+  }
+  return { content: content ?? '', usage: normalizeUsage(json.usage), toolCalls: assembler.finalize() }
 }
 
 /** 拉取模型列表：与 Compatible 共用 GET /models */

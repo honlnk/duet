@@ -22,7 +22,8 @@ import type {
 
 const apiBase = ''
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+/** 通用 REST 请求（同源）：非 2xx 抛错，2xx 解析 JSON */
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) {
     const body = await res.text().catch(() => '')
