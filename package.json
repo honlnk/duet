@@ -12,7 +12,7 @@
     "start": "cross-env NODE_ENV=production node server/dist/index.js",
     "test": "pnpm --filter @honlnk/duet exec tsx ../scripts/test-e2e.ts",
     "typecheck": "pnpm --filter @honlnk/duet typecheck && pnpm --filter @honlnk/duet exec tsc --noEmit -p ../scripts/tsconfig.json",
-    "release": "pnpm build && pnpm --filter @honlnk/duet publish --access public --no-git-checks"
+    "release": "pnpm --filter @honlnk/duet publish --access public --no-git-checks"
   },
   "engines": {
     "node": ">=20"

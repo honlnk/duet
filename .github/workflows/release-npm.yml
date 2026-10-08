@@ -1,0 +1,86 @@
+# 发布 @honlnk/duet 到 npm（pnpm monorepo，发布物为 server/ 子包）。
+# 推送 v* 标签时触发（tag 版本必须与 server/package.json version 一致），也可手动触发。
+# 认证方式：npm Trusted Publishing（OIDC）—— 无需 NPM_TOKEN。
+#
+# 前置（已配置，2026-10-08）：
+#   npmjs.com → 包 @honlnk/duet → Settings → Trusted Publisher：
+#     user=honlnk、repo=duet、workflow filename=release-npm.yml、
+#     environment 留空、Allowed actions 勾选 npm publish。
+#   配好后不再需要任何 token；GITHUB_TOKEN 由 Actions 自动注入。
+#
+# 幂等：版本已在 registry 时自动跳过（兼容「先手动发再推 tag」）。
+# 标签版本必须与 server/package.json version 一致，否则直接失败防止误发。
+
+name: Release npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC Trusted Publishing / --provenance 必需
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version (tag must match server/package.json)
+        id: ver
+        run: |
+          set -e
+          PKG_VERSION=$(node -p "require('./server/package.json').version")
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+              echo "::error::tag v$TAG_VERSION 与 server/package.json version $PKG_VERSION 不一致"
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already published
+        id: skip
+        run: |
+          set -e
+          V=${{ steps.ver.outputs.version }}
+          if npm view "@honlnk/duet@$V" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@honlnk/duet@$V 已存在，跳过发布"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4 # 版本自动读根 package.json 的 packageManager 字段
+
+      - uses: actions/setup-node@v4
+        if: steps.skip.outputs.skip != 'true'
+        with:
+          node-version: '24' # Trusted Publishing 要求 npm ≥ 11.5.1（Node 24 自带）
+          cache: pnpm
+          # 不要设 registry-url：会注入 NODE_AUTH_TOKEN，覆盖 OIDC 认证。
+
+      - name: Install dependencies
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm typecheck
+
+      - name: Build (web -> server/public, server -> dist)
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm build
+
+      - name: Publish
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: server
+        # 必须用 npm CLI（而非 pnpm publish）做 OIDC 认证，并自动附带 provenance；
+        # --ignore-scripts 跳过 prepublishOnly —— 上一步已显式构建，避免重复构建。
+        run: npm publish --access public --ignore-scripts
