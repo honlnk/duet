@@ -239,17 +239,16 @@ export function setDefaultProvider(id: string): boolean {
 
 /**
  * 启动校验：确认至少有一条 Provider 可用。
- * 无 Provider 时在 dev 模式仅 warn，prod 模式报错退出。
+ * 无 Provider 时仅警告、不退出 —— 服务器照常启动托管 UI，
+ * npx 首次使用依赖此行为在浏览器里完成首次配置（否则提示「去 UI 配置」
+ * 但 UI 因进程退出永远打不开，形成死锁）。
  */
 export function validateProviders(): void {
   const data = loadRaw()
   if (data.providers.length === 0) {
-    if (config.env === 'production') {
-      console.error('[provider] 无可用 Provider。请在 UI 中添加至少一个模型连接。')
-      process.exit(1)
-    } else {
-      console.warn('[provider] 警告：无可用 Provider，AI 调用将失败。请在 UI 中添加。')
-    }
+    console.warn(
+      '[provider] 尚未配置任何 Provider。请在打开的页面「设置」中添加模型连接；配置前无法进行 AI 对话。',
+    )
   } else if (!data.defaultId || !data.providers.find((p) => p.id === data.defaultId)) {
     // defaultId 指向不存在的项 → 自动修正为第一条
     const data2 = loadRaw()

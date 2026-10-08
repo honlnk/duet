@@ -88,11 +88,12 @@ npx @honlnk/duet
 
 # 或全局安装后使用
 npm i -g @honlnk/duet
-DATA_DIR=~/.duet duet-chat
+duet-chat
 ```
 
 - 包内已内置前端构建产物，开箱即用。
-- 建议用 `DATA_DIR` 指定数据持久化目录（如 `~/.duet`），避免会话数据写到包目录。
+- 数据（会话 / Provider 配置 / 资产库）默认落盘 `~/.duet/`，与 npx 缓存隔离；可用 `DATA_DIR` 改到其他目录。
+- 首次启动无需预置任何配置：服务器照常起、自动打开浏览器，在页面 Provider 面板添加 API Key / 模型即可开始。
 - 启动后在页面 Provider 面板配置 API Key / 模型。其余配置通过环境变量传入（见 `.env.example`）。
 
 #### 形态 C：Docker（容器化部署）
@@ -120,7 +121,7 @@ docker compose up -d --build
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `PORT` | `23892` | 服务端口（`0` = 自动分配） |
-| `DATA_DIR` | `项目根/data/sessions` | 会话数据持久化目录（npm 包 / Docker 建议显式指定；`providers.json`、`library.json` 落盘到其父目录） |
+| `DATA_DIR` | 见说明 | 数据根目录（`sessions/`、`providers.json`、`library.json` 均在其下）。留空时：npm 包默认 `~/.duet`，源码开发默认 `项目根/data` |
 | `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
 | `ABSOLUTE_MAX_DURATION_SEC` | `7200` | 全局硬熔断时长（秒） |
 | `REQUEST_TIMEOUT_MS` | `30000` | 单次 AI 调用超时（毫秒） |
@@ -263,7 +264,7 @@ duet/
 | 变量 | 说明 | 默认值 |
 |---|---|---|
 | `PORT` | 服务端口（0=自动）| `23892` |
-| `DATA_DIR` | 会话数据持久化目录（`providers.json`、`library.json` 落盘到其父目录）| `项目根/data/sessions` |
+| `DATA_DIR` | 数据根目录（`sessions/`、`providers.json`、`library.json` 均在其下）| 源码开发 `项目根/data`；npm 包 `~/.duet` |
 | `ABSOLUTE_MAX_ROUNDS` | 全局最大轮数熔断 | `200` |
 | `ABSOLUTE_MAX_DURATION_SEC` | 全局最大时长熔断(秒) | `7200` |
 | `REQUEST_TIMEOUT_MS` | 单次 AI 调用超时(毫秒) | `30000` |

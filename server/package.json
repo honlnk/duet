@@ -1,6 +1,6 @@
 {
   "name": "@honlnk/duet",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Duet — 多智能体自主对话聊天室（终端用户可 npx 运行）",
   "type": "module",
   "main": "dist/index.js",

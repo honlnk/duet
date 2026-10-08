@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AppConfig } from './types/index.js'
@@ -9,6 +10,9 @@ const projectRoot = path.resolve(__dirname, '..', '..')
 
 dotenv.config({ path: path.join(projectRoot, '.env'), quiet: true })
 
+// 编译产物恒在名为 dist 的目录下（源码开发时是 src）
+const runningFromDist = path.basename(__dirname) === 'dist'
+
 /**
  * 推断运行环境：
  * - 显式设置 NODE_ENV 时，尊重它（开发用 cross-env / 测试用环境变量）
@@ -17,10 +21,21 @@ dotenv.config({ path: path.join(projectRoot, '.env'), quiet: true })
  */
 function detectEnv(): string {
   if (process.env.NODE_ENV) return process.env.NODE_ENV
-  // 编译产物恒在名为 dist 的目录下（源码开发时是 src）
-  const runningFromDist = path.basename(__dirname) === 'dist'
   return runningFromDist ? 'production' : 'development'
 }
+
+/**
+ * 数据根目录：sessions/ providers.json/ library.json 均在其下。
+ * - DATA_DIR 环境变量最优先
+ * - 未设置且跑的是编译产物（npx / 全局安装）：~/.duet —— 写用户主目录，
+ *   避免落进 npx 缓存（缓存被清即丢配置）
+ * - 未设置且为源码开发：项目根 data/
+ */
+const dataRoot = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : runningFromDist
+    ? path.join(os.homedir(), '.duet')
+    : path.join(projectRoot, 'data')
 
 function toInt(v: string | undefined, def: number): number {
   const n = Number.parseInt(v ?? '', 10)
@@ -35,22 +50,12 @@ const config: AppConfig = {
   // 全局硬熔断
   absoluteMaxRounds: toInt(process.env.ABSOLUTE_MAX_ROUNDS, 200),
   absoluteMaxDurationSec: toInt(process.env.ABSOLUTE_MAX_DURATION_SEC, 7200),
-  // 数据目录：优先用 DATA_DIR 环境变量（npm 包 / Docker 场景下指向持久化目录），
-  // 否则回退到项目根的 data/sessions（开发 / 源码部署）
-  dataDir: process.env.DATA_DIR
-    ? path.resolve(process.env.DATA_DIR)
-    : path.join(projectRoot, 'data', 'sessions'),
-  // Provider 配置：与 sessions/ 平级，放 data/ 根目录
-  // DATA_DIR 已指向 sessions 子目录，providers.json 应与其同级而非在其内部
-  providersFile:
-    process.env.DATA_DIR
-      ? path.join(path.dirname(path.resolve(process.env.DATA_DIR)), 'providers.json')
-      : path.join(projectRoot, 'data', 'providers.json'),
-  // 资产库（角色/话题/世界观模板 + 关系）：与 providers.json 同目录同模式
-  libraryFile:
-    process.env.DATA_DIR
-      ? path.join(path.dirname(path.resolve(process.env.DATA_DIR)), 'library.json')
-      : path.join(projectRoot, 'data', 'library.json'),
+  // 会话数据目录（dataRoot/sessions）
+  dataDir: path.join(dataRoot, 'sessions'),
+  // Provider 配置：数据根目录下，与 sessions/ 平级
+  providersFile: path.join(dataRoot, 'providers.json'),
+  // 资产库（角色/话题/世界观模板 + 关系）：与 providers.json 同目录
+  libraryFile: path.join(dataRoot, 'library.json'),
   // 前端构建产物（生产模式托管）
   staticDir: path.join(__dirname, '..', 'public'),
 }
