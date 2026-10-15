@@ -1,27 +1,23 @@
 {
   "name": "duet",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Duet — 多智能体自主对话聊天室",
+  "description": "Duet — 多智能体自主对话聊天室（后端 server-py/：Python + FastAPI + LangGraph）",
   "type": "module",
   "scripts": {
     "dev": "run-p -l dev:web dev:server",
     "dev:web": "pnpm --filter @duet/web dev",
-    "dev:server": "pnpm --filter @honlnk/duet dev",
-    "build": "pnpm --filter @duet/web build && pnpm --filter @honlnk/duet build",
-    "start": "cross-env NODE_ENV=production node server/dist/index.js",
-    "test": "pnpm --filter @honlnk/duet exec tsx ../scripts/test-e2e.ts",
-    "typecheck": "pnpm --filter @honlnk/duet typecheck && pnpm --filter @honlnk/duet exec tsc --noEmit -p ../scripts/tsconfig.json",
-    "release": "pnpm --filter @honlnk/duet publish --access public --no-git-checks"
+    "dev:server": "cd server-py && uv run uvicorn duet_langgraph.main:app --port 23892",
+    "build": "pnpm --filter @duet/web build",
+    "start": "pnpm --filter @duet/web build && cd server-py && uv run duet-langgraph",
+    "test": "cd server-py && uv run pytest -q",
+    "lint": "cd server-py && uv run ruff check ."
   },
   "engines": {
     "node": ">=20"
   },
   "packageManager": "pnpm@10.21.0",
   "devDependencies": {
-    "@types/ws": "^8.5.10",
-    "cross-env": "^7.0.3",
-    "npm-run-all2": "^9.0.2",
-    "ws": "^8.18.0"
+    "npm-run-all2": "^9.0.2"
   }
 }

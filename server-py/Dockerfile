@@ -14,7 +14,6 @@ WORKDIR /repo
 # 先只拷清单，最大化命中 pnpm store 缓存
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY web/package.json web/package.json
-COPY server/package.json server/package.json
 RUN pnpm install --frozen-lockfile --filter web...
 COPY web ./web
 # vite outDir=../server-py/src/duet_langgraph/public（相对 web/）

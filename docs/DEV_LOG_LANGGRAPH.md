@@ -171,3 +171,25 @@
 4. README 演示 gif 未做：mock 文本内容不适合作为项目演示素材，真实 LLM 会话录制留待 V4 后（最终报告列入尾巴）。
 5. Docker healthcheck 首轮探测有 ~40s 空窗（interval 30s + start_period 10s），与 TS 版一致，未调参。
 6. PyPI workflow 未真机验证（不 push 无法触发），文件头已注明前置配置步骤；标记为未验证项。
+
+## 2026-10-15 S6 清理 TS 版 ✅
+
+**产出**
+
+- `final-ts` 标签（annotated）标记最后一个含 TS 后端的提交；删除 `server/`、根 `Dockerfile`（TS）、`scripts/*.ts`（TS e2e）、`.github/workflows/release-npm.yml`
+- `pnpm-workspace.yaml` 移除 server 包，lockfile 重生成（-646 行）；根 `package.json` 重写为 Python 工作流（`pnpm dev` = vite + uvicorn 并行，`pnpm test` = pytest，版本升 2.0.0）
+- 根 `README.md` 定稿为 Python 主文档：快速开始（源码/uvx/Docker 三形态）、双 Loop mermaid、记忆视角矩阵表（原 ASCII 伪图按文档规范改 Markdown 表）、v1→v2 升级说明（历史会话不迁移 / providers+library 可拷贝 / npm 包停更于 v1）
+- `site/` 门户页同步：npx → uvx、npm 链接 → PyPI、「单 Node 进程」→「单 Python 进程」
+- `web/src` 注释中指向 TS 源文件的路径改为 Python 对应文件（纯注释，无行为变更）
+- `server-py/Dockerfile` web-builder 层移除已删除的 `COPY server/package.json`
+
+**验收结论**
+
+- `uv run pytest` 40/40 绿；`uv run ruff check .` 干净；`pnpm --filter web build` 成功
+- 删除 TS 后 `docker compose up -d --build` 重新全栈构建：容器 **healthy**、`/` 200（venv site-packages 内含前端产物）——D5 一键起在最终形态复验通过
+
+**偏差记录**
+
+1. 计划中「合并 master」执行为本地 merge（不 push，遵守约束）；远端 CI 绿灯与 push 留给用户执行。
+2. `release-pypi.yml` 的 PyPI Trusted Publisher 前置配置（pypi.org pending publisher + GitHub environment `pypi`）需用户手动操作一次，workflow 头部已注明步骤。
+3. PyPI 包 `duet-langgraph` 尚未发布（需先完成上述前置 + 推 tag），v2 首版号建议 2.0.0 对齐根 package.json。

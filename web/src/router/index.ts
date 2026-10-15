@@ -6,7 +6,7 @@
  * - /sessions/:id     会话工作区（聊天区，按 :id 加载）
  *
  * 用 createWebHistory：每个会话有独立 URL，刷新 / 前进后退都能恢复。
- * 后端 SPA fallback（server/src/index.ts）已把非 API/WS 的 GET 回退到 index.html。
+ * 后端 SPA fallback（server-py/src/duet_langgraph/main.py）已把非 API/WS 的 GET 回退到 index.html。
  */
 import { createRouter, createWebHistory } from 'vue-router'
 

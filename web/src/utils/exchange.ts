@@ -15,7 +15,7 @@ const STORAGE_KEY = 'duet:exchange-rates'
 
 /**
  * 固定兜底汇率（各货币对 USD 的比率）。
- * 与后端 server/src/utils/currency.ts 的 FALLBACK_RATES 保持一致。
+ * 与后端 server-py/src/duet_langgraph/utils/currency.py 的 FALLBACK_RATES 保持一致。
  * 用于接口不可用且无任何缓存时的最底层兜底。
  */
 export const FALLBACK_RATES: Record<string, number> = {
