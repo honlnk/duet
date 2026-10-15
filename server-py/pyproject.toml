@@ -33,6 +33,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/duet_langgraph"]
+# web 前端构建产物（被 .gitignore 忽略，构建产物需显式允许入包；缺失时不报错，仅打出一个无 UI 的包）
+artifacts = ["src/duet_langgraph/public"]
 
 [tool.ruff]
 line-length = 100

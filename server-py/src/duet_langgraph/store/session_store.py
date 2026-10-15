@@ -223,8 +223,8 @@ def delete_session(id_: str) -> bool:
     return cur.rowcount > 0
 
 
-def recover_sessions() -> int:
-    """启动恢复：running → stopped（reason=crashed）。"""
+def recover_sessions(reason: str = "crashed") -> int:
+    """启动恢复：running → stopped；进程退出前也可传 reason=shutdown 做落盘冲刷。"""
     n = 0
     with _lock:
         conn = _connection()
@@ -239,7 +239,7 @@ def recover_sessions() -> int:
         if s.get("status") != "running":
             continue
         s["status"] = "stopped"
-        s["finishedReason"] = s.get("finishedReason") or "crashed"
+        s["finishedReason"] = s.get("finishedReason") or reason
         s["updatedAt"] = now_ms()
         with _lock:
             conn.execute(

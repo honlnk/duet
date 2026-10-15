@@ -143,3 +143,31 @@
 2. 摘要后记忆上限：trim 到 keepRecent 后、下次摘要触发前会再累积一轮对话，故记忆条数上限为 keepRecent + 角色数（TS 同此行为，测试断言按此边界）。
 3. scheduling=llm 的选人调用在每次 post_reply 后发生；临近 maxRounds 时跳过（避免最后一轮浪费调用），其余停止条件（时长等）下可能多一次调用——低频场景，接受。
 4. scheduling 为新增功能（TS 无）：前端无 UI 入口，经 REST 配置启用；默认不序列化，契约零变更。
+
+## 2026-10-15 S5 交付打磨 ✅
+
+**产出**
+
+- 静态托管（对齐 TS registerStaticOrVite）：`config.static_dir`（`DUET_STATIC_DIR` 显式优先，默认包内 `public/`）；开发模式 `/` 返回提示 JSON；生产模式 `SPAStaticFiles` 挂载在全部路由之后（GET 未命中回 index.html，`/api`、`/ws` 前缀豁免保持 404 JSON）
+- 优雅退出：lifespan 退出冲刷 running → stopped（reason=shutdown，`recover_sessions` 加 reason 参数复用）；生产入口启动后自动开浏览器（无图形环境静默忽略）
+- 前端构建：`web/vite.config.ts` outDir → `server-py/src/duet_langgraph/public`（.gitignore 忽略，经 hatch `artifacts` 打进 wheel——PyPI/Docker 产物自带 UI）
+- Docker 定稿（`server-py/Dockerfile` 三层）：web-builder（node22 + corepack pnpm 构建前端）→ builder（uv 打 wheel 含 public + lock 导出依赖装独立 venv，非 editable）→ 运行层（非 root duet + /data 卷 + HEALTHCHECK）；根 `docker-compose.yml` 指向 server-py/Dockerfile，healthcheck 由 wget 改 python urllib（slim 无 wget）
+- `.github/workflows/release-pypi.yml` 草稿：tag v* 触发（版本与 pyproject 一致性校验）→ CI 内构建前端 → uv build wheel → PyPI Trusted Publishing（OIDC）；文件头注明 pypi.org pending publisher 前置配置；S6 删 release-npm.yml 前不推 tag（避免双流水线）
+- `server-py/README.md` 定稿：快速开始（uvx/pip/compose 三式）、主图与 Agent 图 mermaid、运行时决策表、与 TS 差异清单（pacing 不做/历史会话不迁移/scheduling 新增/记忆每轮存）、环境变量表、开发与发布指南
+- 测试 +3（`test_s5_static.py`）：开发根提示、生产缺构建提示、生产 SPA 回退/api 豁免
+
+**验收结论**
+
+- `uv run ruff check .` 干净；`uv run pytest` 40/40 绿
+- V3 前端全链路（浏览器真机 + 本地 mock LLM，OpenAI 兼容协议）：UI 配 Provider（含模型列表代理）→ 模板库建角色/话题 → 向导建会话（创建即启动）→ 流式渲染 → 摘要事件日志（「正在整理记忆→记忆已更新」）→ 暂停（stopped/stopped）→ 导演助手指令 → 工具调用 SSE → 「远见者」模板落库，全程无报错
+- V5 Docker：`docker compose up -d --build` 全栈构建成功，容器 healthy，`/`、SPA 回退、静态资源、`/api/health` 全通（venv site-packages 内含 public/）
+- 修复两个流式 usage 真 bug（V3 冒烟发现，pytest fake-model 注入路径测不到）：① `ChatOpenAI` 未开 `stream_usage=True`，langchain 默认不透传流末 usage chunk；② usage 汇总 chunk（choices=[]）后可能跟空 chunk，`character_reply` 由「取最后一个 chunk」改为「取最后一个带 usage 的 chunk」。修复后 mock 真流实测 stats 事件三维数值精确（120/24、hit 40、miss 80 累计）
+
+**偏差记录**
+
+1. 静态托管 `/api` 未命中的非 GET 请求返回 405（StaticFiles 行为）而非 TS 的 404 JSON——前端无此形态请求，接受。
+2. 自动开浏览器仅在存在 index.html 时触发（TS 无此条件判断）；无前端时打开浏览器只会看到错误提示，跳过更合理。
+3. V3 的模板库种子经 REST 灌入（模板 CRUD UI 表单较长，非本次验收关键路径）；Provider/建会话/启动/流式/停止/导演助手均走 UI。
+4. README 演示 gif 未做：mock 文本内容不适合作为项目演示素材，真实 LLM 会话录制留待 V4 后（最终报告列入尾巴）。
+5. Docker healthcheck 首轮探测有 ~40s 空窗（interval 30s + start_period 10s），与 TS 版一致，未调参。
+6. PyPI workflow 未真机验证（不 push 无法触发），文件头已注明前置配置步骤；标记为未验证项。

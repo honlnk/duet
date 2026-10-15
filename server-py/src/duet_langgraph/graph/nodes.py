@@ -289,6 +289,7 @@ async def character_reply(state: dict[str, Any]) -> dict[str, Any]:
         try:
             content = ""
             final = None
+            usage_chunk = None
             async for chunk in model.astream(messages):
                 piece = _chunk_text(chunk)
                 if piece:
@@ -297,7 +298,12 @@ async def character_reply(state: dict[str, Any]) -> dict[str, Any]:
                         {"type": "chunk", "characterId": character_id, "content": piece}
                     )
                 final = chunk
-            usage = usage_from_message(final) if final is not None else None
+                # usage 汇总 chunk（choices=[]）后面可能还跟空 chunk，不能只看最后一个
+                if getattr(chunk, "usage_metadata", None) or (
+                    getattr(chunk, "response_metadata", None) or {}
+                ).get("usage"):
+                    usage_chunk = chunk
+            usage = usage_from_message(usage_chunk if usage_chunk is not None else final)
             return {
                 "reply": {
                     "content": content,

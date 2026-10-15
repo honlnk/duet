@@ -103,6 +103,9 @@ def make_model(
         max_tokens=max_tokens,
         timeout=30_000,
         use_responses_api=(provider.protocol == "openai-responses"),
+        # 对齐 TS：openai SDK 默认 stream_options.include_usage，末 chunk 带 usage；
+        # langchain 默认不透传，须显式开启，否则流式回复的 token 统计恒为 0
+        stream_usage=True,
         **common_kwargs,
     )
 

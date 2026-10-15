@@ -10,7 +10,7 @@ services:
   duet:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: server-py/Dockerfile
     image: duet:latest
     container_name: duet
     restart: unless-stopped
@@ -26,9 +26,9 @@ services:
     volumes:
       # 会话数据与 providers.json 持久化（容器删除后仍在）
       - duet-data:/data
-    # 健康检查（可选，依赖 /api/health 端点）
+    # 健康检查（可选，依赖 /api/health 端点；镜像为 python:3.12-slim，无 wget）
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:23892/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:23892/api/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3

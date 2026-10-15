@@ -3,6 +3,7 @@
 - 端口默认 23892（PORT env 可覆盖）
 - DATA_DIR 显式环境变量最优先，默认 ~/.duet-langgraph
 - 全局硬熔断：200 轮 / 7200 秒（env 可覆盖）
+- 静态目录：DUET_STATIC_DIR 显式优先，默认包内 public/（S5）
 """
 
 from __future__ import annotations
@@ -28,6 +29,14 @@ def _to_int(value: str | None, default: int) -> int:
 def _detect_env() -> str:
     # DUET_ENV 显式优先；默认 development（生产入口 main() 会覆写为 production）
     return os.environ.get("DUET_ENV", "development")
+
+
+def _static_dir() -> Path:
+    # DUET_STATIC_DIR 显式优先；默认取包内 public/（web 构建产物，Docker/PyPI 打包时写入）
+    env_dir = os.environ.get("DUET_STATIC_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser().resolve()
+    return Path(__file__).resolve().parent / "public"
 
 
 def _data_root() -> Path:
@@ -57,6 +66,7 @@ class AppConfig:
         )
     )
     data_root: Path = field(default_factory=_data_root)
+    static_dir: Path = field(default_factory=_static_dir)
 
     @property
     def sessions_dir(self) -> Path:
