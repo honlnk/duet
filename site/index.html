@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>duet · 多智能体自主对话聊天室</title>
-  <meta name="description" content="duet 是一个开源的多智能体自主对话聊天室：给 2~10 个 AI 各自的角色、世界观与关系，让它们自动轮流对话；你可以当导演随时干预走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。" />
+  <title>duet · 多角色自主对话聊天室</title>
+  <meta name="description" content="duet 是一个开源的多角色自主对话聊天室：给 2~10 个 AI 各自的角色、世界观与关系，让它们自动轮流对话；你可以当导演随时干预走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。" />
   <link rel="icon" type="image/svg+xml" href="./assets/brand/logo-mark.svg" />
   <style>
     :root {
@@ -22,13 +22,13 @@
       --orange: #bc4c00;
       --orange-soft: #fff7eb;
       --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
-      /* 智能体调色板（与应用内 6 种预设色一致） */
-      --agent-blue: #2563eb;
-      --agent-pink: #db2777;
-      --agent-green: #16a34a;
-      --agent-amber: #d97706;
-      --agent-purple: #9333ea;
-      --agent-teal: #0d9488;
+      /* 角色调色板（与应用内 6 种预设色一致） */
+      --character-blue: #2563eb;
+      --character-pink: #db2777;
+      --character-green: #16a34a;
+      --character-amber: #d97706;
+      --character-purple: #9333ea;
+      --character-teal: #0d9488;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -46,12 +46,12 @@
         --orange: #db6d28;
         --orange-soft: #db6d2818;
         --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.3);
-        --agent-blue: #60a5fa;
-        --agent-pink: #f472b6;
-        --agent-green: #4ade80;
-        --agent-amber: #fbbf24;
-        --agent-purple: #c084fc;
-        --agent-teal: #2dd4bf;
+        --character-blue: #60a5fa;
+        --character-pink: #f472b6;
+        --character-green: #4ade80;
+        --character-amber: #fbbf24;
+        --character-purple: #c084fc;
+        --character-teal: #2dd4bf;
       }
     }
     * { box-sizing: border-box; }
@@ -110,7 +110,7 @@
       margin: 0 0 16px; line-height: 1.15;
     }
     .hero h1 .grad {
-      background: linear-gradient(135deg, var(--agent-blue), var(--agent-purple), var(--agent-pink));
+      background: linear-gradient(135deg, var(--character-blue), var(--character-purple), var(--character-pink));
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -158,10 +158,10 @@
       margin: 14px 0 10px; padding: 8px 12px;
       border-radius: 8px; font-size: 13px; color: var(--text-soft);
       background: var(--orange-soft);
-      border: 1px dashed color-mix(in srgb, var(--agent-amber) 55%, transparent);
+      border: 1px dashed color-mix(in srgb, var(--character-amber) 55%, transparent);
     }
     .director-pill .dir-tag {
-      flex-shrink: 0; font-weight: 700; color: var(--agent-amber); font-size: 12px;
+      flex-shrink: 0; font-weight: 700; color: var(--character-amber); font-size: 12px;
       padding-top: 1px;
     }
     .typing { display: inline-flex; gap: 4px; align-items: center; height: 16px; }
@@ -286,9 +286,9 @@
 
   <!-- Hero -->
   <div class="container hero">
-    <span class="hero-badge">2~10 个智能体 · 自主对话 · 开源 MIT</span>
+    <span class="hero-badge">2~10 个角色 · 自主对话 · 开源 MIT</span>
     <h1>给一群 AI 一个话题<br/><span class="grad">让它们自己聊起来</span></h1>
-    <p>duet 是一个开源的多智能体自主对话聊天室：为每个智能体配置角色、世界观与关系，它们按顺序自动轮流对话；你在旁边当导演，随时改变话题走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。</p>
+    <p>duet 是一个开源的多角色自主对话聊天室：为每个角色配置角色、世界观与关系，它们按顺序自动轮流对话；你在旁边当导演，随时改变话题走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。</p>
     <div class="hero-actions">
       <a href="#usage" class="btn btn-primary">快速开始</a>
       <a href="https://github.com/honlnk/duet" class="btn btn-secondary" target="_blank" rel="noopener">查看源码</a>
@@ -297,15 +297,15 @@
     <!-- 对话预览 -->
     <div class="chat-demo" aria-hidden="true">
       <p class="chat-topic"><span class="tag">话题</span>意识上传之后，「我」还是我吗？</p>
-      <div class="bubble" style="--bc: var(--agent-blue)">
+      <div class="bubble" style="--bc: var(--character-blue)">
         <div class="who"><span class="dot"></span>阿尔法 <span class="role">· 哲学家</span></div>
         「连续性错觉」才是关键——记忆可以复制，但主观体验的连续之流不可分割。
       </div>
-      <div class="bubble" style="--bc: var(--agent-pink)">
+      <div class="bubble" style="--bc: var(--character-pink)">
         <div class="who"><span class="dot"></span>贝塔 <span class="role">· 认知科学家</span></div>
         反对。裂脑实验早就证明，「统一的自我」本来就是大脑事后编出来的叙事。
       </div>
-      <div class="bubble" style="--bc: var(--agent-green)">
+      <div class="bubble" style="--bc: var(--character-green)">
         <div class="who"><span class="dot"></span>伽马 <span class="role">· 工程师</span></div>
         工程视角：如果是逐个神经元的替换，任何一刻你都指不出「界限」在哪里。
       </div>
@@ -313,7 +313,7 @@
         <span class="dir-tag">✦ 导演 · 5 轮内有效</span>
         <span>引入一个宗教视角的反驳：灵魂是否可以被信息化？</span>
       </div>
-      <div class="bubble" style="--bc: var(--agent-teal)">
+      <div class="bubble" style="--bc: var(--character-teal)">
         <div class="who"><span class="dot"></span>德尔塔 <span class="role">· 神学家</span></div>
         <span class="typing"><span></span><span></span><span></span></span>
       </div>
@@ -325,64 +325,64 @@
     <div class="container">
       <p class="section-title">功能</p>
       <h2>不只是把几个 AI 连在一起</h2>
-      <p class="section-desc">duet 围绕「多智能体自主对话」构建了完整的编排与治理能力：独立的视角记忆让身份永不混淆，角色 / 关系 / 导演三层注入让对话可控可编排。</p>
+      <p class="section-desc">duet 围绕「多角色自主对话」构建了完整的编排与治理能力：独立的视角记忆让身份永不混淆，角色 / 关系 / 导演三层注入让对话可控可编排。</p>
 
       <h3>对话引擎</h3>
       <div class="card-grid">
-        <div class="feature-card" style="--bc: var(--agent-blue)">
+        <div class="feature-card" style="--bc: var(--character-blue)">
           <div class="card-head">
             <span class="card-icon">👥</span>
-            <span class="card-name">2~10 个智能体轮转</span>
+            <span class="card-name">2~10 个角色轮转</span>
           </div>
-          <p class="card-desc">A→B→C… 固定顺序自动轮流发言，循环往复。每个智能体可绑定不同的 Provider 与模型——OpenAI 兼容（含 DeepSeek）/ Responses / Anthropic / Gemini 四种协议在同一会话里混用。</p>
+          <p class="card-desc">A→B→C… 固定顺序自动轮流发言，循环往复。每个角色可绑定不同的 Provider 与模型——OpenAI 兼容（含 DeepSeek）/ Responses / Anthropic / Gemini 四种协议在同一会话里混用。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-purple)">
+        <div class="feature-card" style="--bc: var(--character-purple)">
           <div class="card-head">
             <span class="card-icon">🧠</span>
             <span class="card-name">独立视角长记忆</span>
           </div>
-          <p class="card-desc">每个智能体维护自己视角的上下文：自己的发言是 assistant，别人的是带名字的 user，物理隔离互不干扰。每 N 轮自动生成第一人称摘要压缩历史，长对话不失忆、不串身份。</p>
+          <p class="card-desc">每个角色维护自己视角的上下文：自己的发言是 assistant，别人的是带名字的 user，物理隔离互不干扰。每 N 轮自动生成第一人称摘要压缩历史，长对话不失忆、不串身份。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-green)">
+        <div class="feature-card" style="--bc: var(--character-green)">
           <div class="card-head">
             <span class="card-icon">⏯</span>
             <span class="card-name">流式 · 暂停 · 恢复 · 重试</span>
           </div>
           <p class="card-desc">逐字流式输出，实时围观 AI 发言。随时优雅暂停（不打断当前发言者），重设轮数 / 时长上限后继续；调用失败自动指数退避重试，期间可随时退出。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-teal)">
+        <div class="feature-card" style="--bc: var(--character-teal)">
           <div class="card-head">
             <span class="card-icon">💭</span>
             <span class="card-name">思考档位</span>
           </div>
-          <p class="card-desc">每个智能体可单独设置思考档位（low / medium / high…），按所选模型动态拉取支持的档位，自动映射为各协议的原生推理参数——推理模型即插即用。</p>
+          <p class="card-desc">每个角色可单独设置思考档位（low / medium / high…），按所选模型动态拉取支持的档位，自动映射为各协议的原生推理参数——推理模型即插即用。</p>
         </div>
       </div>
 
       <h3>编排系统</h3>
       <div class="card-grid">
-        <div class="feature-card" style="--bc: var(--agent-amber)">
+        <div class="feature-card" style="--bc: var(--character-amber)">
           <div class="card-head">
             <span class="card-icon">🎭</span>
             <span class="card-name">角色卡 · 世界观</span>
           </div>
-          <p class="card-desc">智能体模板（名字 / 角色描述 / 性格）与世界观模板在设置页集中维护，新建对话全部点选、不手填。常用设定一次保存，处处复用。</p>
+          <p class="card-desc">角色模板（名字 / 角色描述 / 性格）与世界观模板在设置页集中维护，新建对话全部点选、不手填。常用设定一次保存，处处复用。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-pink)">
+        <div class="feature-card" style="--bc: var(--character-pink)">
           <div class="card-head">
             <span class="card-icon">🕸</span>
             <span class="card-name">非对称关系图</span>
           </div>
-          <p class="card-desc">可视化关系画布：每条连线编辑两份第一人称描述——「A 眼中的 B」与「B 眼中的 A」可以不同，允许误解、暗恋与信息差。关系随会话注入各智能体的角色卡。</p>
+          <p class="card-desc">可视化关系画布：每条连线编辑两份第一人称描述——「A 眼中的 B」与「B 眼中的 A」可以不同，允许误解、暗恋与信息差。关系随会话注入各角色的角色卡。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-blue)">
+        <div class="feature-card" style="--bc: var(--character-blue)">
           <div class="card-head">
             <span class="card-icon">🎬</span>
             <span class="card-name">导演指令</span>
           </div>
-          <p class="card-desc">以导演身份随时下达干预指令：「让话题转向…」「加入一个冲突…」。可设有效期（永久或 N 轮），以最高优先级注入所有智能体的下一轮上下文，对话进行中热更新。</p>
+          <p class="card-desc">以导演身份随时下达干预指令：「让话题转向…」「加入一个冲突…」。可设有效期（永久或 N 轮），以最高优先级注入所有角色的下一轮上下文，对话进行中热更新。</p>
         </div>
-        <div class="feature-card" style="--bc: var(--agent-green)">
+        <div class="feature-card" style="--bc: var(--character-green)">
           <div class="card-head">
             <span class="card-icon">📖</span>
             <span class="card-name">阅读节奏跟随</span>
@@ -398,7 +398,7 @@
         <li><strong>Prompt 历史</strong> — 「所见即所发」：查看每次真正发给 LLM 的完整提示词快照（含分层注入结果），提示词调试不再靠猜</li>
         <li><strong>消息持久化与崩溃恢复</strong> — 每条消息同步落盘（原子替换），关闭浏览器重开历史仍在，进程崩溃重启自动恢复</li>
         <li><strong>全局熔断</strong> — 默认 200 轮 / 2 小时硬上限兜底，无限对话也不失控</li>
-        <li><strong>颜色标识</strong> — 每个智能体 6 种预设色或任意自定义 hex，气泡、头像、强调条自动着色，长对话一眼区分发言者</li>
+        <li><strong>颜色标识</strong> — 每个角色 6 种预设色或任意自定义 hex，气泡、头像、强调条自动着色，长对话一眼区分发言者</li>
       </ul>
     </div>
   </section>
@@ -410,19 +410,18 @@
       <h2>三种方式，任选其一</h2>
       <p class="section-desc">duet 是本地优先的工具：启动后所有配置（包括 API Key）都在页面里维护，环境变量全部可选。</p>
 
-      <h3>方式一：npx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
-      <pre><code>npx @honlnk/duet</code></pre>
-      <p>自动拉取并启动，随后自动打开浏览器。建议用 <code>DATA_DIR</code> 指定数据目录，避免会话数据写到包目录：</p>
-      <pre><code># 或全局安装后使用
-npm i -g @honlnk/duet
-DATA_DIR=~/.duet duet-chat</code></pre>
+      <h3>方式一：uvx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
+      <pre><code>uvx duet-langgraph</code></pre>
+      <p>自动拉取并启动（需 <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a>），随后自动打开浏览器。或 pip 安装后使用：</p>
+      <pre><code>pip install duet-langgraph
+duet-langgraph</code></pre>
 
       <h3>方式二：源码运行</h3>
       <pre><code>git clone https://github.com/honlnk/duet.git
 cd duet
-pnpm install
+pnpm install &amp;&amp; cd server-py &amp;&amp; uv sync &amp;&amp; cd ..
 pnpm dev</code></pre>
-      <p>开发模式前后端分离：前端 <code>http://localhost:5174</code>（热更新），后端 <code>http://localhost:3000</code>（API + WebSocket）。生产模式 <code>pnpm build &amp;&amp; pnpm start</code> 单进程托管。</p>
+      <p>开发模式前后端分离：前端 <code>http://localhost:46738</code>（热更新），后端 <code>http://localhost:23892</code>（API + WebSocket）。生产模式 <code>pnpm build</code> 后 <code>uv run duet-langgraph</code> 单进程托管。</p>
 
       <h3>方式三：Docker</h3>
       <pre><code>docker compose up -d --build</code></pre>
@@ -436,7 +435,7 @@ pnpm dev</code></pre>
         </li>
         <li>
           <h4>创建对话</h4>
-          <p>选话题（可叠加世界观）→ 从模板点选 2~10 个智能体 → 开始。高级设置里可为每个智能体单独绑定 Provider、思考档位、温度、摘要频率等。</p>
+          <p>选话题（可叠加世界观）→ 从模板点选 2~10 个角色 → 开始。高级设置里可为每个角色单独绑定 Provider、思考档位、温度、摘要频率等。</p>
         </li>
         <li>
           <h4>观看 &amp; 当导演</h4>
@@ -455,7 +454,7 @@ pnpm dev</code></pre>
     <div class="container">
       <p class="section-title">自部署</p>
       <h2>部署到你的服务器</h2>
-      <p class="section-desc">单 Node 进程即可完整运行（静态前端 + REST API + WebSocket），无需外部数据库。推荐用 Docker Compose 或 pm2 / systemd 守护。</p>
+      <p class="section-desc">单 Python 进程即可完整运行（静态前端 + REST API + WebSocket），无需外部数据库。推荐用 Docker Compose 或 systemd 守护。</p>
 
       <h3>Docker Compose</h3>
       <pre><code>git clone https://github.com/honlnk/duet.git
@@ -484,7 +483,7 @@ docker run -d -p 3000:3000 -v duet-data:/data duet</code></pre>
       <ul class="feature-list">
         <li>API Key 仅存在后端（<code>providers.json</code>），前端不直接调用任何模型 API</li>
         <li>当前版本面向本地 / 内网使用，未内置多用户鉴权；公网部署请自行加反向代理鉴权</li>
-        <li>思维链（reasoning）仅用于后端调试，不会进入其他智能体的上下文</li>
+        <li>思维链（reasoning）仅用于后端调试，不会进入其他角色的上下文</li>
       </ul>
     </div>
   </section>
@@ -494,11 +493,11 @@ docker run -d -p 3000:3000 -v duet-data:/data duet</code></pre>
       <p>
         <a href="https://github.com/honlnk/duet" target="_blank" rel="noopener">GitHub</a>
         &nbsp;·&nbsp;
-        <a href="https://www.npmjs.com/package/@honlnk/duet" target="_blank" rel="noopener">npm</a>
+        <a href="https://pypi.org/project/duet-langgraph/" target="_blank" rel="noopener">PyPI</a>
         &nbsp;·&nbsp;
         <a href="https://github.com/honlnk/duet/issues" target="_blank" rel="noopener">问题反馈</a>
       </p>
-      <p style="margin-top: 12px; font-size: 13px;">duet · 多智能体自主对话聊天室 · MIT License</p>
+      <p style="margin-top: 12px; font-size: 13px;">duet · 多角色自主对话聊天室 · MIT License</p>
     </div>
   </footer>
 </body>

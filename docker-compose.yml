@@ -1,0 +1,38 @@
+# Duet — Docker Compose 一键部署
+# 用法：
+#   1. docker compose up -d --build
+#   2. 浏览器访问 http://localhost:23892
+#   3. 在页面右上角「Provider」中配置 API Key / 模型 / 协议（支持 OpenAI 兼容 / Responses / Anthropic / Gemini）
+#
+# 说明：API Key、模型、价格等凭证全部通过页面 Provider 管理维护，
+# 落盘到 DATA_DIR 下的 providers.json，无需在环境变量中配置。
+services:
+  duet:
+    build:
+      context: .
+      dockerfile: server-py/Dockerfile
+    image: duet:latest
+    container_name: duet
+    restart: unless-stopped
+    ports:
+      - "23892:23892"
+    environment:
+      # 可选：覆盖默认配置（见 .env.example）
+      PORT: "23892"
+      DATA_DIR: /data
+      ABSOLUTE_MAX_ROUNDS: ${ABSOLUTE_MAX_ROUNDS:-200}
+      ABSOLUTE_MAX_DURATION_SEC: ${ABSOLUTE_MAX_DURATION_SEC:-7200}
+      REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:-30000}
+    volumes:
+      # 会话数据与 providers.json 持久化（容器删除后仍在）
+      - duet-data:/data
+    # 健康检查（可选，依赖 /api/health 端点；镜像为 python:3.12-slim，无 wget）
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:23892/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  duet-data:

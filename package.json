@@ -1,23 +1,23 @@
 {
   "name": "duet",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Duet — 双 AI 自主对话聊天室",
+  "description": "Duet — 多智能体自主对话聊天室（后端 server-py/：Python + FastAPI + LangGraph）",
   "type": "module",
-  "workspaces": [
-    "server",
-    "web"
-  ],
   "scripts": {
-    "dev": "npm run build --workspace web && node server/src/index.js",
-    "build": "npm run build --workspace web",
-    "start": "cross-env NODE_ENV=production node server/src/index.js",
-    "test": "node scripts/test-e2e.js"
+    "dev": "run-p -l dev:web dev:server",
+    "dev:web": "pnpm --filter @duet/web dev",
+    "dev:server": "cd server-py && uv run uvicorn duet_langgraph.main:app --port 23892",
+    "build": "pnpm --filter @duet/web build",
+    "start": "pnpm --filter @duet/web build && cd server-py && uv run duet-langgraph",
+    "test": "cd server-py && uv run pytest -q",
+    "lint": "cd server-py && uv run ruff check ."
   },
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@10.21.0",
   "devDependencies": {
-    "cross-env": "^7.0.3"
+    "npm-run-all2": "^9.0.2"
   }
 }

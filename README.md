@@ -1,74 +1,126 @@
-# Duet ♪ 双 AI 自主对话聊天室
+# Duet ♪ 多角色自主对话聊天室
 
-> 给两个 AI 一个话题与身份，让它们自己聊起来。
+> 给 2~10 个 AI 一个话题与各自的身份，让它们自己聊起来。
+> 聊天室走固定策略的对话循环；右下角「导演助手」是真正的 Agent Loop——用对话直接增删改查你的角色 / 话题 / 世界观与关系。
 > 支持轮数/时长上限、无限对话手动停止、长对话自动压缩记忆。
-> 两个 AI 各自维护独立的上下文记忆，互不混淆身份。
+> 每个 AI 各自维护独立的上下文记忆，互不混淆身份。
 
-![status](https://img.shields.io/badge/status-v1.0%20ready-green) ![model](https://img.shields.io/badge/model-deepseek--v4--flash-blue)
+![status](https://img.shields.io/badge/status-v2.0%20ready-green) ![characters](https://img.shields.io/badge/characters-2~10-orange) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![backend](https://img.shields.io/badge/backend-Python%20%2B%20FastAPI%20%2B%20LangGraph-3776ab) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8)
+
+> **v2.0**：后端由 TypeScript 重写为 **Python 3.12 + FastAPI + LangGraph**（`server-py/`）。功能与契约对齐 TS 版，另新增 `scheduling: "llm"` 模型选人调度；**历史会话不迁移**（详见下文「v1 → v2 升级说明」）。重构计划见 [docs/DEV_PLAN_LANGGRAPH.md](docs/DEV_PLAN_LANGGRAPH.md)，施工日志见 [docs/DEV_LOG_LANGGRAPH.md](docs/DEV_LOG_LANGGRAPH.md)。
 
 ## ✨ 功能特性
 
-- **一键启动双 AI 对话**：输入话题 + 两个智能体身份设定，点击开始即自动轮流对话。
+- **一键启动多角色对话**：输入话题 + 2~10 个角色身份设定，点击开始即按 A→B→C→…→A 顺序自动轮流对话；也可设 `scheduling: "llm"` 让模型按对话内容决定下一位发言者。
 - **流式输出**：逐字打字效果，实时看到 AI 的发言。
+- **多 Provider / 多协议模型管理**：
+  - 支持 **OpenAI 兼容 / Responses / Anthropic / Gemini** 四种协议，每个角色可各自绑定不同 Provider 与模型；
+  - 在页面内可视化维护 API Key、模型、价格，按需「获取列表」拉取上游模型；
+  - 单价 / 缓存命中 / 缓存写入分维度计费，支持 CNY/USD/EUR 并按在线汇率换算。
+- **自定义颜色标识**：每个角色可指定 6 种预设色（蓝/粉/绿/琥珀/紫/青）或任意 `#hex` 自定义色，气泡、头像、强调条自动着色，长对话中一眼区分发言者。
+- **模板复用**：把常用的角色设定（名字 + persona）、话题和世界观保存为模板，新建对话时一键套用，在「设置」页集中管理。
+- **导演助手（Agent Loop）**：右下角机器人挂件打开弹框聊天，模型可调用 12 个内置工具对资产库做**真实的增删改查**（角色 / 话题 / 世界观模板 + 有向角色关系），工具调用过程内联展示、可展开看参数与结果；改动即时同步到设置页与关系画布。
+- **资产库服务端化**：模板与关系统一落盘 `library.json`（与 `providers.json` 平级）。
 - **灵活的停止条件**：
   - 设置「对话轮数上限」按轮停止；
   - 设置「持续时间上限」到点停止；
   - 不设置则**无限对话**，随时点「停止」立即中断（中断当前流式请求）。
 - **独立的长记忆**（参考 SillyTavern Summarize 机制）：
-  - 两个 AI 各自维护独立的 messages 与 summary，物理隔离，身份不串；
+  - 每个角色各自维护独立的 messages 与 summary，物理隔离，身份不串；
   - 每 N 轮自动触发**第一人称视角摘要**压缩上下文；
   - 滑动窗口保留最近若干条原始消息。
-- **成本可控**：顶部常驻显示累计 token 与估算成本；全局硬熔断兜底（默认 ≤ 200 轮 / 2 小时）。
-- **持久化与崩溃恢复**：每条消息同步落盘，关闭浏览器重开历史仍在；进程崩溃重启后自动恢复。
-- **双部署形态**：本地 CLI 一键起服务并打开浏览器；远程服务器单进程可部署。
+- **成本可控**：右侧详情面板显示累计 token 与估算成本；全局硬熔断兜底（默认 ≤ 200 轮 / 2 小时）。
+- **持久化与崩溃恢复**：每条消息同步落盘（SQLite），关闭浏览器重开历史仍在；进程崩溃重启后自动恢复，LangGraph checkpointer 支持会话续跑。
+- **多种部署形态**：源码本地运行、`uvx duet-langgraph` 一键启动、Docker 容器部署，任选其一。
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 1. 源码开发模式
+
+需 [uv](https://docs.astral.sh/uv/)（Python）与 pnpm（前端）：
 
 ```bash
-npm install
+pnpm install                 # 前端依赖
+cd server-py && uv sync && cd ..   # 后端依赖
+pnpm dev                     # 前后端并行：vite 46738 + uvicorn 23892
 ```
 
-### 2. 配置 API Key
+开发模式前后端分离：后端 `http://localhost:23892`（仅 API/WebSocket），前端由 vite 独立托管在 **`http://localhost:46738`**（`/api`、`/ws` 自动反代，支持热更新）。
 
-复制环境变量模板并填入你的 DeepSeek API Key：
+### 2. 配置 Provider（API Key / 模型）
+
+启动后首次访问，页面会提示尚未配置 Provider。点击右上角「设置」打开管理面板，添加你的第一个 Provider：
+
+- 选择**协议**：OpenAI 兼容（含 DeepSeek）/ Responses / Anthropic / Gemini；
+- 填写 **API Key、Base URL、模型名**，可点「获取列表」从上游拉取可用模型；
+- 可选填**价格**（输入 / 输出 / 缓存命中 / 缓存写入，支持 CNY/USD/EUR 并按在线汇率换算），留空则用内置兜底单价估算成本。
+
+第一条 Provider 会自动成为默认。之后在「高级设置」里可给每个角色各自绑定不同 Provider。配置落盘到 `DATA_DIR/providers.json`。
+
+> API Key 仅存在后端，前端不直接调用任何模型 API。
+
+### 3. 生产部署
+
+三种形态，按需选择。环境变量均为**可选**，API Key / 模型 / 价格等凭证一律通过页面 Provider 面板维护。
+
+#### 形态 A：源码部署（本地或服务器）
 
 ```bash
-cp .env.example .env
-# 编辑 .env，设置 DEEPSEEK_API_KEY=sk-xxxx
+pnpm build                        # 构建前端到 server-py 包内 public/
+cd server-py && uv run duet-langgraph   # 单进程托管 前端 + API + WebSocket
 ```
 
-### 3. 本地开发启动
+生产模式启动后自动打开浏览器；通过 `PORT` 环境变量改端口。
+
+#### 形态 B：PyPI 包（uvx 一键启动，无需 clone 源码）
 
 ```bash
-npm run dev
+# 临时运行（自动拉取并启动，随后自动打开浏览器）
+uvx duet-langgraph
+
+# 或 pip 安装后使用
+pip install duet-langgraph
+duet-langgraph
 ```
 
-启动后终端会打印访问地址（默认 `http://localhost:3000`），并**自动打开浏览器**。
-在左侧填写话题和两个智能体的身份设定，点击「开始对话」即可。
+- wheel 内置前端构建产物，开箱即用；
+- 数据默认落盘 `~/.duet-langgraph/`，可用 `DATA_DIR` 改到其他目录。
 
-### 4. 生产部署
+#### 形态 C：Docker（容器化部署）
 
 ```bash
-npm run build    # 构建前端到 server/public
-npm start        # 启动单进程（托管前端 + API + WebSocket）
+# 方式一：docker run（构建上下文须为仓库根）
+docker build -f server-py/Dockerfile -t duet .
+docker run -d -p 23892:23892 -v duet-data:/data duet
+
+# 方式二：docker compose（推荐，配置已写在 docker-compose.yml）
+docker compose up -d --build
 ```
 
-- 单一 Node 进程托管静态资源 + REST API + WebSocket。
-- 通过 `PORT` 环境变量改端口（设为 `0` 自动分配可用端口）。
-- 远程服务器反向代理到 80/443 即可对外服务。
-- 推荐用 `pm2` 或 `systemd` 守护进程。
+- 三阶段构建（前端 → Python wheel → 运行层），运行镜像仅含 venv，非 root 用户，内置健康检查（`/api/health`）；
+- 会话数据与 `providers.json` 通过卷（`/data`）持久化，容器删除重建后仍在。
+
+#### 配置项
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `PORT` | `23892` | 服务端口 |
+| `DATA_DIR` | `~/.duet-langgraph`（Docker 为 `/data`） | 数据根目录（`sessions/`、`providers.json`、`library.json` 均在其下） |
+| `DUET_ENV` | 开发 `development` / 入口 `production` | 生产模式托管前端静态产物并自动开浏览器 |
+| `DUET_STATIC_DIR` | 包内 `public/` | 前端构建产物目录（一般无需设置） |
+| `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
+| `ABSOLUTE_MAX_DURATION_SEC` | `7200` | 全局硬熔断时长（秒） |
+| `REQUEST_TIMEOUT_MS` | `30000` | 单次 AI 调用超时（毫秒） |
+
+完整配置见 [`.env.example`](./.env.example)。
 
 ## 📖 使用说明
 
 ### 基本用法
 
-1. **话题**：在「话题」输入框写你想让两个 AI 讨论的内容。
-2. **智能体设定**：
-   - 智能体 A：名称 + 身份设定（你是谁、你的立场是什么）。
-   - 智能体 B：同上。
-3. **开始**：点击「开始对话」，A 先发言，B 接力，自动循环。
+1. **话题**：从「话题」下拉中选用一个话题模板（可在「设置」页提前维护）。
+2. **角色设定**：每个角色从模板列表中选择身份设定（名字 + persona）。可添加 2~10 个，模板可在「设置」页集中管理。
+3. **开始**：点击「开始对话」，A 先发言，B 接力，C 继续……自动循环回到 A。
 4. **停止**：随时点「停止」立即中断（会保留已生成的部分消息）。
 5. **重置**：清空当前界面，重新开始设置。
 
@@ -76,92 +128,143 @@ npm start        # 启动单进程（托管前端 + API + WebSocket）
 
 | 参数 | 说明 | 默认值 |
 |---|---|---|
-| 模型 | DeepSeek 模型 | `deepseek-v4-flash` |
+| 每个角色的 Provider | 分别绑定各角色使用的 Provider | 默认 Provider |
 | 温度 | 生成多样性 | `0.7` |
 | 对话轮数上限 | 留空=无限（仍受全局熔断） | 空（无限）|
 | 持续时间上限(秒) | 留空=无限 | 空（无限）|
 | 每 N 轮触发摘要 | 摘要压缩频率 | `10` |
 | 压缩后保留最近消息数 | 滑动窗口大小 | `8` |
 
-### 顶部状态栏
+> Provider（含 API Key、协议、模型、价格）在页面右上角「设置」面板统一管理，详见上文「配置 Provider」。
+
+### 模板管理
+
+在「设置」页可维护三类模板与关系（也可直接让导演助手用对话维护）：
+
+- **角色模板**：保存常用的名字 + persona，新建对话时一键填入，无需重复粘贴长设定。
+- **话题模板**：保存常用讨论话题，下次直接选用。
+- **世界观模板**：保存场景设定，会话创建时注入。
+- **角色关系**：关系画布中连线编辑，关系是**有向**的（A→B 与 B→A 各写一条视角描述），新建会话时自动按模板注入。
+
+### 导演助手（Agent Loop）
+
+右下角机器人按钮 → 弹框聊天。与聊天室的固定轮转策略不同，这是一个**真正的工具调用 Agent 循环**：
+
+1. 你用自然语言下指令（如「帮我建一个角色：林小雨，大学生，性格内向」）；
+2. 模型决定调用哪个工具（`upsert_character_template` 等 12 个），参数与执行结果以内联工具行展示；
+3. 工具结果回灌给模型，它继续下一步或口头确认收尾；
+4. 任何写操作（`mutated`）都会即时刷新前端的模板 / 关系缓存——设置弹窗、关系画布同步更新。
+
+安全设计：Agent 只能调用封装好的内存工具（永远接触不到文件系统与任意代码）；单轮最多 30 次 LLM 调用防死循环；会话态仅存内存（2 小时空闲过期，刷新页面即新会话）。
+
+### 右侧详情面板（Inspector）
+
+会话详情页右侧的 Inspector 面板汇总本次对话的运行状态与统计，默认展开，可一键收起：
 
 - 状态徽章：待机 / 对话中 / 已停止 / 已完成 / 错误
 - 轮次：当前 round / 上限（∞ 表示无限）
 - 时长：剩余时间或已运行时间
-- **成本**：累计 token 数 + 估算美元成本
+- **成本**：累计 token 数 + 估算成本（货币符号跟随默认 Provider 的币种：¥ / $ / 代码前缀）
+- 各角色信息：名称、颜色标识、绑定的 Provider
+- 缓存命中率、合计字符数等细项
 
 ## 🏗️ 技术架构
 
 | 层 | 选型 |
 |---|---|
-| 后端 | Node.js + Fastify + @fastify/websocket + @fastify/static |
-| AI 调用 | 原生 fetch + SSE 流式解析（零 SDK 依赖）|
-| 前端 | 原生 HTML/CSS/JS + Vite 构建 |
-| 持久化 | JSON 文件（每条消息同步落盘，原子替换）|
-| 部署 | 单进程单端口，npm workspaces 管理 |
+| 后端 | **Python 3.12 + FastAPI + uvicorn**，编排用 **LangGraph StateGraph**（AsyncSqliteSaver checkpointer） |
+| AI 调用 | langchain 官方 model 类（openai / openai-responses / anthropic / gemini），thinking_config 原样透传 |
+| 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
+| 持久化 | SQLite（会话真源 `duet.db` + 图状态 `checkpoints.db` 分文件）；Provider 凭证 `providers.json`、资产库 `library.json` |
+| 包管理 | pnpm workspace（`web`）+ uv（`server-py`） |
 
-### 双 AI 独立记忆设计（核心）
+### 双 Loop 架构（核心）
 
-每个 AI 维护**自己的视角**的 messages 数组：
+项目有两条独立的模型驱动循环。
 
+**对话循环**（主图，`server-py/src/duet_langgraph/graph/`）：聊天室用。LangGraph 状态图按轮调度，各角色以独立视角续写发言，无工具调用：
+
+```mermaid
+flowchart TB
+    START(("START")) --> check_stop["check_stop<br/>停止/轮次/时长判定"]
+    check_stop -- "继续" --> summarize_memory["summarize_memory<br/>滚动摘要"]
+    check_stop -- "结束分支" --> finish["finish<br/>广播 finished"]
+    summarize_memory --> build_context["build_context<br/>角色视角上下文"]
+    build_context --> character_reply["character_reply<br/>流式生成（退避重试）"]
+    character_reply --> post_reply["post_reply<br/>落盘 + 统计 + 热合并"]
+    post_reply --> select_speaker["select_speaker<br/>round-robin 或 llm 选人"]
+    select_speaker --> check_stop
+    finish --> END(("END"))
 ```
-AI-A 的视角：                 AI-B 的视角：
-[system: A 的 persona+规则]   [system: B 的 persona+规则]
-[system: 摘要（A视角）]        [system: 摘要（B视角）]
-[user: 开场提示]               ...
-[assistant: A的发言1]          [user: [A]: A的发言1]
-[user: [B]: B的发言1]          [assistant: B的发言1]
-[assistant: A的发言2]          [user: [A]: A的发言2]
-...                            ...
-```
 
-- A 说的话，在 A 视角是 `assistant`，在 B 视角是 `user`（带 `[A名]:` 前缀）。
-- 摘要各自生成，以**第一人称**撰写（"我"、"对方"），避免身份混淆。
+**Agent 循环**（`server-py/src/duet_langgraph/agent/`）：导演助手用。标准 tool-use 循环——模型返回 `tool_calls` → 执行工具 → 结果回灌 → 继续下一轮，直到模型给出纯文本收尾；SSE 输出 6 类事件（`delta` / `tool_call` / `tool_result` / `assistant` / `done` / `error`）。
+
+### 多角色独立记忆设计（核心）
+
+每个角色维护**自己视角**的 messages 数组，彼此物理隔离。同一轮对话在三个视角中的形态：
+
+| 消息 | A 的视角 | B 的视角 | C 的视角 |
+|---|---|---|---|
+| A 的发言 | `assistant`（自己说的） | `user`（`[A]: …` 前缀） | `user`（`[A]: …` 前缀） |
+| B 的发言 | `user`（`[B]: …` 前缀） | `assistant`（自己说的） | `user`（`[B]: …` 前缀） |
+| C 的发言 | `user`（`[C]: …` 前缀） | `user`（`[C]: …` 前缀） | `assistant`（自己说的） |
+| 摘要 | system（A 视角第一人称） | system（B 视角第一人称） | system（C 视角第一人称） |
+
+- 自己说的话在自己的视角是 `assistant`，在其他人的视角是带 `[名字]:` 前缀的 `user`；
+- 摘要各自生成，以**第一人称**撰写（"我"、"对方们"），避免身份混淆；
 - 对方的思维链（`reasoning_content`）绝不进入自己的上下文。
 
-详见 `docs/DEVELOPMENT_PLAN.md`。
+### 轮次定义（N 角色场景）
+
+- **1 轮（round）= N 个角色各发言一次 = N 条 message**（N = 角色数量）。
+- `round = floor(messageCount / characters.length)`。
+- 「对话轮数上限」「摘要频率」均按 round 计。
 
 ## 📁 项目结构
 
 ```
 duet/
-├── docs/                  # 文档（开发计划、调研笔记、审核记录）
-├── server/                # 后端（Fastify + WS + DeepSeek 客户端）
-│   └── src/
-│       ├── ai/            # DeepSeek 流式客户端 + prompt 模板
-│       ├── memory/        # 上下文管理 + 摘要器
-│       ├── store/         # 会话持久化
-│       ├── ws/            # WebSocket 双 AI 调度
-│       └── routes/        # REST 路由
-├── web/                   # 前端（Vite + 原生 JS）
-└── data/sessions/         # 运行时会话数据（gitignore）
+├── docs/                  # 文档（开发计划、施工日志、调研笔记）
+├── server-py/             # 后端（Python + FastAPI + LangGraph）
+│   └── src/duet_langgraph/
+│       ├── agent/         # Agent Loop：工具表 / 执行 / 循环 / 会话态 / 提示词
+│       ├── ai/            # langchain model 构造 + prompt 模板 + usage 归一化
+│       ├── graph/         # 主对话图：StateGraph 节点 + AsyncSqliteSaver checkpointer
+│       ├── memory/        # 上下文管理 + 摘要器（第一人称视角）
+│       ├── store/         # 会话（SQLite）+ Provider 凭证 + 资产库持久化
+│       ├── routes/        # REST 路由（含 /api/agent/chat SSE、/api/templates 等）
+│       ├── ws/            # WebSocket 对话循环入口 + 运行时
+│       └── main.py        # 应用工厂 + duet-langgraph 控制台入口
+├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
+├── site/                  # 门户页（GitHub Pages）
+├── docker-compose.yml     # 一键起（构建上下文=仓库根，Dockerfile 在 server-py/）
+└── pnpm-workspace.yaml
 ```
-
-## 🔧 环境变量
-
-| 变量 | 说明 | 默认值 |
-|---|---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（必填）| - |
-| `DEEPSEEK_BASE_URL` | API 地址 | `https://api.deepseek.com/v1` |
-| `DEEPSEEK_MODEL` | 默认模型 | `deepseek-v4-flash` |
-| `PORT` | 服务端口（0=自动）| `3000` |
-| `ABSOLUTE_MAX_ROUNDS` | 全局最大轮数熔断 | `200` |
-| `ABSOLUTE_MAX_DURATION_SEC` | 全局最大时长熔断(秒) | `7200` |
-| `REQUEST_TIMEOUT_MS` | 单次 AI 调用超时(毫秒) | `30000` |
-| `COST_INPUT_PER_MTOK` | 输入 token 单价($/百万) | `0.27` |
-| `COST_OUTPUT_PER_MTOK` | 输出 token 单价($/百万) | `1.10` |
 
 ## ⚠️ 注意事项
 
-- **无限对话会产生持续 API 费用**，请留意顶部 token 与成本统计，及时停止。
+- **无限对话会产生持续 API 费用**，请留意右侧详情面板的 token 与成本统计，及时停止。
 - 全局熔断默认 200 轮 / 2 小时，可通过环境变量调整。
-- API Key 仅存在后端 `.env`，前端不直接调用 DeepSeek。
-- 模型返回的 `reasoning_content`（思维链）仅用于后端调试，不会展示给前端，也不会进入对方 AI 的上下文。
+- API Key 仅存在后端（落盘到 `providers.json`），前端不直接调用任何模型 API。
+- 模型返回的思维链（`reasoning_content`）仅用于后端调试，不会展示给前端，也不会进入其他角色的上下文。
+
+## 📦 v1 → v2 升级说明（TS → Python）
+
+| 项 | 说明 |
+|---|---|
+| 历史会话 | **不迁移**。TS 版会话存 JSON 文件、Python 版存 SQLite，升级后旧会话不可见 |
+| `providers.json` / `library.json` | **可直接拷贝**到新数据目录继续用（格式兼容） |
+| pacing 阅读节奏 | 后端不再实现（前端开关保留，切换无后端效果） |
+| `scheduling: "llm"` | 新增：建会话或 PATCH config 设置后由模型选下一位发言者 |
+| 启动方式 | `npx @honlnk/duet` → `uvx duet-langgraph`（npm 包停更于 v1） |
 
 ## 📚 文档
 
 - [门户页](https://duet.honlnk.com/) — 项目介绍与快速开始（`site/`，由 GitHub Actions 自动发布）
-- [开发计划](docs/DEVELOPMENT_PLAN.md) — 完整设计文档
+- [LangGraph 重构计划](docs/DEV_PLAN_LANGGRAPH.md) — 本次 TS → Python 重构的计划与验收标准
+- [LangGraph 施工日志](docs/DEV_LOG_LANGGRAPH.md) — 各阶段产出与偏差记录
+- [开发计划](docs/DEVELOPMENT_PLAN.md) — 初始设计文档（v1，部分已演进，见文首声明）
+- [Agent Loop 开发计划](docs/DEV_PLAN_AGENT_LOOP.md) — 双 Loop 架构改造：资产库服务端化 + 导演助手 Agent Loop
 - [调研笔记](docs/RESEARCH_NOTES.md) — DeepSeek API 实测数据
 - [审核记录](docs/REVIEW.md) — 计划审核与修订记录
 

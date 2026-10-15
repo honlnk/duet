@@ -1,0 +1,522 @@
+<script setup lang="ts">
+/**
+ * 会话详情右侧栏
+ *
+ * 聚合当前会话的「状态 + 控制 / 统计 / 角色设定 / 事件日志」四区，
+ * 取代原 SessionView 底部那组控制条 + StatsBar + EventLog。
+ *
+ * 布局参考 NovAI ContentPanel：默认收起（w-0），展开为 w-80；
+ * 移动端走覆盖抽屉（fixed + 遮罩）。纯展示组件，WS 控制逻辑
+ * 通过 emit 上抛由 SessionView 处理，本组件不碰 WebSocket。
+ */
+import { computed, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from '@/stores/session'
+import { useProviderStore } from '@/stores/provider'
+import { useDurationTracker } from '@/composables/useDurationTracker'
+import { bgColor, textColor, resolveColor } from '@/utils/characterColor'
+import StatusBadge from './StatusBadge.vue'
+import type { CharacterId } from '@/types/api'
+
+defineProps<{
+  /** 是否展开 */
+  open: boolean
+  /** 移动端（<768）走覆盖抽屉 */
+  isMobile: boolean
+}>()
+
+const emit = defineEmits<{
+  close: []
+  /** 停止当前会话（发 WS stop） */
+  stop: []
+  /** 返回首页（关 WS + 清会话 + 跳路由） */
+  reset: []
+  /** 继续对话（打开设置弹窗） */
+  resume: []
+}>()
+
+const session = useSessionStore()
+const provider = useProviderStore()
+const {
+  session: current,
+  status,
+  round,
+  maxRounds,
+  stats,
+  startedAt,
+  stoppedAt,
+  durationSec,
+  eventLog,
+  viewSide,
+  isStopping,
+  directors,
+} = storeToRefs(session)
+
+const { display: durationDisplay, start, stop: stopTimer } = useDurationTracker()
+
+// 计时器随会话状态联动（与原 StatsBar 逻辑一致）
+watch(
+  () => [startedAt.value, durationSec.value, status.value] as const,
+  ([sa, ds, st]) => {
+    if (sa && st === 'running') {
+      start(sa, ds)
+    } else if (sa && (st === 'stopped' || st === 'finished')) {
+      stopTimer(stoppedAt.value ?? undefined)
+    } else {
+      stopTimer()
+    }
+  },
+  { immediate: true },
+)
+
+/* --------------------------- 派生展示 --------------------------- */
+
+const isRunning = computed(() => status.value === 'running')
+
+const topic = computed(() => current.value?.topic ?? '（未设定话题）')
+
+/** 角色列表（2~3 个），带颜色 dot */
+const characters = computed(() => current.value?.characters ?? [])
+
+/**
+ * 各角色使用的 Provider 名称（用户在 Provider 管理中自定义的名字）。
+ * 解析优先级与后端 chatHandler.providerIdOf 保持一致：
+ *   A/B/C → providerA/B/C；D~J → characterProviders[id]；均缺省回退默认 Provider。
+ */
+const characterProviders = computed<Record<string, string>>(() => {
+  const cfg = current.value?.config
+  const resolve = (pid: string | undefined) => {
+    const p = provider.find(pid) ?? provider.find(provider.defaultId)
+    return p?.name || '—'
+  }
+  const out: Record<string, string> = {}
+  for (const a of characters.value) {
+    let pid: string | undefined
+    if (a.id === 'A') pid = cfg?.providerA
+    else if (a.id === 'B') pid = cfg?.providerB
+    else if (a.id === 'C') pid = cfg?.providerC
+    else pid = cfg?.characterProviders?.[a.id]
+    out[a.id] = resolve(pid)
+  }
+  return out
+})
+
+/** 角色颜色 dot（按 character.color 解析，预设→class / 自定义→style） */
+function characterDot(id: CharacterId) {
+  const idx = characters.value.findIndex((a) => a.id === id)
+  const color = resolveColor(characters.value[idx]?.color, idx)
+  return bgColor(color)
+}
+
+/** 角色名称颜色 */
+function characterText(id: CharacterId) {
+  const idx = characters.value.findIndex((a) => a.id === id)
+  const color = resolveColor(characters.value[idx]?.color, idx)
+  return textColor(color)
+}
+
+/** 轮次展示：次数模式或无限模式 */
+const roundText = computed(() => {
+  const max = maxRounds.value > 0 ? maxRounds.value : '∞'
+  return `${round.value} / ${max}`
+})
+
+/** 成本展示：根据 costCurrency 选择货币符号 */
+const costText = computed(() => {
+  const cur = stats.value.costCurrency || 'CNY'
+  const symbol = cur === 'CNY' ? '¥' : cur === 'USD' ? '$' : cur + ' '
+  return `${symbol}${stats.value.estCost.toFixed(4)}`
+})
+
+/** 缓存命中率 */
+const cacheHitRate = computed(() => {
+  const hit = stats.value.totalCacheHitTokens
+  const miss = stats.value.totalCacheMissTokens
+  const total = hit + miss
+  if (total === 0) return '0%'
+  return `${((hit / total) * 100).toFixed(1)}%`
+})
+
+/** 总字数：超过万则以万为单位 */
+const charsText = computed(() => {
+  const n = stats.value.totalChars
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万字`
+  return `${n}字`
+})
+
+/** token 统计项（用于统计区键值对） */
+const statRows = computed(() => [
+  { label: '输入 token', value: stats.value.totalPromptTokens.toLocaleString() },
+  { label: '输出 token', value: stats.value.totalCompletionTokens.toLocaleString() },
+  { label: '合计 token', value: stats.value.totalTokens.toLocaleString() },
+  { label: '预估成本', value: costText.value, accent: true },
+  { label: '缓存命中', value: cacheHitRate.value },
+  { label: '总字数', value: charsText.value },
+])
+
+/** 事件日志为空判断 */
+const hasEvents = computed(() => eventLog.value.length > 0)
+
+/* --------------------------- 导演指令管理 --------------------------- */
+
+/** 判断导演指令是否已过期 */
+function directorStatus(d: { addedRound: number; durationRounds: number }): 'permanent' | 'active' | 'expired' {
+  if (d.durationRounds === 0) return 'permanent'
+  const remaining = d.addedRound + d.durationRounds - round.value
+  if (remaining <= 0) return 'expired'
+  return 'active'
+}
+
+/** 导演指令剩余轮数文案 */
+function directorLabel(d: { addedRound: number; durationRounds: number }): string {
+  const s = directorStatus(d)
+  if (s === 'permanent') return '永久'
+  if (s === 'expired') return '已过期'
+  const remaining = d.addedRound + d.durationRounds - round.value
+  return `剩 ${remaining} 轮`
+}
+
+/** 删除导演指令 */
+const deletingId = ref<string | null>(null)
+async function handleDeleteDirector(id: string) {
+  if (!current.value) return
+  deletingId.value = id
+  try {
+    await session.deleteDirectorAction(current.value.id, id)
+  } finally {
+    deletingId.value = null
+  }
+}
+
+/* --------------------------- 视窗跟随节奏 --------------------------- */
+
+const pacingEnabled = computed({
+  get: () => current.value?.config.pacingEnabled ?? false,
+  set: (val: boolean) => {
+    if (!current.value) return
+    void session.updateConfigAction(current.value.id, { pacingEnabled: val })
+  },
+})
+
+const pacingBufferRounds = computed(() => current.value?.config.pacingBufferRounds ?? 2)
+
+const updatingBuffer = ref(false)
+async function handleBufferChange(e: Event) {
+  if (!current.value) return
+  const val = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(val) || val < 1) return
+  updatingBuffer.value = true
+  try {
+    await session.updateConfigAction(current.value.id, { pacingBufferRounds: val })
+  } finally {
+    updatingBuffer.value = false
+  }
+}
+</script>
+
+<template>
+  <!-- 移动端遮罩 -->
+  <div
+    v-if="open && isMobile"
+    class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+    @click="emit('close')"
+  />
+
+  <!-- 右侧栏本体 -->
+  <aside
+    :class="[
+      'flex shrink-0 flex-col border-l border-border-subtle bg-bg-card',
+      // 移动端：固定定位 + 抽屉滑入；PC 端：内联，宽度由 open 控制
+      isMobile
+        ? 'fixed inset-y-0 right-0 z-50 w-80 ' +
+          (open ? 'translate-x-0' : 'translate-x-full')
+        : open
+          ? 'w-80'
+          : 'w-0 overflow-hidden border-l-0',
+      'transition-all duration-200',
+    ]"
+  >
+    <!-- 头部 -->
+    <div
+      class="flex h-14 shrink-0 items-center justify-between border-b border-border-subtle px-4"
+    >
+      <h2 class="text-sm font-semibold text-text-main">会话详情</h2>
+      <!-- 关闭按钮：仅移动端显示（PC 端由主区 header 的箭头 toggle 控制） -->
+      <button
+        type="button"
+        class="flex h-7 w-7 items-center justify-center rounded-lg text-text-dim hover:bg-bg-hover hover:text-text-main lg:hidden"
+        aria-label="收起"
+        @click="emit('close')"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <line x1="4" y1="4" x2="12" y2="12" />
+          <line x1="12" y1="4" x2="4" y2="12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- 内容区（纵向滚动） -->
+    <div class="flex-1 overflow-y-auto p-4">
+      <!-- ① 运行状态 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          运行状态
+        </h3>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <StatusBadge :status="status" />
+          <span class="text-xs text-text-dim">{{ durationDisplay }}</span>
+          <span class="text-xs text-text-dim">·</span>
+          <span class="text-xs text-text-dim">
+            轮次 <span class="font-medium text-text-main">{{ roundText }}</span>
+          </span>
+        </div>
+      </section>
+
+      <!-- ② 使用的 Provider -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          使用的 Provider
+        </h3>
+        <div class="flex flex-col gap-1.5">
+          <div
+            v-for="character in characters"
+            :key="character.id"
+            class="flex items-center gap-2 text-xs"
+          >
+            <span class="h-2 w-2 shrink-0 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="shrink-0 text-text-dim">{{ character.name }}</span>
+            <span class="truncate text-text-main">{{ characterProviders[character.id] }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ③ 统计（成本/token 等） -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          统计
+        </h3>
+        <dl class="divide-y divide-border-subtle rounded-lg border border-border-subtle">
+          <div
+            v-for="row in statRows"
+            :key="row.label"
+            class="flex items-center justify-between px-3 py-2 text-xs"
+          >
+            <dt class="text-text-dim">{{ row.label }}</dt>
+            <dd
+              class="font-medium"
+              :class="row.accent ? 'text-accent' : 'text-text-main'"
+            >
+              {{ row.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- ④ 导演指令管理 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          导演指令
+        </h3>
+        <div v-if="directors.length > 0" class="flex flex-col gap-1.5">
+          <div
+            v-for="d in directors"
+            :key="d.id"
+            class="group flex items-start gap-2 rounded-lg border border-border-subtle px-3 py-2"
+            :class="directorStatus(d) === 'expired' ? 'opacity-50' : ''"
+          >
+            <span class="mt-1 text-xs text-text-muted">•</span>
+            <div class="min-w-0 flex-1">
+              <p class="whitespace-pre-wrap break-words text-xs leading-relaxed text-text-main">
+                {{ d.content }}
+              </p>
+              <span class="mt-0.5 inline-block text-xs text-text-muted">
+                {{ directorLabel(d) }}
+              </span>
+            </div>
+            <button
+              type="button"
+              :disabled="deletingId === d.id"
+              class="shrink-0 rounded p-0.5 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+              :aria-label="'删除指令'"
+              @click="handleDeleteDirector(d.id)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="4" y1="4" x2="12" y2="12" />
+                <line x1="12" y1="4" x2="4" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p v-else class="text-xs text-text-muted">
+          在聊天框下方输入导演指令，引导对话走向
+        </p>
+      </section>
+
+      <!-- ⑤ 视窗跟随节奏 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          阅读节奏
+        </h3>
+        <div class="rounded-lg border border-border-subtle p-3">
+          <label class="flex items-center justify-between">
+            <span class="text-xs text-text-main">跟随阅读速度</span>
+            <button
+              type="button"
+              class="relative h-5 w-9 rounded-full transition-colors"
+              :class="pacingEnabled ? 'bg-focus' : 'bg-border-subtle'"
+              @click="pacingEnabled = !pacingEnabled"
+            >
+              <span
+                class="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+                :class="pacingEnabled ? 'translate-x-4' : 'translate-x-0'"
+              />
+            </button>
+          </label>
+          <p class="mt-1.5 text-xs text-text-muted">
+            开启后，不在底部时仅生成缓冲轮数，避免提前生成太多
+          </p>
+          <div v-if="pacingEnabled" class="mt-2 flex items-center gap-2">
+            <span class="text-xs text-text-dim">缓冲轮数</span>
+            <input
+              type="number"
+              min="1"
+              :value="pacingBufferRounds"
+              :disabled="updatingBuffer"
+              class="w-14 rounded-md border border-border-subtle bg-bg px-2 py-0.5 text-xs text-text-main focus:border-focus focus:outline-none disabled:opacity-50"
+              @change="handleBufferChange"
+            />
+            <span class="text-xs text-text-muted">轮</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ⑥ 角色视角（选择哪个角色消息靠右显示） -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          角色视角
+        </h3>
+        <p class="mb-2 text-xs text-text-muted">选中角色的消息靠右显示</p>
+        <div class="flex flex-col gap-1.5">
+          <button
+            v-for="character in characters"
+            :key="character.id"
+            type="button"
+            class="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+            :class="viewSide === character.id
+              ? 'border-focus bg-bg-hover text-text-main'
+              : 'border-border-subtle text-text-dim hover:bg-bg-hover'"
+            @click="session.setViewSide(character.id)"
+          >
+            <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="flex-1 truncate">{{ character.name }}</span>
+            <span
+              v-if="viewSide === character.id"
+              class="text-xs text-focus"
+            >右侧</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ⑦ 角色设定 -->
+      <section class="mb-5">
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          角色
+        </h3>
+        <!-- 话题 -->
+        <div class="mb-2 rounded-lg bg-bg-hover px-3 py-2">
+          <div class="text-xs text-text-muted">话题</div>
+          <div class="mt-0.5 text-sm text-text-main">{{ topic }}</div>
+        </div>
+        <!-- 每个 Character -->
+        <div
+          v-for="character in characters"
+          :key="character.id"
+          class="mb-2 rounded-lg border border-border-subtle p-3"
+        >
+          <div class="mb-1.5 flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full" :class="characterDot(character.id).class" :style="characterDot(character.id).style" />
+            <span class="text-sm font-medium" :class="characterText(character.id).class" :style="characterText(character.id).style">{{ character.name }}</span>
+            <span class="text-xs text-text-muted">角色 {{ character.id }}</span>
+          </div>
+          <p
+            v-if="character.description"
+            class="max-h-32 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-text-dim"
+          >
+            {{ character.description }}
+          </p>
+          <p v-else class="text-xs text-text-muted">（未设定身份）</p>
+          <p v-if="character.personality" class="mt-1 text-xs text-text-muted">
+            性格：{{ character.personality }}
+          </p>
+        </div>
+      </section>
+
+      <!-- ⑧ 事件日志 -->
+      <section>
+        <h3 class="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          事件日志
+        </h3>
+        <div
+          v-if="hasEvents"
+          class="flex flex-col gap-1"
+        >
+          <div
+            v-for="item in eventLog"
+            :key="item.id"
+            class="border-l-2 pl-2 py-0.5 text-xs"
+            :class="{
+              'border-accent text-text-dim': item.type === 'summary',
+              'border-danger text-danger': item.type === 'error',
+              'border-border-subtle text-text-muted': item.type === 'info',
+            }"
+          >
+            {{ item.text }}
+          </div>
+        </div>
+        <p v-else class="text-xs text-text-muted">暂无事件</p>
+      </section>
+    </div>
+
+    <!-- footer：控制按钮（固定在右侧面板底部，不随内容滚动） -->
+    <div
+      class="flex h-14 shrink-0 items-center justify-end gap-2 border-t border-border-subtle px-4"
+    >
+      <button
+        v-if="isRunning"
+        type="button"
+        :disabled="isStopping"
+        class="rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+        :class="isStopping
+          ? 'cursor-not-allowed border-border-subtle text-text-muted'
+          : 'border-danger text-danger hover:bg-danger/10'"
+        @click="emit('stop')"
+      >
+        {{ isStopping ? '暂停中…' : '暂停' }}
+      </button>
+      <button
+        v-else
+        type="button"
+        class="rounded-lg bg-focus px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+        @click="emit('resume')"
+      >
+        继续对话
+      </button>
+      <button
+        type="button"
+        class="rounded-lg border border-border-subtle px-3 py-1.5 text-xs text-text-dim hover:bg-bg-hover"
+        @click="emit('reset')"
+      >
+        返回首页
+      </button>
+    </div>
+
+  </aside>
+</template>

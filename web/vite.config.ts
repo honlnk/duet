@@ -1,0 +1,38 @@
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueDevTools from 'vite-plugin-vue-devtools'
+import tailwindcss from '@tailwindcss/vite'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [vue(), vueDevTools(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+  build: {
+    // 构建产物直接输出到 Python 后端静态目录（langgraph 分支起后端为 server-py），单进程托管
+    outDir: '../server-py/src/duet_langgraph/public',
+    emptyOutDir: true,
+  },
+  server: {
+    port: 46738,
+    strictPort: false,
+    // 监听 0.0.0.0，允许内网/手机访问（手机访问 http://电脑局域网IP:46738）
+    host: true,
+    // 开发态：前端跑在 46738，把 /api、/ws 反代到后端 23892。
+    // 业务代码用相对路径 + location.host，无需感知端口差异。
+    proxy: {
+      '/api': {
+        target: 'http://localhost:23892',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:23892',
+        ws: true,
+      },
+    },
+  },
+})

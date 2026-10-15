@@ -1,0 +1,80 @@
+# 发布 duet-langgraph 到 PyPI（S6 起生效，替换 release-npm.yml）。
+# 推送 v* 标签时触发（tag 版本必须与 server-py/pyproject.toml version 一致），也可手动触发。
+# 认证方式：PyPI Trusted Publishing（OIDC）—— 无需 PYPI_TOKEN。
+#
+# 前置（需手动配置一次，S6 合并前完成）：
+#   pypi.org → 项目 duet-langgraph → Publishing → Add a pending publisher：
+#     owner=honlnk、repository=duet、workflow filename=release-pypi.yml、
+#     environment=pypi。
+#   GitHub 仓库 Settings → Environments → 新建 environment 名为 pypi。
+#   配好后不再需要任何 token；id-token 由 Actions 自动注入。
+#
+# 打包物：wheel（经 hatch artifacts 携带 web 前端构建产物，装完即有 UI，
+# duet-langgraph 一条命令同时提供 API 与页面）。仅发 wheel，不发 sdist
+#（sdist 无法携带 gitignored 的前端产物）。
+#
+# 注意：在 release-npm.yml 删除之前，v* 标签会同时触发两条流水线 ——
+# 切换期间不要推送标签。
+
+name: Release PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # PyPI Trusted Publishing（OIDC）必需
+    environment: pypi
+    defaults:
+      run:
+        working-directory: server-py
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- 前端构建（wheel 需携带 UI）----
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Build web
+        working-directory: .
+        run: |
+          pnpm install --frozen-lockfile --filter web...
+          pnpm --filter web build
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: 0.12.3
+
+      - name: Resolve version (tag must match pyproject.toml)
+        run: |
+          set -e
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+              echo "::error::tag v$TAG_VERSION 与 pyproject.toml version $PKG_VERSION 不一致"
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+        id: ver
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Publish (Trusted Publishing)
+        run: uv publish --trusted-publishing automatic
