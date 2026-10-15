@@ -65,6 +65,11 @@ duet 的 TS 版后端是一套零 SDK 的手写实现（四协议适配器、手
 | `/api/config/limits` | GET | `routes/health.ts` |
 | `/api/sessions` | POST / GET | `routes/sessions.ts` |
 | `/api/sessions/:id` | GET / DELETE | `routes/sessions.ts` |
+| `/api/sessions/:id/relationships` | PATCH | `routes/sessions.ts`（S1 施工时源码核对补录） |
+| `/api/sessions/:id/directors` | POST | `routes/sessions.ts`（同上） |
+| `/api/sessions/:id/directors/:iid` | DELETE | `routes/sessions.ts`（同上） |
+| `/api/sessions/:id/config` | PATCH | `routes/sessions.ts`（同上） |
+| `/api/sessions/:id/prompts` | GET | `routes/sessions.ts`（同上） |
 | `/api/providers` | GET / POST | `routes/providers.ts` |
 | `/api/providers/:id` | PUT / DELETE | `routes/providers.ts` |
 | `/api/providers/default/:id` | PUT | `routes/providers.ts` |
