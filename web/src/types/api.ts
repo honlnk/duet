@@ -1,8 +1,8 @@
 /**
  * 后端 API 契约类型定义
  *
- * 严格对应 server-py/src/duet_langgraph/schemas.py 的数据模型，
- * 以及 server-py/src/duet_langgraph/ws/chat_ws.py + graph/nodes.py 的 WebSocket 事件。
+ * 严格对应 server/src/duet_langgraph/schemas.py 的数据模型，
+ * 以及 server/src/duet_langgraph/ws/chat_ws.py + graph/nodes.py 的 WebSocket 事件。
  * 详见 docs/DEVELOPMENT_PLAN.md §5.1 数据模型。
  */
 

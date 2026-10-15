@@ -419,7 +419,7 @@ duet-langgraph</code></pre>
       <h3>方式二：源码运行</h3>
       <pre><code>git clone https://github.com/honlnk/duet.git
 cd duet
-pnpm install &amp;&amp; cd server-py &amp;&amp; uv sync &amp;&amp; cd ..
+pnpm install &amp;&amp; cd server &amp;&amp; uv sync &amp;&amp; cd ..
 pnpm dev</code></pre>
       <p>开发模式前后端分离：前端 <code>http://localhost:46738</code>（热更新），后端 <code>http://localhost:23892</code>（API + WebSocket）。生产模式 <code>pnpm build</code> 后 <code>uv run duet-langgraph</code> 单进程托管。</p>
 

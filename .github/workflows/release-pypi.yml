@@ -1,5 +1,5 @@
 # 发布 duet-langgraph 到 PyPI（S6 起生效，替换 release-npm.yml）。
-# 推送 v* 标签时触发（tag 版本必须与 server-py/pyproject.toml version 一致），也可手动触发。
+# 推送 v* 标签时触发（tag 版本必须与 server/pyproject.toml version 一致），也可手动触发。
 # 认证方式：PyPI Trusted Publishing（OIDC）—— 无需 PYPI_TOKEN。
 #
 # 前置（需手动配置一次，S6 合并前完成）：
@@ -36,7 +36,7 @@ jobs:
     environment: pypi
     defaults:
       run:
-        working-directory: server-py
+        working-directory: server
     steps:
       - uses: actions/checkout@v4
 
