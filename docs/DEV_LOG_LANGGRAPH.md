@@ -120,3 +120,26 @@
 1. Agent 图无 checkpointer（TS 也是纯内存会话态）：每次 ainvoke 全量传入消息、结束写回 `messages[:]`——与 TS 原地追加语义等价。
 2. 工具 schema 经 pydantic model_json_schema（numbered OpenAI function 格式）传 `bind_tools`，由 langchain 转各协议线格式；openai 路径与 TS 逐字段同构，anthropic/gemini 的工具转换正确性留 V4 真机验证。
 3. 校验错误文本：TS 手写中文校验器；Python 用 pydantic ValidationError 详情拼中文前缀（回灌语义一致，具体措辞不同——模型自纠所需信息等价）。
+
+## 2026-10-15 S4 记忆与统计 ✅
+
+**产出**
+
+- `memory/summarizer.py`：summarize_conversation——摘要走该 Character 的 Provider（剥离 thinkingConfig），temperature 0.3 / maxTokens 600（对齐 TS chatComplete 参数）；返回 (第一人称摘要, usage)
+- `graph/nodes.py summarize_memory` 实装（替换 S2 占位）：触发条件对齐 TS（messages > keepRecent 且距上次摘要 >= summaryEveryN）→ summary/start → 生成 → addStats（摘要成本按该角色单价+展示货币计入会话统计）→ applySummary → trimToRecent → summary/done；失败广播 summary/error 不致命
+- WS 事件补齐第 15 种：summary（start/done/error 三相位）
+- `scheduling: "llm"` 开关（D3 新增，TS 无）：SessionConfig 可选字段（None=默认轮转，序列化省略 → REST 契约默认形状与 TS 逐字段一致）；建会话 config / PATCH config 均可设置；select_speaker 在 scheduling=llm 且未临近轮数上限时调模型选人（正则解析 A–J，失败/异常回落 round-robin），选人 usage 计入统计；`_parse_session` live 合并纳入 scheduling（运行中切换生效）
+- `ai/models.content_text`：langchain 消息文本提取公共助手
+- 测试 5 例（`test_s4_summary.py`）：摘要触发/裁剪/注入（prompt 快照含「对话进展摘要」system 消息）、摘要失败不致命、usage 三维缓存累计断言（prompt/completion/hit/write/miss 精确值）、llm 选人解析与双回落、scheduling=llm 全链路覆盖轮转（3 角色恒选 A → A,A,A；最后一轮跳过选人）
+
+**验收结论**
+
+- `uv run ruff check .` 干净；`uv run pytest` 37/37 绿；连跑 3 次无 flakes
+- 真机冒烟：建会话带 `scheduling:"llm"` 配置回读正确；PATCH config 置 null 回退默认
+
+**偏差记录**
+
+1. 计划提到的「RemoveMessage」未采用：langgraph 的 RemoveMessage 是 chat-history reducer 概念，而本实现展示层消息（session.messages）与记忆层消息（memory.messages）分离——摘要裁剪作用于记忆列表（trim_to_recent），与 TS trimToRecent 语义一致，无需 RemoveMessage。
+2. 摘要后记忆上限：trim 到 keepRecent 后、下次摘要触发前会再累积一轮对话，故记忆条数上限为 keepRecent + 角色数（TS 同此行为，测试断言按此边界）。
+3. scheduling=llm 的选人调用在每次 post_reply 后发生；临近 maxRounds 时跳过（避免最后一轮浪费调用），其余停止条件（时长等）下可能多一次调用——低频场景，接受。
+4. scheduling 为新增功能（TS 无）：前端无 UI 入口，经 REST 配置启用；默认不序列化，契约零变更。

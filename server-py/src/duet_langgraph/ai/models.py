@@ -107,6 +107,16 @@ def make_model(
     )
 
 
+def content_text(msg: Any) -> str:
+    """从 langchain 消息/chunk 提取文本 content（列表形态取 text 拼接）。"""
+    content = getattr(msg, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(p.get("text", "") for p in content if isinstance(p, dict))
+    return ""
+
+
 def usage_from_message(msg: Any) -> NormalizedUsage:
     """从 AIMessage 提取归一化 usage（三维缓存计数）。
 

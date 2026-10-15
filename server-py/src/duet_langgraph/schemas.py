@@ -222,6 +222,8 @@ class SessionConfig(CamelModel):
     scenario: str | None = None
     pacing_enabled: bool | None = None
     pacing_buffer_rounds: int | None = None
+    # D3 新增（TS 无）：发言者调度；None/round-robin = 轮转（默认），llm = 模型选人
+    scheduling: str | None = None
 
 
 class SessionStats(CamelModel):

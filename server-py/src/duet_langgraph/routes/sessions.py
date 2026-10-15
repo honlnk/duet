@@ -34,6 +34,7 @@ SESSION_CONFIG_KEYS = {
     "scenario",
     "pacingEnabled",
     "pacingBufferRounds",
+    "scheduling",
 }
 
 
@@ -216,12 +217,15 @@ async def patch_config(id_: str, request: Request):
         session.config.pacing_enabled = body["pacingEnabled"]
     if "pacingBufferRounds" in body:
         session.config.pacing_buffer_rounds = body["pacingBufferRounds"]
+    if "scheduling" in body:
+        session.config.scheduling = body["scheduling"]
     session_store.save_session(session)
     ws_runtime.sync_config_to_runtime(
         id_,
         {
             "pacing_enabled": session.config.pacing_enabled,
             "pacing_buffer_rounds": session.config.pacing_buffer_rounds,
+            "scheduling": session.config.scheduling,
         },
     )
     return dump_session(session)

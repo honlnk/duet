@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -56,6 +57,7 @@ def _parse_session(state: dict[str, Any]) -> Session:
         session.relationships = live.relationships
         session.config.pacing_enabled = live.config.pacing_enabled
         session.config.pacing_buffer_rounds = live.config.pacing_buffer_rounds
+        session.config.scheduling = live.config.scheduling
     return session
 
 
@@ -119,12 +121,65 @@ def route_after_check(state: dict[str, Any]) -> str:
     return "finish" if state.get("stop_reason") else "summarize_memory"
 
 
-# ----------------------------- 2. 摘要（S4 实装） -----------------------------
+# ----------------------------- 2. 摘要 -----------------------------
 
 
 async def summarize_memory(state: dict[str, Any]) -> dict[str, Any]:
-    """按需压缩当前角色记忆（S2 为占位直通；S4 实装触发/生成/裁剪）。"""
-    return {}
+    """按需压缩当前角色记忆（对齐 TS runLoop 第 3 步）。
+
+    触发：messages > keepRecent 且距上次摘要 >= summaryEveryN 轮。
+    摘要失败不致命（广播 summary/error 后继续对话）。
+    """
+    loop = _loop()
+    session_id = loop.session_id
+    session = _parse_session(state)
+    character_id = state["current_speaker"]
+    info = _char_info(session_id, character_id)
+
+    mem = _restore_memory(state, session, character_id)
+    round_ = session_store.current_round(session)
+    rounds_since = round_ - mem.last_summarized_round
+    if not (
+        len(mem.messages) > session.config.keep_recent
+        and rounds_since >= session.config.summary_every_n
+    ):
+        return {}
+
+    broadcast_event({"type": "summary", "characterId": character_id, "phase": "start"})
+    try:
+        from ..memory.summarizer import summarize_conversation
+
+        summary, summary_usage = await summarize_conversation(
+            character_name=mem.character.name,
+            others=mem.others,
+            messages=mem.messages,
+            old_summary=mem.summary,
+            words=200,
+            provider=info.provider,
+        )
+        if not summary:
+            return {}
+        # 摘要调用成本也计入会话总成本（按该 Character 的 Provider 单价 + 展示货币换算）
+        session_store.add_stats(
+            session, summary_usage, info.rates, loop.display_currency, loop.exchange_rates
+        )
+        mem.apply_summary(summary, round_)
+        mem.trim_to_recent(session.config.keep_recent)
+        broadcast_event(
+            {"type": "summary", "characterId": character_id, "phase": "done", "summary": summary}
+        )
+    except Exception as e:  # noqa: BLE001 —— 摘要失败不致命，继续对话
+        broadcast_event(
+            {"type": "summary", "characterId": character_id, "phase": "error", "message": str(e)}
+        )
+        return {}
+
+    memories = dict(state.get("memories", {}))
+    memories[character_id] = mem.to_data().model_dump(by_alias=True, exclude_none=True)
+    session.memory = {
+        cid: CharacterMemoryData.model_validate(d) for cid, d in memories.items()
+    }
+    return {"memories": memories, "session": _dump(session)}
 
 
 # ----------------------------- 3. 组装上下文 -----------------------------
@@ -384,10 +439,72 @@ async def post_reply(state: dict[str, Any]) -> dict[str, Any]:
 # ----------------------------- 6. 选下一个发言者 -----------------------------
 
 
+async def _llm_pick_speaker(session: Session, fallback: str) -> tuple[str, Any]:
+    """scheduling=llm：模型驱动选下一个发言者（D3 新增，TS 无此功能）。
+
+    返回 (选中 id, 本次调用 usage)；解析失败 / 模型错误 → (round-robin 结果, None)。
+    """
+    loop = _loop()
+    try:
+        info = _char_info(loop.session_id, fallback)
+    except RuntimeError:
+        return fallback, None
+
+    candidates = "、".join(f"{c.id}（{c.name}）" for c in session.characters)
+    recent = session.messages[-6:]
+    lines = "\n".join(
+        f"{next((c.name for c in session.characters if c.id == m.character_id), m.character_id)}："
+        f"{m.content[:40]}"
+        for m in recent
+    )
+    system = (
+        "你是一场多角色对话的主持人。根据话题走向与最近的发言，"
+        "选出下一位最合适的发言者。只输出一个字母编号，不要输出任何其他内容。"
+    )
+    user = (
+        f"话题：{session.topic}\n候选人：{candidates}\n"
+        f"最近发言：\n{lines or '（还没有发言）'}\n\n请只输出下一位发言者的字母编号。"
+    )
+
+    try:
+        plain = info.provider.model_copy(update={"thinking_config": None})
+        model = make_model(plain, temperature=0.3, max_tokens=16, thinking=None)
+        result = await model.ainvoke([SystemMessage(content=system), HumanMessage(content=user)])
+    except Exception:  # noqa: BLE001 —— 选人失败回落 round-robin
+        return fallback, None
+
+    valid_ids = {c.id for c in session.characters}
+    text = result.content if isinstance(result.content, str) else ""
+    for ch in re.findall(r"[A-J]", text.upper()):
+        if ch in valid_ids:
+            return ch, usage_from_message(result)
+    return fallback, None
+
+
 async def select_speaker(state: dict[str, Any]) -> dict[str, Any]:
-    """round-robin（对齐 TS nextCharacterId）；S4 增加 scheduling=llm 选项。"""
+    """round-robin（对齐 TS nextCharacterId）；scheduling=llm 时模型选人覆盖。"""
     session = _parse_session(state)
+    updates: dict[str, Any] = {}
+
+    if session.config.scheduling == "llm":
+        round_ = session_store.current_round(session)
+        about_to_finish = session.config.max_rounds > 0 and round_ >= session.config.max_rounds
+        if not about_to_finish:
+            fallback = session.current_character_id
+            picked, usage = await _llm_pick_speaker(session, fallback)
+            if usage is not None:
+                loop = _loop()
+                info = _char_info(loop.session_id, fallback)
+                session_store.add_stats(
+                    session, usage, info.rates, loop.display_currency, loop.exchange_rates
+                )
+            if picked != session.current_character_id:
+                session.current_character_id = picked
+            session_store.save_session(session)
+            updates["session"] = _dump(session)
+
     return {
+        **updates,
         "current_speaker": session.current_character_id,
         "round": session_store.current_round(session),
     }
