@@ -67,3 +67,33 @@
 3. 探测层（listModels/thinking-options）不经 langchain model 类直连原生 REST：langchain 不提供 list-models 能力，这是 REST 面的等价实现，不影响 D2（对话与 Agent 主链路仍走 langchain）。
 4. TS normalizeLegacySession（智能体时期旧数据归一化）不移植：无旧数据输入（sessions 不迁移）。
 5. 计划 §3.1 已补录源码多出的 6 条 sessions 路由（见 S0 偏差 1）。
+
+## 2026-10-15 S2 主图 + WS ✅
+
+**产出**
+
+- `ai/prompts.py`：五段式 system / 开场 / `[name]: content` 包装 / 摘要三件套 / 导演注入，中文文案逐字对齐 TS prompts.ts
+- `ai/models.py`：make_model 工厂——openai→ChatOpenAI、openai-responses→ChatOpenAI(use_responses_api)、anthropic→ChatAnthropic、gemini→ChatGoogleGenerativeAI；thinking 档位按协议映射（reasoning_effort / reasoning:{effort} / thinking:{type} / generationConfig.thinkingConfig）；usage_from_message 归一化（原始 usage 优先，回退 usage_metadata：hit=cache_read、miss=input-hit）
+- `memory/context.py`：CharacterMemory（push_self/push_other/摘要/裁剪/组装 API messages，导演指令尾部注入用消息克隆）；restore_memories
+- `graph/state.py`：DuetState TypedDict（session 全量 JSON 真相源 + memories + 轮转字段）；运行期非序列化信息（Provider 连接、汇率、广播函数）经 ContextVar 注入，不进 checkpoint
+- `graph/nodes.py`：七节点——check_stop（停止条件优先级对齐 TS：用户停止→maxRounds→全局轮数→用户时长→全局时长，各分支置 finishedReason）→ summarize_memory（S4 占位直通）→ build_context（A 首轮开场提示 / prompt 快照落盘）→ character_reply（astream 流式 chunk + 指数退避重试 10 次上限 60s，退避期间停止→优雅退出，耗尽→error）→ post_reply（统计 / 消息 / 记忆写穿 / message_done+stats+turn_end 广播）→ select_speaker（round-robin）→ finish（running→finished / stoppedAt / finished 广播）
+- `graph/chat_graph.py`：StateGraph 编译（recursion_limit=2000）+ AsyncSqliteSaver（thread_id=sessionId）
+- `ws/chat_ws.py`：`/ws/chat` 端点（每连接出站队列保序；sync-on-connect；ping/pong、start、stop、reading 消息处理；JSON 非对象容错）+ run_loop 驱动（重复 start / 状态守卫、每角色 Provider 解析与 CostRates、货币选举 + 汇率兜底、计时重置语义对齐 TS：继续时重置 startedAt）
+- WS 事件落地：sync / started / chunk / message_done / stats（9 字段顶层）/ turn_end / stopping / finished / error / retry / pong + S1 已有 director_added / director_removed；summary×3 留 S4；pacing 不实现（R6 决策）
+- 测试：`test_s2_ws.py` 8 用例（fake 模型 monkeypatch make_model）——全链路 2 轮×2 角色事件序列与落盘（记忆条数/角色视角/统计/token 三维）、退避重试、重试耗尽 error、优雅停止（gate 门控当前发言完成后停止）、重复 start 拒绝、连接协议（sync/ping/非法消息/缺 sessionId/会话不存在）
+
+**验收结论**
+
+- `uv run ruff check .` 干净；`uv run pytest` 24/24 绿；全套件连跑 6 次无 flakes（~0.3s/轮）
+- 真实进程冒烟（临时 DATA_DIR + 真实 uvicorn）：health / 建删会话 / WS sync+ping×4 → start（无 Provider）→ started+error，行为与 TS 同路径一致（TS 此路径同样不广播 finished）
+- 测试侧曾暴露真实缺陷：sessions_meta（同步 sqlite，事件循环线程）与 checkpointer（aiosqlite，工作线程）写同一 duet.db 跨线程写锁互卡（`database is locked`，偶发死锁/崩溃）——已分库修复，见偏差 1
+
+**偏差记录**
+
+1. **checkpoint 与 sessions_meta 分库**：checkpointer 改存 `DATA_DIR/checkpoints.db`（S1 偏差 1 中「复用同一 duet.db」的设计作废）。SQLite 单写者，两个独立写入方（同步连接在事件循环线程 + aiosqlite 在工作线程，后者完成回调依赖事件循环）共用一个文件会形成跨线程锁依赖，实测偶发 `database is locked` 且难复现。分库后彻底消除竞争；两库仍在同一 DATA_DIR。
+2. **REST 运行中修改经 live 对象合并进图状态**：图节点从 state 快照解析 session，而 REST 路由（加导演/改关系/改 pacing 配置）只改 `rt.active_session`——`_parse_session` 在每个节点入口合并 directors/relationships/pacing 四个字段，`post_reply` 推进 live 指针。TS 是单对象引用天然可见，此处为等价实现。附带修复：S1 的 `sync_config_to_runtime` 传 camelCase key 去 setattr pydantic 会崩，改传 snake_case。
+3. **记忆每轮写穿落盘**：TS 在循环退出时统一把 memory 写回 session；Python 版 post_reply 每轮写穿（崩潛建议面更小），契约无差。
+4. **退避期间停止的终态**：TS 此路径经循环退出块得到 status=finished + reason=stopped（怪癖）；Python 直接置 status=stopped + finishedReason=stopped（语义更自洽，前端对两者展示等价）。另 check_stop 各停止分支同时置 finishedReason（对齐 TS 逐行）。
+5. 每次运行都以最新 sessions_meta 组装全新 input 跑图（checkpoint 被覆盖）；checkpoint 承担运行中断点续跑与 LangGraph 状态留痕，不承担跨运行累积——与 TS「重开即从头」语义一致（S1 偏差 2 的复核结论）。
+6. 无 Provider 提前返回路径只广播 started+error 不广播 finished——逐行对齐 TS（前端靠 error 事件恢复 UI）。
+7. `ai/prompts.py` 加 ruff E501 豁免（逐字移植的中文文案不折行）。

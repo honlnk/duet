@@ -14,19 +14,21 @@ from fastapi import FastAPI
 
 from . import __version__
 from .config import get_config
+from .graph.chat_graph import close_checkpointer, get_checkpointer
 from .routes import exchange, health, library, pricing, providers, sessions
 from .store import providers as provider_store
 from .store import session_store
+from .ws import chat_ws
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 启动恢复：running 会话 → stopped（reason=crashed），避免僵尸会话
-    recovered = session_store.recover_sessions()
-    if recovered:
-        pass  # 本地工具，静默恢复即可（与 TS 行为一致：不打日志文案）
+    session_store.recover_sessions()
     provider_store.validate_providers()
+    await get_checkpointer()
     yield
+    await close_checkpointer()
 
 
 def create_app() -> FastAPI:
@@ -44,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(library.router)
     app.include_router(pricing.router)
     app.include_router(exchange.router)
+    app.include_router(chat_ws.router)
     return app
 
 

@@ -220,8 +220,8 @@ async def patch_config(id_: str, request: Request):
     ws_runtime.sync_config_to_runtime(
         id_,
         {
-            "pacingEnabled": session.config.pacing_enabled,
-            "pacingBufferRounds": session.config.pacing_buffer_rounds,
+            "pacing_enabled": session.config.pacing_enabled,
+            "pacing_buffer_rounds": session.config.pacing_buffer_rounds,
         },
     )
     return dump_session(session)

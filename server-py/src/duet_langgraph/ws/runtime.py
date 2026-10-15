@@ -38,6 +38,11 @@ def get_runtime(session_id: str) -> Runtime:
     return rt
 
 
+def peek_runtime(session_id: str) -> Runtime | None:
+    """无副作用查询（不创建）；图节点合并实时修改用。"""
+    return _runtimes.get(session_id)
+
+
 def attach_client(session_id: str, send: SendFn) -> Callable[[], None]:
     rt = get_runtime(session_id)
     rt.ws_clients.add(send)
