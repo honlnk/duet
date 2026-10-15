@@ -14,7 +14,7 @@ data/
 
 # 构建产物
 server/public/
-server-py/src/duet_langgraph/public/
+server/src/duet_langgraph/public/
 dist/
 build/
 *.tgz

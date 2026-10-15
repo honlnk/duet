@@ -10,7 +10,7 @@ services:
   duet:
     build:
       context: .
-      dockerfile: server-py/Dockerfile
+      dockerfile: server/Dockerfile
     image: duet:latest
     container_name: duet
     restart: unless-stopped

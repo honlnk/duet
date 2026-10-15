@@ -13,8 +13,8 @@ export default defineConfig({
     },
   },
   build: {
-    // 构建产物直接输出到 Python 后端静态目录（langgraph 分支起后端为 server-py），单进程托管
-    outDir: '../server-py/src/duet_langgraph/public',
+    // 构建产物直接输出到 Python 后端静态目录（后端为 server（Python）），单进程托管
+    outDir: '../server/src/duet_langgraph/public',
     emptyOutDir: true,
   },
   server: {

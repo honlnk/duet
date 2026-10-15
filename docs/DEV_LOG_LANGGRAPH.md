@@ -193,3 +193,9 @@
 1. 计划中「合并 master」执行为本地 merge（不 push，遵守约束）；远端 CI 绿灯与 push 留给用户执行。
 2. `release-pypi.yml` 的 PyPI Trusted Publisher 前置配置（pypi.org pending publisher + GitHub environment `pypi`）需用户手动操作一次，workflow 头部已注明步骤。
 3. PyPI 包 `duet-langgraph` 尚未发布（需先完成上述前置 + 推 tag），v2 首版号建议 2.0.0 对齐根 package.json。
+
+## 2026-10-15 S6 补充：server-py → server 目录更名 ✅
+
+TS 后端删除后 `-py` 后缀失去区分意义，目录 `server-py/` 更名为 `server/`（Python 包名/导入名 `duet_langgraph` 与 PyPI 发布名不变）。同步更新：Dockerfile（COPY 路径）、docker-compose.yml、ci-python.yml / release-pypi.yml（paths 与 working-directory）、根 package.json 脚本、根与 server 两份 README、门户页、web/vite.config.ts outDir、.gitignore、web 源码注释。venv 因绝对路径 shebang 重建。
+
+**验收**：`pnpm --filter web build` ✓；pytest 40/40 + ruff 干净 ✓；`docker compose up -d --build` 更名后全栈构建 healthy、`/` 200 ✓。历史文档（DEV_PLAN / 本日志既往条目）保留 `server-py` 原称不改——当时事实记录。

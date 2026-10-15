@@ -7,7 +7,7 @@
 
 ![status](https://img.shields.io/badge/status-v2.0%20ready-green) ![characters](https://img.shields.io/badge/characters-2~10-orange) ![provider](https://img.shields.io/badge/provider-OpenAI%20%7C%20Anthropic%20%7C%20Gemini-blue) ![backend](https://img.shields.io/badge/backend-Python%20%2B%20FastAPI%20%2B%20LangGraph-3776ab) ![css](https://img.shields.io/badge/Tailwind-v4-38bdf8)
 
-> **v2.0**：后端由 TypeScript 重写为 **Python 3.12 + FastAPI + LangGraph**（`server-py/`）。功能与契约对齐 TS 版，另新增 `scheduling: "llm"` 模型选人调度；**历史会话不迁移**（详见下文「v1 → v2 升级说明」）。重构计划见 [docs/DEV_PLAN_LANGGRAPH.md](docs/DEV_PLAN_LANGGRAPH.md)，施工日志见 [docs/DEV_LOG_LANGGRAPH.md](docs/DEV_LOG_LANGGRAPH.md)。
+> **v2.0**：后端由 TypeScript 重写为 **Python 3.12 + FastAPI + LangGraph**（`server/`）。功能与契约对齐 TS 版，另新增 `scheduling: "llm"` 模型选人调度；**历史会话不迁移**（详见下文「v1 → v2 升级说明」）。重构计划见 [docs/DEV_PLAN_LANGGRAPH.md](docs/DEV_PLAN_LANGGRAPH.md)，施工日志见 [docs/DEV_LOG_LANGGRAPH.md](docs/DEV_LOG_LANGGRAPH.md)。
 
 ## ✨ 功能特性
 
@@ -41,7 +41,7 @@
 
 ```bash
 pnpm install                 # 前端依赖
-cd server-py && uv sync && cd ..   # 后端依赖
+cd server && uv sync && cd ..   # 后端依赖
 pnpm dev                     # 前后端并行：vite 46738 + uvicorn 23892
 ```
 
@@ -66,8 +66,8 @@ pnpm dev                     # 前后端并行：vite 46738 + uvicorn 23892
 #### 形态 A：源码部署（本地或服务器）
 
 ```bash
-pnpm build                        # 构建前端到 server-py 包内 public/
-cd server-py && uv run duet-langgraph   # 单进程托管 前端 + API + WebSocket
+pnpm build                        # 构建前端到 server 包内 public/
+cd server && uv run duet-langgraph   # 单进程托管 前端 + API + WebSocket
 ```
 
 生产模式启动后自动打开浏览器；通过 `PORT` 环境变量改端口。
@@ -90,7 +90,7 @@ duet-langgraph
 
 ```bash
 # 方式一：docker run（构建上下文须为仓库根）
-docker build -f server-py/Dockerfile -t duet .
+docker build -f server/Dockerfile -t duet .
 docker run -d -p 23892:23892 -v duet-data:/data duet
 
 # 方式二：docker compose（推荐，配置已写在 docker-compose.yml）
@@ -176,13 +176,13 @@ docker compose up -d --build
 | AI 调用 | langchain 官方 model 类（openai / openai-responses / anthropic / gemini），thinking_config 原样透传 |
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
 | 持久化 | SQLite（会话真源 `duet.db` + 图状态 `checkpoints.db` 分文件）；Provider 凭证 `providers.json`、资产库 `library.json` |
-| 包管理 | pnpm workspace（`web`）+ uv（`server-py`） |
+| 包管理 | pnpm workspace（`web`）+ uv（`server`） |
 
 ### 双 Loop 架构（核心）
 
 项目有两条独立的模型驱动循环。
 
-**对话循环**（主图，`server-py/src/duet_langgraph/graph/`）：聊天室用。LangGraph 状态图按轮调度，各角色以独立视角续写发言，无工具调用：
+**对话循环**（主图，`server/src/duet_langgraph/graph/`）：聊天室用。LangGraph 状态图按轮调度，各角色以独立视角续写发言，无工具调用：
 
 ```mermaid
 flowchart TB
@@ -197,7 +197,7 @@ flowchart TB
     finish --> END(("END"))
 ```
 
-**Agent 循环**（`server-py/src/duet_langgraph/agent/`）：导演助手用。标准 tool-use 循环——模型返回 `tool_calls` → 执行工具 → 结果回灌 → 继续下一轮，直到模型给出纯文本收尾；SSE 输出 6 类事件（`delta` / `tool_call` / `tool_result` / `assistant` / `done` / `error`）。
+**Agent 循环**（`server/src/duet_langgraph/agent/`）：导演助手用。标准 tool-use 循环——模型返回 `tool_calls` → 执行工具 → 结果回灌 → 继续下一轮，直到模型给出纯文本收尾；SSE 输出 6 类事件（`delta` / `tool_call` / `tool_result` / `assistant` / `done` / `error`）。
 
 ### 多角色独立记忆设计（核心）
 
@@ -225,7 +225,7 @@ flowchart TB
 ```
 duet/
 ├── docs/                  # 文档（开发计划、施工日志、调研笔记）
-├── server-py/             # 后端（Python + FastAPI + LangGraph）
+├── server/             # 后端（Python + FastAPI + LangGraph）
 │   └── src/duet_langgraph/
 │       ├── agent/         # Agent Loop：工具表 / 执行 / 循环 / 会话态 / 提示词
 │       ├── ai/            # langchain model 构造 + prompt 模板 + usage 归一化
@@ -237,7 +237,7 @@ duet/
 │       └── main.py        # 应用工厂 + duet-langgraph 控制台入口
 ├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
 ├── site/                  # 门户页（GitHub Pages）
-├── docker-compose.yml     # 一键起（构建上下文=仓库根，Dockerfile 在 server-py/）
+├── docker-compose.yml     # 一键起（构建上下文=仓库根，Dockerfile 在 server/）
 └── pnpm-workspace.yaml
 ```
 

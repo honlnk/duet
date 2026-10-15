@@ -85,7 +85,7 @@ flowchart LR
 ## 开发
 
 ```bash
-cd server-py
+cd server
 uv sync                 # 安装依赖（含 dev）
 uv run duet-langgraph   # 生产模式（需先构建前端：仓库根 pnpm --filter web build）
 uv run uvicorn duet_langgraph.main:app --port 23892   # 开发模式（API/WS only）
@@ -100,4 +100,4 @@ uv run ruff check .     # lint
 ## 发布
 
 - 打 tag `v*`（须与 `pyproject.toml` version 一致）→ `.github/workflows/release-pypi.yml` 构建 wheel（含前端产物）并以 PyPI Trusted Publishing（OIDC）发布
-- Docker：`server-py/Dockerfile` 三层构建（web → wheel → 运行层），根 `docker-compose.yml` 一键起
+- Docker：`server/Dockerfile` 三层构建（web → wheel → 运行层），根 `docker-compose.yml` 一键起

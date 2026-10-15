@@ -2,16 +2,16 @@
   "name": "duet",
   "version": "2.0.0",
   "private": true,
-  "description": "Duet — 多智能体自主对话聊天室（后端 server-py/：Python + FastAPI + LangGraph）",
+  "description": "Duet — 多智能体自主对话聊天室（后端 server/：Python + FastAPI + LangGraph）",
   "type": "module",
   "scripts": {
     "dev": "run-p -l dev:web dev:server",
     "dev:web": "pnpm --filter @duet/web dev",
-    "dev:server": "cd server-py && uv run uvicorn duet_langgraph.main:app --port 23892",
+    "dev:server": "cd server && uv run uvicorn duet_langgraph.main:app --port 23892",
     "build": "pnpm --filter @duet/web build",
-    "start": "pnpm --filter @duet/web build && cd server-py && uv run duet-langgraph",
-    "test": "cd server-py && uv run pytest -q",
-    "lint": "cd server-py && uv run ruff check ."
+    "start": "pnpm --filter @duet/web build && cd server && uv run duet-langgraph",
+    "test": "cd server && uv run pytest -q",
+    "lint": "cd server && uv run ruff check ."
   },
   "engines": {
     "node": ">=20"
