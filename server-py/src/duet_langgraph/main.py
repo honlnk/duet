@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from . import __version__
 from .config import get_config
 from .graph.chat_graph import close_checkpointer, get_checkpointer
-from .routes import exchange, health, library, pricing, providers, sessions
+from .routes import agent, exchange, health, library, pricing, providers, sessions
 from .store import providers as provider_store
 from .store import session_store
 from .ws import chat_ws
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(library.router)
     app.include_router(pricing.router)
     app.include_router(exchange.router)
+    app.include_router(agent.router)
     app.include_router(chat_ws.router)
     return app
 

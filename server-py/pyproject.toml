@@ -45,6 +45,7 @@ select = ["E", "F", "I", "W", "UP", "B"]
 "tests/*" = ["E501"]
 # 逐字移植的中文 prompt 文案，不应为行宽折行
 "src/duet_langgraph/ai/prompts.py" = ["E501"]
+"src/duet_langgraph/agent/prompt.py" = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

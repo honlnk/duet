@@ -97,3 +97,26 @@
 5. 每次运行都以最新 sessions_meta 组装全新 input 跑图（checkpoint 被覆盖）；checkpoint 承担运行中断点续跑与 LangGraph 状态留痕，不承担跨运行累积——与 TS「重开即从头」语义一致（S1 偏差 2 的复核结论）。
 6. 无 Provider 提前返回路径只广播 started+error 不广播 finished——逐行对齐 TS（前端靠 error 事件恢复 UI）。
 7. `ai/prompts.py` 加 ruff E501 豁免（逐字移植的中文文案不折行）。
+
+## 2026-10-15 S3 导演 Agent ✅
+
+**产出**
+
+- `agent/prompt.py`：导演助手系统提示词逐字平移（19 条工作原则）
+- `agent/tools.py`：12 工具全量平移（list/upsert/delete × 角色/话题/世界观 + list/set/delete 关系）——pydantic args_schema（extra=forbid ≙ TS additionalProperties:false）+ isWrite 标记 + summarize + 校验错误中文文本回灌
+- `agent/messages.py`：会话态内存 Map + TTL 2h 惰性清理（对齐 TS：聊天历史不持久化）
+- `agent/query.py`：Agent 循环落成 LangGraph StateGraph（agent_step ⇄ tool_step，add_messages reducer；无 checkpointer，会话态由 messages 持有、每轮整体传入/写回）——停止/30 轮安全阀在 step 边界检查；流式 delta；工具批次顺序执行回灌；未知工具/校验失败/执行失败均回灌不崩循环；abort 时批内剩余工具补「已因用户停止而跳过」保持消息序列合法
+- `routes/agent.py`：POST /api/agent/chat → SSE（delta / tool_call / tool_result / assistant / done / error 六事件；providerId 404 守卫；body.model 覆盖 Provider 模型；客户端断开 → 生成器 finally 置 abort）
+- `main.py` 挂载 agent 路由；conftest 增加 agent 会话态重置
+
+**验收结论**
+
+- `uv run ruff check .` 干净；`uv run pytest` 32/32 绿；连跑 4 次无 flakes（~0.38s/轮）
+- 测试：工具往返 + SSE 事件契约（mutated 联动真实改库、REST 可见）、未知工具/参数校验失败回灌、30 轮安全阀、LLM 错误 surfaced（error+done(error)）、provider 404、body 422、abort 前置（零 LLM 调用）、abort 跳过批内剩余工具（消息序列完整性）
+- 真机冒烟：`/api/agent/chat` 无 Provider → 404 JSON；缺字段 → 422（真实 LLM 循环在 V4 冒烟覆盖）
+
+**偏差记录**
+
+1. Agent 图无 checkpointer（TS 也是纯内存会话态）：每次 ainvoke 全量传入消息、结束写回 `messages[:]`——与 TS 原地追加语义等价。
+2. 工具 schema 经 pydantic model_json_schema（numbered OpenAI function 格式）传 `bind_tools`，由 langchain 转各协议线格式；openai 路径与 TS 逐字段同构，anthropic/gemini 的工具转换正确性留 V4 真机验证。
+3. 校验错误文本：TS 手写中文校验器；Python 用 pydantic ValidationError 详情拼中文前缀（回灌语义一致，具体措辞不同——模型自纠所需信息等价）。
