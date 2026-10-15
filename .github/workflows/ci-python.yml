@@ -1,0 +1,27 @@
+name: ci-python
+
+on:
+  push:
+    branches: [langgraph, master]
+    paths:
+      - "server-py/**"
+      - ".github/workflows/ci-python.yml"
+  pull_request:
+    paths:
+      - "server-py/**"
+      - ".github/workflows/ci-python.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run pytest -q
