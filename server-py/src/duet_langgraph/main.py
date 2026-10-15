@@ -7,13 +7,26 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 
 from . import __version__
 from .config import get_config
-from .routes import health
+from .routes import exchange, health, library, pricing, providers, sessions
+from .store import providers as provider_store
+from .store import session_store
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动恢复：running 会话 → stopped（reason=crashed），避免僵尸会话
+    recovered = session_store.recover_sessions()
+    if recovered:
+        pass  # 本地工具，静默恢复即可（与 TS 行为一致：不打日志文案）
+    provider_store.validate_providers()
+    yield
 
 
 def create_app() -> FastAPI:
@@ -23,8 +36,14 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
     app.include_router(health.router)
+    app.include_router(providers.router)
+    app.include_router(sessions.router)
+    app.include_router(library.router)
+    app.include_router(pricing.router)
+    app.include_router(exchange.router)
     return app
 
 

@@ -15,13 +15,13 @@ router = APIRouter()
 @router.get("/api/health")
 async def health() -> dict:
     cfg = get_config()
-    data = providers.load_raw()
+    items = providers.list_provider_items()
     return {
         "status": "ok",
         "ts": int(time.time() * 1000),
         "env": cfg.env,
-        "providerCount": len(data["providers"]),
-        "hasDefaultProvider": bool(data.get("defaultId")),
+        "providerCount": len(items["providers"]),
+        "hasDefaultProvider": bool(items["defaultId"]),
         "limits": {
             "absoluteMaxRounds": cfg.absolute_max_rounds,
             "absoluteMaxDurationSec": cfg.absolute_max_duration_sec,
@@ -32,9 +32,9 @@ async def health() -> dict:
 @router.get("/api/config/limits")
 async def config_limits() -> dict:
     cfg = get_config()
-    data = providers.load_raw()
+    items = providers.list_provider_items()
     return {
         "absoluteMaxRounds": cfg.absolute_max_rounds,
         "absoluteMaxDurationSec": cfg.absolute_max_duration_sec,
-        "defaultProviderId": data.get("defaultId", ""),
+        "defaultProviderId": items["defaultId"],
     }
