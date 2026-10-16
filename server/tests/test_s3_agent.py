@@ -290,3 +290,17 @@ async def test_agent_abort_skips_rest_of_tool_batch(fake_agent_model, tmp_path, 
     assert tools[1].tool_call_id == "c2"
     assert tools[1].content == "已因用户停止而跳过该工具"
     library_store._reset_for_test()
+
+
+def test_library_ids_are_clean(client):
+    """回归：_gen_id 曾把 random.choices 的列表 repr 拼进 id（脏 id 进库）。"""
+    import re
+
+    from duet_langgraph.store import library
+
+    for _ in range(3):  # 连建三个，同毫秒内也须靠随机后缀区分且格式干净
+        t = library.upsert_character_template(
+            {"id": "", "name": "测试", "description": "d", "personality": "p"}
+        )
+        assert re.fullmatch(r"ct_[0-9a-z]+", t["id"]), f"脏 id: {t['id']!r}"
+        library.delete_character_template(t["id"])
