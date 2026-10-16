@@ -199,3 +199,15 @@
 TS 后端删除后 `-py` 后缀失去区分意义，目录 `server-py/` 更名为 `server/`（Python 包名/导入名 `duet_langgraph` 与 PyPI 发布名不变）。同步更新：Dockerfile（COPY 路径）、docker-compose.yml、ci-python.yml / release-pypi.yml（paths 与 working-directory）、根 package.json 脚本、根与 server 两份 README、门户页、web/vite.config.ts outDir、.gitignore、web 源码注释。venv 因绝对路径 shebang 重建。
 
 **验收**：`pnpm --filter web build` ✓；pytest 40/40 + ruff 干净 ✓；`docker compose up -d --build` 更名后全栈构建 healthy、`/` 200 ✓。历史文档（DEV_PLAN / 本日志既往条目）保留 `server-py` 原称不改——当时事实记录。
+
+## 2026-10-16 修复：`_gen_id` 把列表 repr 拼进模板 id（真实使用暴露）✅
+
+**来源**：用户用导演助手（真实 DeepSeek）实测，agent 工具连建 5 个模板，id 形如 `ct_mvacxtrc['c', 's', 'e', 'f']`——`random.choices(k=4)` 返回列表，f-string 直接内插进的是其 repr。脏 id 入库后 URL 路径（DELETE/PUT 带 id）与关系键 `a->b` 都会携带 `[`、`'`、空格，REST 与前端按 id 操作随时可能炸。
+
+**修复**：`_join` 成串再拼（`"".join(random.choices(alphabet, k=4))`）；`tests/test_s3_agent.py` 加回归 `test_library_ids_are_clean`（连建三个模板断言 `ct_[0-9a-z]+` 全匹配，同毫秒内靠随机后缀区分）。
+
+**数据迁移**：存量 5 个脏 id 模板（红队/蓝队/裁判/话题/世界观「三阶段决策审查」资产集）经 REST 换干净 id——克隆同内容 → 删脏原件（角色删除级联清理其关系与坐标）→ 关系键和画布坐标按 old→new 重映射整体写回。终检：模板 id、关系键、坐标键全部无 `[`，关系 8 条、坐标 4 个内容原样保留。
+
+**验收**：pytest 41/41 绿 + ruff 干净；迁移后 REST 全量复查无脏 id。
+
+**顺带确认**：真实 DeepSeek 的 agent 工具链路（3 次对话、多次模板写入）全程无报错——V4 的 agent 路径 + 真实 LLM 由用户实测背书（主聊天 loop 真实 LLM 仍未测）。

@@ -30,7 +30,9 @@ def _gen_id(prefix: str) -> str:
         digits.append(alphabet[n % 36])
         n //= 36
     ts = "".join(reversed(digits))
-    return f"{prefix}_{ts}{random.choices(alphabet, k=4)}"
+    # random.choices 返回列表，必须 join 成串再拼（曾因此生成出带列表 repr 的脏 id）
+    suffix = "".join(random.choices(alphabet, k=4))
+    return f"{prefix}_{ts}{suffix}"
 
 
 def _empty_library() -> dict[str, Any]:
