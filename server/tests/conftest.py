@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,8 +16,9 @@ from duet_langgraph.store import session_store
 
 
 @pytest.fixture()
-def client(tmp_path):
-    os.environ["DATA_DIR"] = str(tmp_path)
+def client(tmp_path, monkeypatch):
+    # monkeypatch 自动还原，避免 DATA_DIR 泄漏污染后续测试的默认目录解析
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
     reset_config()
     session_store._reset_for_test()
     library_store._reset_for_test()

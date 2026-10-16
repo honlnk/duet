@@ -19,7 +19,7 @@ git clone git@github.com:honlnk/duet.git
 cd duet && docker compose up -d --build
 ```
 
-数据目录：`DATA_DIR` 环境变量最优先，默认 `~/.duet-langgraph`（Docker 镜像为 `/data`）。
+数据目录：`DATA_DIR` 环境变量最优先；源码跑默认仓库 `data/`，安装形态（uvx/pip/Docker）默认 `~/.duet`（镜像内为 `/data`）。
 
 API Key、模型、价格全部通过页面右上角「设置 → API 配置」维护，落盘到 `DATA_DIR/providers.json`，无需环境变量。
 
@@ -75,7 +75,7 @@ flowchart LR
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `PORT` | `23892` | 监听端口 |
-| `DATA_DIR` | `~/.duet-langgraph` | 数据目录（providers/library/sessions） |
+| `DATA_DIR` | 源码跑为仓库 `data/`，安装形态为 `~/.duet` | 数据目录（providers/library/sessions） |
 | `DUET_ENV` | 开发 `development` / 入口 `production` | 生产模式托管前端静态产物 |
 | `DUET_STATIC_DIR` | 包内 `public/` | 前端构建产物目录（默认无需设置） |
 | `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮次 |

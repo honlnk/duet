@@ -211,3 +211,15 @@ TS 后端删除后 `-py` 后缀失去区分意义，目录 `server-py/` 更名�
 **验收**：pytest 41/41 绿 + ruff 干净；迁移后 REST 全量复查无脏 id。
 
 **顺带确认**：真实 DeepSeek 的 agent 工具链路（3 次对话、多次模板写入）全程无报错——V4 的 agent 路径 + 真实 LLM 由用户实测背书（主聊天 loop 真实 LLM 仍未测）。
+
+## 2026-10-16 数据目录对齐 TS 逻辑：源码跑 → 仓库 data/，安装形态 → ~/.duet ✅
+
+**变更**（应用户要求，去掉过渡期的 `~/.duet-langgraph`）：`config.py` 的 `_data_root` 改为三段优先级——`DATA_DIR` 显式最优先；包不在 site-packages 下且能向上找到仓库根（`pnpm-workspace.yaml`，兼容 zip 解包无 .git）→ 仓库 `data/`；否则（uvx/pip/Docker venv）→ `~/.duet`。TS 版以「dist 产物 vs src 源码」判定，Python 对应为「site-packages 与否」。Docker 不受影响（Dockerfile/compose 均显式 `DATA_DIR=/data`）。
+
+**顺带修了测试基建**：conftest 的 client fixture 与 test_health/test_s3_agent 共 3 处直接 `os.environ["DATA_DIR"]=` 只设不清，会泄漏污染后续测试——全改 `monkeypatch.setenv` 自动还原。新增 `test_s0_config.py`（3 用例：源码检测、site-packages/裸目录回退、env 优先）正是靠这个清理才能在全量跑中断言默认值。
+
+**数据搬家**：活数据（providers/library + duet.db/checkpoints.db，含脏 id 迁移后的模板）从 `~/.duet-langgraph` 拷入仓库 `data/`（旧 TS 时期 json 被取代）并同步一份到 `~/.duet`（供将来 uvx 形态续用）。重启验证：`lsof` 确认进程打开的是仓库 data/ 下库文件，6 角色 / 3 Provider / 干净 id 全部就位。`~/.duet-langgraph` 保留未删（孤儿备份）。
+
+**验收**：pytest 44/44 绿 + ruff 干净。
+
+**注意**：源码跑与安装形态各写各的目录，交替使用会分叉（与 TS 时代行为一致）；`.gitignore` 已忽略 `data/`（除 .gitkeep）。

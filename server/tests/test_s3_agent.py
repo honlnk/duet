@@ -250,9 +250,7 @@ async def test_agent_abort_before_start(fake_agent_model, tmp_path, monkeypatch)
 
 
 async def test_agent_abort_skips_rest_of_tool_batch(fake_agent_model, tmp_path, monkeypatch):
-    import os
-
-    os.environ["DATA_DIR"] = str(tmp_path)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
     from duet_langgraph.store import library as library_store
 
     library_store._reset_for_test()

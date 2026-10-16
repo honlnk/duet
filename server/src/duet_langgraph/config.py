@@ -1,7 +1,7 @@
 """运行配置：与 TS 版 config.ts 对齐（D4/D5）。
 
 - 端口默认 23892（PORT env 可覆盖）
-- DATA_DIR 显式环境变量最优先，默认 ~/.duet-langgraph
+- DATA_DIR 显式环境变量最优先；源码跑用仓库 data/，装好的包（uvx/pip）用 ~/.duet
 - 全局硬熔断：200 轮 / 7200 秒（env 可覆盖）
 - 静态目录：DUET_STATIC_DIR 显式优先，默认包内 public/（S5）
 """
@@ -39,11 +39,29 @@ def _static_dir() -> Path:
     return Path(__file__).resolve().parent / "public"
 
 
+def _source_repo_root() -> Path | None:
+    # TS 版以「跑的是 dist 产物还是 src 源码」区分安装/开发；Python 对应判定：
+    # 包文件若位于 site-packages 之下即已安装（uvx/pip/Docker venv），否则向上找仓库根
+    #（含 pnpm-workspace.yaml 的目录，兼容无 .git 的 zip 解包场景）。
+    p = Path(__file__).resolve()
+    for parent in p.parents:
+        if parent.name in {"site-packages", "dist-packages"}:
+            return None
+        if (parent / "pnpm-workspace.yaml").exists():
+            return parent
+    return None
+
+
 def _data_root() -> Path:
+    # 对齐 TS config.ts：DATA_DIR 显式最优先；源码开发 → 仓库 data/；
+    # 安装形态（uvx duet-langgraph / pip / Docker）→ ~/.duet（避免 npx/uvx 缓存目录被清丢数据）
     env_dir = os.environ.get("DATA_DIR")
     if env_dir:
         return Path(env_dir).expanduser().resolve()
-    return Path.home() / ".duet-langgraph"
+    repo = _source_repo_root()
+    if repo is not None:
+        return repo / "data"
+    return Path.home() / ".duet"
 
 
 @dataclass
