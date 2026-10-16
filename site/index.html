@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>duet · 多角色自主对话聊天室</title>
-  <meta name="description" content="duet 是一个开源的多角色自主对话聊天室：给 2~10 个 AI 各自的角色、世界观与关系，让它们自动轮流对话；你可以当导演随时干预走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计。" />
+  <meta name="description" content="duet 是一个开源的多角色自主对话聊天室：给 2~10 个 AI 各自的角色、世界观与关系，让它们自动轮流对话；你可以当导演随时干预走向。支持多 Provider 混用、思考档位、独立长记忆与成本统计；右下角的配置机器人帮你一键准备好对话要用的角色与话题。" />
   <link rel="icon" type="image/svg+xml" href="./assets/brand/logo-mark.svg" />
   <style>
     :root {
@@ -231,6 +231,26 @@
     }
     .steps li h4 { margin-top: 0; }
 
+    /* Tutorial screenshots */
+    figure.shot { margin: 16px 0 4px; }
+    figure.shot img {
+      display: block; width: 100%; height: auto;
+      border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+    figure.shot figcaption {
+      font-size: 13px; color: var(--text-muted); margin-top: 8px;
+    }
+    .shot-row { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin: 16px 0 4px; }
+    .shot-row figure.shot { flex: 1 1 480px; margin: 0; }
+    .shot-row figure.shot.side { flex: 0 1 300px; }
+    .shot-row figure.shot.side img { object-fit: cover; }
+    figure.shot.small { max-width: 420px; }
+    @media (max-width: 720px) {
+      .shot-row figure.shot, .shot-row figure.shot.side { flex: 1 1 100%; }
+      .shot-row figure.shot.side img { max-height: 560px; object-position: top; }
+    }
+
     /* Callout */
     .callout {
       padding: 16px 20px; border-radius: 8px; margin: 20px 0;
@@ -393,6 +413,7 @@
 
       <h3>工程能力</h3>
       <ul class="feature-list">
+        <li><strong>配置机器人</strong> — 页面右下角的 AI 助手能直接读写模板库：说一句需求，角色卡、话题、关系当场建好；聊天记录落盘本地，刷新不丢</li>
         <li><strong>多 Provider 管理中心</strong> — 页面内可视化维护 API Key、Base URL、模型与价格，支持从上游拉取模型列表；Key 只存后端，前端不触碰模型 API</li>
         <li><strong>成本统计</strong> — 按输入 / 输出 / 缓存命中 / 缓存写入分维度计价，CNY / USD / EUR 在线汇率换算（三层降级兜底），右侧面板实时显示累计 token 与成本</li>
         <li><strong>Prompt 历史</strong> — 「所见即所发」：查看每次真正发给 LLM 的完整提示词快照（含分层注入结果），提示词调试不再靠猜</li>
@@ -408,7 +429,7 @@
     <div class="container">
       <p class="section-title">快速开始</p>
       <h2>三种方式，任选其一</h2>
-      <p class="section-desc">duet 是本地优先的工具：启动后所有配置（包括 API Key）都在页面里维护，环境变量全部可选。</p>
+      <p class="section-desc">duet 是本地优先的工具：所有配置（包括 API Key）都在页面里维护，环境变量全部可选。你唯一要手动做的是配一个 API Key——角色、话题、关系这些对话配置，直接告诉右下角的机器人就行。</p>
 
       <h3>方式一：npx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
       <pre><code>npx @honlnk/duet</code></pre>
@@ -425,21 +446,47 @@ pnpm dev</code></pre>
       <pre><code>docker compose up -d --build</code></pre>
       <p>多阶段构建（alpine），非 root 运行，内置健康检查；会话数据与 Provider 配置通过卷（<code>/data</code>）持久化。</p>
 
-      <h3>首次使用</h3>
+      <h3>首次使用 <span class="pill">配好 API 就能聊</span></h3>
       <ol class="steps">
         <li>
-          <h4>配置 Provider</h4>
-          <p>首次访问会提示未配置。点右上角「Provider」添加第一条：选择协议（OpenAI 兼容 / Responses / Anthropic / Gemini），填 API Key、Base URL、模型名，可点「获取列表」拉取上游模型。第一条自动成为默认。</p>
+          <h4>配置 Provider —— 唯一要手动做的事</h4>
+          <p>首次访问会提示未配置。点右上角「Provider」添加第一条：选择协议（OpenAI 兼容 / Responses / Anthropic / Gemini），填 API Key、Base URL 与模型名，可点「获取列表」拉取上游模型。第一条自动成为默认，到此设置就结束了。</p>
+          <figure class="shot">
+            <img src="./assets/tutorial-provider.png" alt="Provider 配置面板" loading="lazy" />
+            <figcaption>Provider 管理面板。Key 只存后端 providers.json，列表里始终脱敏显示。</figcaption>
+          </figure>
         </li>
         <li>
-          <h4>创建对话</h4>
-          <p>选话题（可叠加世界观）→ 从模板点选 2~10 个角色 → 开始。高级设置里可为每个角色单独绑定 Provider、思考档位、温度、摘要频率等。</p>
+          <h4>剩下的，直接跟右下角的机器人说</h4>
+          <p>配完 API 不用研究任何设置页——打开右下角的机器人，把需求说成人话就行：「帮我建三个角色：产品经理、前端工程师、测试工程师，再来一个深夜版本评审的话题，让他们互相有点摩擦」。机器人当场调用工具建好角色模板、话题模板和关系，每一步建了什么、改了什么，都实时展示在对话里，不满意就让它改。</p>
+          <div class="shot-row">
+            <figure class="shot">
+              <img src="./assets/tutorial-agent.png" alt="在页面右下角与配置机器人对话" loading="lazy" />
+              <figcaption>在页面右下角把需求说给机器人，它直接把配置建好。</figcaption>
+            </figure>
+            <figure class="shot side">
+              <img src="./assets/tutorial-agent-zoom.png" alt="机器人对话面板特写" loading="lazy" />
+              <figcaption>角色、话题、关系，一次说清、一次建齐。</figcaption>
+            </figure>
+          </div>
         </li>
         <li>
-          <h4>观看 &amp; 当导演</h4>
-          <p>A 先发言、B 接力……自动循环。随时点「暂停」优雅停止；底部输入框可下达导演指令（永久 / N 轮有效），下一轮立即生效。右侧面板实时显示轮次、token 与成本。</p>
+          <h4>机器人备好的配置，点选开聊</h4>
+          <p>机器人建好的模板已直接出现在模板库里：新建对话时选话题、点选这 2~10 个角色 → 开始。A 先发言、B 接力……自动循环；底部输入框随时下达导演指令（永久 / N 轮有效），右侧面板实时显示轮次、token 与成本。</p>
+          <figure class="shot">
+            <img src="./assets/tutorial-templates.png" alt="机器人创建的角色模板出现在模板库" loading="lazy" />
+            <figcaption>机器人刚建好的三个角色模板，已经躺在模板库里等你点选。</figcaption>
+          </figure>
         </li>
       </ol>
+
+      <div class="callout callout-info">
+        <strong>聊天不白聊：</strong>和机器人的对话记录保存在面板右上角的「聊天历史」里，刷新页面、重启服务都不会丢，随时回来接着聊、让它继续改配置。
+      </div>
+      <figure class="shot small">
+        <img src="./assets/tutorial-history.png" alt="机器人聊天历史列表" loading="lazy" />
+        <figcaption>「聊天历史」列表：点开即可续聊。</figcaption>
+      </figure>
 
       <div class="callout callout-warn">
         <strong>费用提示：</strong>不设上限的「无限对话」会持续产生 API 费用。全局熔断默认 200 轮 / 2 小时兜底，请留意右侧面板的成本统计，及时暂停。
