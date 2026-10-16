@@ -175,7 +175,7 @@ docker compose up -d --build
 | 后端 | **Python 3.12 + FastAPI + uvicorn**，编排用 **LangGraph StateGraph**（AsyncSqliteSaver checkpointer） |
 | AI 调用 | langchain 官方 model 类（openai / openai-responses / anthropic / gemini），thinking_config 原样透传 |
 | 前端 | **Vue 3.5 + TypeScript + Pinia + Tailwind CSS v4** + Vite |
-| 持久化 | SQLite（会话真源 `duet.db` + 图状态 `checkpoints.db` 分文件）；Provider 凭证 `providers.json`、资产库 `library.json` |
+| 持久化 | SQLite（会话真源 `duet.db` + 图状态 `checkpoints.db` 分文件）；Provider 凭证 `providers.json`、资产库 `library.json`、导演助手聊天历史 `agent-chats.json` |
 | 包管理 | pnpm workspace（`web`）+ uv（`server`） |
 
 ### 双 Loop 架构（核心）

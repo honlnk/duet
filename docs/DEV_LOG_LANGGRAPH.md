@@ -223,3 +223,15 @@ TS 后端删除后 `-py` 后缀失去区分意义，目录 `server-py/` 更名�
 **验收**：pytest 44/44 绿 + ruff 干净。
 
 **注意**：源码跑与安装形态各写各的目录，交替使用会分叉（与 TS 时代行为一致）；`.gitignore` 已忽略 `data/`（除 .gitkeep）。
+
+## 2026-10-16 导演助手聊天历史持久化 + 历史列表 ✅
+
+**背景**：TS 时代决策「agent 聊天历史不持久化」——刷新即丢，用户提出要一个简单的聊天历史列表，推翻该决策。
+
+**后端**：新增 `store/agent_chats.py`（`data/agent-chats.json`，与 providers/library 同款原子写）。`POST /api/agent/chat` body 增可选 `chatId`：带则增量落盘展示条目——user 立即写，tool 行在 tool_result 时合并写（含 call 摘要与参数），assistant 以终稿事件为准；system 瞬态提示条（错误/停止）不落盘。新端点 `GET /api/agent/chats`（新→旧摘要）、`GET /api/agent/chats/{id}`（全量）、`DELETE`。内存会话 TTL 过期后带同一 chatId 续聊，从落盘历史重建文本上下文（仅 user/assistant，工具消息不回灌）。
+
+**前端**：`AgentWidget.vue` 双视图——聊天 / 历史列表（标题取首条用户消息前 30 字，含时间与条数，行内删除带 confirm）；「开启新对话」常驻头部；刷新后重开面板且无进行中对话时自动落历史列表；sessionId 即 chatId。输入区在历史视图下隐藏。
+
+**验收**：pytest 47/47 绿 + ruff 干净（新增 3 用例：CRUD 契约 / 上下文重建 / 新旧排序）；浏览器真机过全流程（空态 → 种子数据渲染 → 打开还原含工具行徽标 → 删除回空态，种子数据已清）；`pnpm --filter web build` 通过。
+
+**已知简化**（偏差记录）：① 中途「停止」的半截回复不落盘（以 assistant 终稿事件为准）；② 历史里的工具行只存展示字段，不参与模型上下文重建；③ 功能前产生的旧对话无法追溯进历史。均为有意取舍，简单优先。

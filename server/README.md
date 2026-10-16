@@ -40,7 +40,7 @@ flowchart TB
     finish --> END(("END"))
 ```
 
-导演助手是独立的 Agent 图（SSE 输出 6 类事件：`delta` / `tool_call` / `tool_result` / `assistant` / `done` / `error`），挂载 12 个资产管理工具（角色/话题/世界观模板 CRUD + 关系图读写）：
+导演助手是独立的 Agent 图（SSE 输出 6 类事件：`delta` / `tool_call` / `tool_result` / `assistant` / `done` / `error`），挂载 12 个资产管理工具（角色/话题/世界观模板 CRUD + 关系图读写）。带 `chatId` 的对话增量落盘 `agent-chats.json`（user/assistant/工具行展示条目），支持历史列表 / 续聊 / 删除（`/api/agent/chats`）；内存会话过期后续聊会从落盘历史重建文本上下文：
 
 ```mermaid
 flowchart LR

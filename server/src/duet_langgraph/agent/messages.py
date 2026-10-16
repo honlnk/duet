@@ -1,7 +1,9 @@
 """Agent 会话态：内存 Map + 空闲过期清理（对齐 TS agent/messages.ts）。
 
-决策记录（同 TS）：聊天历史不持久化——刷新页面换新 sessionId 即全新会话；
-服务端只保留最近活跃会话的内存态（TTL 2 小时，惰性清理）。
+历史决策（同 TS）曾是「聊天历史不持久化」；现已按需求改为持久化
+（store/agent_chats.py 落盘展示条目），本模块继续承担「活跃会话的模型上下文」
+——含工具消息的全量消息序列，TTL 2 小时惰性清理；过期后带 chatId 再来
+会从落盘历史重建文本上下文（见 routes/agent.py）。
 """
 
 from __future__ import annotations
