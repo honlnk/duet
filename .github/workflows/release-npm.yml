@@ -1,0 +1,112 @@
+# 发布 @honlnk/duet 到 npm（v2：薄壳启动器 + 内嵌 Python wheel）。
+# 推送 v* 标签时触发（tag 版本必须与 packaging/npm/package.json version 一致），也可手动触发。
+#
+# 认证方式：npm Trusted Publishing（OIDC）—— 无需 NPM_TOKEN，npm 侧登记沿用 v1 配置：
+#   npmjs.com → 包 @honlnk/duet → Settings → Trusted Publisher：
+#     user=honlnk、repo=duet、workflow filename=release-npm.yml、environment 留空。
+# （2026-10-08 已配置，workflow 文件名保持 release-npm.yml 即可直接复用。）
+#
+# 产物形态：packaging/npm/{package.json, bin/duet.mjs, README.md} + dist/<wheel>。
+# wheel 由 uv build 产出（含 web 前端构建产物），bin 启动器用 `uvx --from <wheel>`
+# 运行——用户侧唯一前置是 uv。发布物不含任何 Node 运行时代码。
+#
+# 幂等：版本已在 registry 时自动跳过（兼容「先手动发再推 tag」）。
+# PyPI 发布为可选形态，见 release-pypi.yml（仅手动触发）。
+
+name: Release npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm OIDC Trusted Publishing / --provenance 必需
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version (tag must match packaging/npm/package.json)
+        id: ver
+        run: |
+          set -e
+          PKG_VERSION=$(node -p "require('./packaging/npm/package.json').version")
+          PY_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' server/pyproject.toml | head -1)
+          if [[ "$PKG_VERSION" != "$PY_VERSION" ]]; then
+            echo "::error::npm 版本 $PKG_VERSION 与 pyproject 版本 $PY_VERSION 不一致"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "$TAG_VERSION" != "$PKG_VERSION" ]]; then
+              echo "::error::tag v$TAG_VERSION 与 packaging/npm/package.json version $PKG_VERSION 不一致"
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already published
+        id: skip
+        run: |
+          set -e
+          V=${{ steps.ver.outputs.version }}
+          if npm view "@honlnk/duet@$V" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::@honlnk/duet@$V 已存在，跳过发布"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v4 # 版本自动读根 package.json 的 packageManager 字段
+
+      - uses: actions/setup-node@v4
+        if: steps.skip.outputs.skip != 'true'
+        with:
+          node-version: '24' # Trusted Publishing 要求 npm ≥ 11.5.1（Node 24 自带）
+          cache: pnpm
+          # 不要设 registry-url：会注入 NODE_AUTH_TOKEN，覆盖 OIDC 认证。
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.skip.outputs.skip != 'true'
+
+      - name: Install dependencies (web)
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web (vite -> server/src/duet_langgraph/public)
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm --filter web build
+
+      - name: Build wheel (uv build, 内含前端产物)
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: server
+        run: |
+          set -e
+          uv build
+          WHEEL=$(ls dist/duet_langgraph-*.whl)
+          if [[ "$WHEEL" != *"-${{ steps.ver.outputs.version }}-"* ]]; then
+            echo "::error::wheel 版号与 package.json 不一致: $WHEEL"
+            exit 1
+          fi
+
+      - name: Assemble npm package (wheel -> packaging/npm/dist)
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          set -e
+          mkdir -p packaging/npm/dist
+          cp server/dist/duet_langgraph-*.whl packaging/npm/dist/
+          ls -la packaging/npm/dist/
+
+      - name: Publish
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: packaging/npm
+        # 必须用 npm CLI（而非 pnpm publish）做 OIDC 认证，并自动附带 provenance。
+        # --ignore-scripts：包无构建脚本，纯静态组装，防注入。
+        run: npm publish --access public --provenance --ignore-scripts

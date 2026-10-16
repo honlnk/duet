@@ -1,8 +1,9 @@
-# 发布 duet-langgraph 到 PyPI（S6 起生效，替换 release-npm.yml）。
-# 推送 v* 标签时触发（tag 版本必须与 server/pyproject.toml version 一致），也可手动触发。
+# 发布 duet-langgraph 到 PyPI（可选形态，默认不参与 tag 发布）。
+# 仅手动触发（workflow_dispatch）——npm（release-npm.yml）是 v2 的主发布通道；
+# 想启用 PyPI 时按下方前置配置好后手动跑，或把 tags 触发加回来。
 # 认证方式：PyPI Trusted Publishing（OIDC）—— 无需 PYPI_TOKEN。
 #
-# 前置（需手动配置一次，S6 合并前完成）：
+# 前置（需手动配置一次）：
 #   pypi.org → 项目 duet-langgraph → Publishing → Add a pending publisher：
 #     owner=honlnk、repository=duet、workflow filename=release-pypi.yml、
 #     environment=pypi。
@@ -12,16 +13,10 @@
 # 打包物：wheel（经 hatch artifacts 携带 web 前端构建产物，装完即有 UI，
 # duet-langgraph 一条命令同时提供 API 与页面）。仅发 wheel，不发 sdist
 #（sdist 无法携带 gitignored 的前端产物）。
-#
-# 注意：在 release-npm.yml 删除之前，v* 标签会同时触发两条流水线 ——
-# 切换期间不要推送标签。
 
 name: Release PyPI
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
