@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
 from . import __version__
-from .config import get_config
+from .config import get_config, reset_config
 from .graph.chat_graph import close_checkpointer, get_checkpointer
 from .routes import agent, exchange, health, library, pricing, providers, sessions
 from .store import providers as provider_store
@@ -113,6 +113,9 @@ app = create_app()
 def main() -> None:
     """PyPI 控制台入口：duet-langgraph。"""
     os.environ.setdefault("DUET_ENV", "production")
+    # 模块导入时上面的 app = create_app() 已把配置单例定格（DUET_ENV 未设 → development），
+    # 生产入口必须重建单例，否则 env/static 判定都以开发态生效
+    reset_config()
     cfg = get_config()
     # 与 TS 一致：生产模式启动后自动打开浏览器；无图形环境（Docker/远程）下静默忽略
     url = f"http://localhost:{cfg.port}"

@@ -1,0 +1,32 @@
+{
+  "name": "@honlnk/duet",
+  "version": "2.0.0",
+  "description": "duet — 多智能体自主对话聊天室（npm 薄壳：内嵌 Python wheel，经 uv 运行）",
+  "type": "module",
+  "bin": {
+    "duet-chat": "bin/duet.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/honlnk/duet.git"
+  },
+  "author": "honlnk",
+  "license": "MIT",
+  "keywords": [
+    "duet",
+    "ai",
+    "chat",
+    "multi-agent",
+    "langgraph",
+    "fastapi",
+    "conversation"
+  ]
+}

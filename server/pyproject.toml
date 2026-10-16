@@ -1,6 +1,6 @@
 [project]
 name = "duet-langgraph"
-version = "0.1.0"
+version = "2.0.0"
 description = "duet 后端的 Python + FastAPI + LangGraph 重写版：多 AI 自主对话聊天室"
 readme = "README.md"
 requires-python = ">=3.12"

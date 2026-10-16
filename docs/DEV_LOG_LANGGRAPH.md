@@ -235,3 +235,21 @@ TS 后端删除后 `-py` 后缀失去区分意义，目录 `server-py/` 更名�
 **验收**：pytest 47/47 绿 + ruff 干净（新增 3 用例：CRUD 契约 / 上下文重建 / 新旧排序）；浏览器真机过全流程（空态 → 种子数据渲染 → 打开还原含工具行徽标 → 删除回空态，种子数据已清）；`pnpm --filter web build` 通过。
 
 **已知简化**（偏差记录）：① 中途「停止」的半截回复不落盘（以 assistant 终稿事件为准）；② 历史里的工具行只存展示字段，不参与模型上下文重建；③ 功能前产生的旧对话无法追溯进历史。均为有意取舍，简单优先。
+
+## 2026-10-16 交付形态改道：npm 包（薄壳 + 内嵌 wheel）接替 PyPI 成为 v2 主发布通道 ✅
+
+**背景**：用户不想注册 PyPI 账号；v1 的 npm 发布链路（`@honlnk/duet`，OIDC Trusted Publishing，npm 侧登记只绑 workflow 文件名）是现成的。
+
+**方案**：npm 包不含任何 Node 运行时代码——`packaging/npm/`（`@honlnk/duet` 2.0.0，bin `duet-chat`）内含 `bin/duet.mjs` 启动器，发布时 CI 把 `uv build` 产出的 wheel（含前端产物）放入 `dist/`。启动器检测 uv 后以 `uv tool run --from <wheel> duet-langgraph` 运行；uv 自动准备 Python ≥3.12，用户无需预装 Python。数据落 `~/.duet`（安装形态，site-packages 判定）。
+
+**流水线**：新建 `release-npm.yml`（tag v* 触发；版本三处对齐校验：tag = npm package.json = pyproject = wheel 文件名；已发布版本幂等跳过；npm CLI OIDC + provenance，Node 24）。npm 侧 Trusted Publisher 沿用 v1 登记（workflow 文件名相同），**零 npm 侧操作**。`release-pypi.yml` 降级为仅手动触发（可选形态，想发再启用）。
+
+**本地验证**：`uv build` → wheel 206KB 含 public/index.html → `npm pack`（内容：package.json/bin/README/wheel）→ 全局安装 tarball → `duet-chat` + `DATA_DIR=/tmp` + `PORT=23895` 实跑：health ok、页面 200、数据写入指定目录、二次启动走 uv 缓存秒级。测试后已卸载清理。
+
+**顺带修了控制台入口真 bug**：`main.py` 模块级 `app = create_app()` 在导入时就把配置单例定格，`main()` 里 `setdefault("DUET_ENV","production")` 来不及生效——控制台入口（npm/uvx 用户路径）一直跑 development。修复：setdefault 后 `reset_config()` 重建单例。此前冒烟全走 `uvicorn` 直起恰好绕开此路径，故未被发现；重装包实测 env=production 通过。
+
+**文档**：根 README（形态 B 改 npx、目录树 +packaging/npm、升级表「命令不变」）、门户页（npx @honlnk/duet + uv 前置、页脚 PyPI→npm）。
+
+**验收**：pytest 47/47 + ruff 干净；npm pack 内容检查 ✓；全局安装实跑 ✓（含 production 修复复验）。
+
+**偏差记录**：① 用户机器需预装 uv（启动器检测缺失时打印安装命令退出）；② 同版本 wheel 环境按 npm 包安装路径各自缓存（uvx --from 本地路径语义），多副本安装会占多份磁盘，v1 接受；③ 真实发布未演练（需推 tag，留给用户）。

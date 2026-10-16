@@ -31,7 +31,7 @@
   - 滑动窗口保留最近若干条原始消息。
 - **成本可控**：右侧详情面板显示累计 token 与估算成本；全局硬熔断兜底（默认 ≤ 200 轮 / 2 小时）。
 - **持久化与崩溃恢复**：每条消息同步落盘（SQLite），关闭浏览器重开历史仍在；进程崩溃重启后自动恢复，LangGraph checkpointer 支持会话续跑。
-- **多种部署形态**：源码本地运行、`uvx duet-langgraph` 一键启动、Docker 容器部署，任选其一。
+- **多种部署形态**：源码本地运行、`npx @honlnk/duet` 一键启动（npm 包内嵌 Python wheel）、Docker 容器部署，任选其一。
 
 ## 🚀 快速开始
 
@@ -72,19 +72,16 @@ cd server && uv run duet-langgraph   # 单进程托管 前端 + API + WebSocket
 
 生产模式启动后自动打开浏览器；通过 `PORT` 环境变量改端口。
 
-#### 形态 B：PyPI 包（uvx 一键启动，无需 clone 源码）
+#### 形态 B：npm 包（npx 一键启动，无需 clone 源码）
 
 ```bash
-# 临时运行（自动拉取并启动，随后自动打开浏览器）
-uvx duet-langgraph
-
-# 或 pip 安装后使用
-pip install duet-langgraph
-duet-langgraph
+npx @honlnk/duet        # 或 npm i -g @honlnk/duet && duet-chat
 ```
 
-- wheel 内置前端构建产物，开箱即用；
-- 数据默认落盘 `~/.duet/`（与 v1 一致），可用 `DATA_DIR` 改到其他目录。
+- 唯一前置 [uv](https://docs.astral.sh/uv/)（`brew install uv` 或 `curl -LsSf https://astral.sh/uv/install.sh | sh`）：npm 包是「薄壳启动器 + 内嵌 Python wheel」，由 uv 准备 Python ≥3.12 运行环境，**无需预装 Python**；首次运行下载依赖后缓存，二次启动秒级；
+- wheel 内置前端构建产物，开箱即用，启动后自动打开浏览器；
+- 数据默认落盘 `~/.duet/`（与 v1 一致），可用 `DATA_DIR` 改到其他目录；
+- Python 原生安装形态 `uvx duet-langgraph` 为可选路线（见 `.github/workflows/release-pypi.yml`，需先发布 PyPI）。
 
 #### 形态 C：Docker（容器化部署）
 
@@ -236,6 +233,7 @@ duet/
 │       ├── ws/            # WebSocket 对话循环入口 + 运行时
 │       └── main.py        # 应用工厂 + duet-langgraph 控制台入口
 ├── web/                   # 前端（Vue 3 + TS + Pinia + Tailwind v4 + Vite）
+├── packaging/npm/         # @honlnk/duet npm 包（薄壳启动器 bin/ + CI 发布时放入内嵌 wheel）
 ├── site/                  # 门户页（GitHub Pages）
 ├── docker-compose.yml     # 一键起（构建上下文=仓库根，Dockerfile 在 server/）
 └── pnpm-workspace.yaml
@@ -256,7 +254,7 @@ duet/
 | `providers.json` / `library.json` | **可直接拷贝**到新数据目录继续用（格式兼容） |
 | pacing 阅读节奏 | 后端不再实现（前端开关保留，切换无后端效果） |
 | `scheduling: "llm"` | 新增：建会话或 PATCH config 设置后由模型选下一位发言者 |
-| 启动方式 | `npx @honlnk/duet` → `uvx duet-langgraph`（npm 包停更于 v1） |
+| 启动方式 | 命令不变：`npx @honlnk/duet`（v2 内嵌 Python wheel，新增 uv 前置）；`npx @honlnk/duet@1` 可继续用 v1 |
 
 ## 📚 文档
 

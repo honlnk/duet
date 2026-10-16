@@ -410,11 +410,9 @@
       <h2>三种方式，任选其一</h2>
       <p class="section-desc">duet 是本地优先的工具：启动后所有配置（包括 API Key）都在页面里维护，环境变量全部可选。</p>
 
-      <h3>方式一：uvx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
-      <pre><code>uvx duet-langgraph</code></pre>
-      <p>自动拉取并启动（需 <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a>），随后自动打开浏览器。或 pip 安装后使用：</p>
-      <pre><code>pip install duet-langgraph
-duet-langgraph</code></pre>
+      <h3>方式一：npx 一键启动 <span class="pill">推荐 · 无需 clone</span></h3>
+      <pre><code>npx @honlnk/duet</code></pre>
+      <p>唯一前置 <a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener">uv</a>（<code>brew install uv</code>）：npm 包内嵌 Python 后端与页面产物，由 uv 准备 Python ≥3.12 运行环境——无需预装 Python。启动后自动打开浏览器。</p>
 
       <h3>方式二：源码运行</h3>
       <pre><code>git clone https://github.com/honlnk/duet.git
@@ -493,7 +491,7 @@ docker run -d -p 3000:3000 -v duet-data:/data duet</code></pre>
       <p>
         <a href="https://github.com/honlnk/duet" target="_blank" rel="noopener">GitHub</a>
         &nbsp;·&nbsp;
-        <a href="https://pypi.org/project/duet-langgraph/" target="_blank" rel="noopener">PyPI</a>
+        <a href="https://www.npmjs.com/package/@honlnk/duet" target="_blank" rel="noopener">npm</a>
         &nbsp;·&nbsp;
         <a href="https://github.com/honlnk/duet/issues" target="_blank" rel="noopener">问题反馈</a>
       </p>
