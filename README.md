@@ -84,7 +84,7 @@ duet-langgraph
 ```
 
 - wheel 内置前端构建产物，开箱即用；
-- 数据默认落盘 `~/.duet-langgraph/`，可用 `DATA_DIR` 改到其他目录。
+- 数据默认落盘 `~/.duet/`（与 v1 一致），可用 `DATA_DIR` 改到其他目录。
 
 #### 形态 C：Docker（容器化部署）
 
@@ -105,7 +105,7 @@ docker compose up -d --build
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `PORT` | `23892` | 服务端口 |
-| `DATA_DIR` | `~/.duet-langgraph`（Docker 为 `/data`） | 数据根目录（`sessions/`、`providers.json`、`library.json` 均在其下） |
+| `DATA_DIR` | 源码跑为仓库 `data/`，安装形态为 `~/.duet`（Docker 为 `/data`） | 数据根目录（`sessions/`、`providers.json`、`library.json` 均在其下） |
 | `DUET_ENV` | 开发 `development` / 入口 `production` | 生产模式托管前端静态产物并自动开浏览器 |
 | `DUET_STATIC_DIR` | 包内 `public/` | 前端构建产物目录（一般无需设置） |
 | `ABSOLUTE_MAX_ROUNDS` | `200` | 全局硬熔断轮数 |
