@@ -35,6 +35,12 @@ function toggle() {
   if (open.value) {
     // 首次打开回填默认 Provider
     if (!providerId.value) providerId.value = defaultId.value
+    // 刷新后重开且无进行中对话：有历史则直接进历史列表，旧对话找得回
+    if (!hasChat.value) {
+      void loadChats().then(() => {
+        if (chats.value.length > 0) view.value = 'history'
+      })
+    }
     nextTick(() => inputRef.value?.focus())
   }
 }
@@ -50,8 +56,11 @@ onBeforeUnmount(() => {
 
 /* --------------------------- 会话与消息模型 --------------------------- */
 
-/** 会话 id：组件实例持有，刷新页面即新会话（服务端 2h 空闲过期，不持久化） */
-const sessionId = makeId()
+/**
+ * 会话 id：即后端 chatId（持久化历史的主键）。页面刷新后组件重建，
+ * 通过「历史」列表重新打开旧对话可续聊（服务端从落盘历史重建上下文）。
+ */
+const sessionId = ref(makeId())
 
 function makeId(): string {
   try {
@@ -88,6 +97,106 @@ let uidSeed = 0
 
 function nextUid(): number {
   return ++uidSeed
+}
+
+/* --------------------------- 聊天历史 --------------------------- */
+
+interface ChatSummary {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  messageCount: number
+}
+
+/** 面板双视图：chat 聊天 / history 历史列表 */
+const view = ref<'chat' | 'history'>('chat')
+const chats = ref<ChatSummary[]>([])
+const chatsLoading = ref(false)
+const historyError = ref('')
+
+function fmtTime(ts: number): string {
+  const d = new Date(ts)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  const day = `${d.getMonth() + 1}/${d.getDate()}`
+  return sameYear ? `${day} ${hh}:${mm}` : `${d.getFullYear()}/${day} ${hh}:${mm}`
+}
+
+async function loadChats(): Promise<void> {
+  chatsLoading.value = true
+  historyError.value = ''
+  try {
+    const res = await fetch('/api/agent/chats')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    chats.value = (await res.json()) as ChatSummary[]
+  } catch (e) {
+    historyError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    chatsLoading.value = false
+  }
+}
+
+function showHistory(): void {
+  view.value = 'history'
+  void loadChats()
+}
+
+function newChat(): void {
+  sessionId.value = makeId()
+  items.value = []
+  view.value = 'chat'
+  nextTick(() => inputRef.value?.focus())
+}
+
+/** 打开一条历史：还原展示条目并切回聊天视图（sessionId 换成该会话 id 续聊） */
+async function openChat(id: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/agent/chats/${id}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const chat = (await res.json()) as { messages: Array<Record<string, unknown>> }
+    uidSeed = 0
+    items.value = chat.messages
+      .filter((m) => m.kind === 'user' || m.kind === 'assistant' || m.kind === 'tool')
+      .map((m): Item => {
+        if (m.kind === 'tool') {
+          return {
+            kind: 'tool',
+            uid: nextUid(),
+            name: String(m.name ?? ''),
+            summary: String(m.summary ?? ''),
+            args: (m.args as Record<string, unknown>) ?? {},
+            status: m.ok ? ('ok' as const) : ('fail' as const),
+            detail: String(m.resultSummary ?? ''),
+            mutated: Boolean(m.mutated),
+            expanded: false,
+          }
+        }
+        return {
+          kind: m.kind as 'user' | 'assistant',
+          uid: nextUid(),
+          content: String(m.content ?? ''),
+          sealed: true,
+        }
+      })
+    sessionId.value = id
+    view.value = 'chat'
+    nextTick(() => scrollToBottom(true))
+  } catch (e) {
+    historyError.value = e instanceof Error ? e.message : String(e)
+  }
+}
+
+async function deleteChat(id: string): Promise<void> {
+  if (!confirm('确定删除这段对话历史？')) return
+  try {
+    const res = await fetch(`/api/agent/chats/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await loadChats()
+  } catch (e) {
+    historyError.value = e instanceof Error ? e.message : String(e)
+  }
 }
 
 /** 空态示例指令 */
@@ -270,7 +379,8 @@ async function send(preset?: string): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        sessionId,
+        sessionId: sessionId.value,
+        chatId: sessionId.value,
         text,
         providerId: providerId.value,
         model: model.value,
@@ -295,6 +405,7 @@ async function send(preset?: string): Promise<void> {
     // 收尾：丢掉空的 assistant 占位（如中止在 delta 之前）
     const last = items.value[items.value.length - 1]
     if (last && last.kind === 'assistant' && last.content === '') items.value.pop()
+    void loadChats() // 历史列表静默刷新（用户可能停在历史视图）
     nextTick(() => scrollToBottom())
   }
 }
@@ -400,21 +511,101 @@ function fillExample(text: string): void {
           <p class="text-[11px] text-text-muted">对话式管理角色、话题、世界观与关系</p>
         </div>
       </div>
-      <button
-        type="button"
-        aria-label="关闭"
-        class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-main"
-        @click="open = false"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
+      <div class="flex items-center gap-0.5">
+        <button
+          type="button"
+          aria-label="开启新对话"
+          title="开启新对话"
+          class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-main"
+          @click="newChat"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          aria-label="聊天历史"
+          title="聊天历史"
+          :class="
+            view === 'history'
+              ? 'flex h-7 w-7 items-center justify-center rounded-md bg-bg-hover text-text-main'
+              : 'flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-main'
+          "
+          @click="view === 'history' ? (view = 'chat') : showHistory()"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15.5 14" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          aria-label="关闭"
+          class="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-bg-hover hover:text-text-main"
+          @click="open = false"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 历史列表视图 -->
+    <div v-if="view === 'history'" class="flex flex-1 flex-col overflow-y-auto bg-bg-card/60">
+      <p v-if="historyError" class="mx-3 mt-2 text-xs text-danger">{{ historyError }}</p>
+      <p v-if="chatsLoading" class="px-4 py-8 text-center text-xs text-text-muted">加载中…</p>
+      <div v-else-if="chats.length === 0" class="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        <p class="text-sm text-text-dim">还没有历史对话</p>
+        <button
+          type="button"
+          class="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover"
+          @click="newChat"
+        >
+          开启新对话
+        </button>
+      </div>
+      <div v-else class="flex-1 space-y-1.5 p-3">
+        <div
+          v-for="c in chats"
+          :key="c.id"
+          role="button"
+          tabindex="0"
+          class="flex cursor-pointer items-center gap-2 rounded-lg border border-border-subtle bg-white px-3 py-2 transition-colors hover:border-focus/50"
+          @click="openChat(c.id)"
+          @keydown.enter="openChat(c.id)"
+        >
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-xs font-medium text-text-main">{{ c.title || '（无标题）' }}</p>
+            <p class="mt-0.5 text-[10px] text-text-muted">{{ fmtTime(c.updatedAt) }} · {{ c.messageCount }} 条消息</p>
+          </div>
+          <button
+            type="button"
+            aria-label="删除该对话"
+            class="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+            @click.stop="deleteChat(c.id)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="w-full rounded-lg border border-dashed border-border-subtle px-3 py-2 text-xs text-text-muted transition-colors hover:border-focus/50 hover:text-text-main"
+          @click="newChat"
+        >
+          ＋ 开启新对话
+        </button>
+      </div>
     </div>
 
     <!-- 消息流 -->
-    <div ref="scrollRef" class="flex-1 space-y-2.5 overflow-y-auto bg-bg-card/60 px-4 py-3">
+    <div v-else ref="scrollRef" class="flex-1 space-y-2.5 overflow-y-auto bg-bg-card/60 px-4 py-3">
       <!-- 空态 -->
       <div v-if="!hasChat" class="flex h-full flex-col items-center justify-center gap-3 px-2 text-center">
         <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-bg-hover text-text-dim">
@@ -501,8 +692,8 @@ function fillExample(text: string): void {
       </template>
     </div>
 
-    <!-- 输入区 -->
-    <div class="shrink-0 border-t border-border-subtle bg-white px-3 pb-3 pt-2">
+    <!-- 输入区（历史视图下隐藏） -->
+    <div v-if="view === 'chat'" class="shrink-0 border-t border-border-subtle bg-white px-3 pb-3 pt-2">
       <p v-if="sendError" class="mb-1.5 text-xs text-danger">{{ sendError }}</p>
       <textarea
         ref="inputRef"

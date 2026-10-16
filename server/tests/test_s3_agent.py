@@ -21,12 +21,14 @@ class FakeAgentModel:
     def __init__(self, turns: list):
         self.turns = list(turns)
         self.bound_tools = None
+        self.seen: list[list] = []
 
     def bind_tools(self, tools):
         self.bound_tools = tools
         return self
 
     async def astream(self, messages):
+        self.seen.append(list(messages))
         msg = self.turns.pop(0)
         if isinstance(msg, Exception):
             raise msg
@@ -82,7 +84,7 @@ def add_provider(client) -> dict:
     return res.json()["providers"][0]
 
 
-def chat(client, prov, text, session_id="agent-s1", model="deepseek-v4-flash", thinking=None):
+def chat(client, prov, text, session_id="agent-s1", model="deepseek-v4-flash", thinking=None, chat_id=None):
     return client.post(
         "/api/agent/chat",
         json={
@@ -91,6 +93,7 @@ def chat(client, prov, text, session_id="agent-s1", model="deepseek-v4-flash", t
             "providerId": prov["id"],
             "model": model,
             **({"thinking": thinking} if thinking else {}),
+            **({"chatId": chat_id} if chat_id else {}),
         },
     )
 
@@ -302,3 +305,77 @@ def test_library_ids_are_clean(client):
         )
         assert re.fullmatch(r"ct_[0-9a-z]+", t["id"]), f"脏 id: {t['id']!r}"
         library.delete_character_template(t["id"])
+
+
+# ============================== 聊天历史持久化 ==============================
+
+
+def test_agent_chat_history_crud(client, fake_agent_model):
+    """带 chatId 的对话增量落盘（user/tool/assistant），可列表/详情/删除；不带则维持纯内存。"""
+    prov = add_provider(client)
+    fake_agent_model.model = FakeAgentModel(
+        [
+            tool_call(
+                "upsert_character_template",
+                {"name": "小张", "description": "d", "personality": "p"},
+            ),
+            {"content": "已创建角色模板「小张」。"},
+        ]
+    )
+    res = chat(client, prov, "帮我建一个角色：小张", session_id="hist-1", chat_id="hist-1")
+    assert res.status_code == 200
+    assert [e["event"] for e in parse_sse(res.text)][-1] == "done"
+
+    # 不带 chatId 的旧用法：不落盘
+    fake_agent_model.model = FakeAgentModel([{"content": "好"}])
+    assert chat(client, prov, "hi", session_id="ephemeral").status_code == 200
+
+    lst = client.get("/api/agent/chats").json()
+    assert [c["id"] for c in lst] == ["hist-1"]
+    summary = lst[0]
+    assert summary["title"].startswith("帮我建一个角色")
+    assert summary["messageCount"] == 3  # user + tool + assistant
+
+    detail = client.get("/api/agent/chats/hist-1").json()
+    kinds = [m["kind"] for m in detail["messages"]]
+    assert kinds == ["user", "tool", "assistant"]
+    tool_msg = detail["messages"][1]
+    assert tool_msg["name"] == "upsert_character_template"
+    assert tool_msg["ok"] is True and tool_msg["mutated"] is True
+    assert tool_msg["args"]["name"] == "小张"
+    assert detail["messages"][2]["content"] == "已创建角色模板「小张」。"
+
+    assert client.delete("/api/agent/chats/hist-1").json() == {"ok": True}
+    assert client.get("/api/agent/chats/hist-1").status_code == 404
+    assert client.delete("/api/agent/chats/hist-1").status_code == 404
+    assert client.get("/api/agent/chats").json() == []
+
+
+def test_agent_chat_history_context_rebuild(client, fake_agent_model):
+    """内存会话过期后（TTL 清空），带 chatId 续聊从落盘历史重建上下文。"""
+    prov = add_provider(client)
+    fake_agent_model.model = FakeAgentModel([{"content": "第一轮回答"}])
+    assert chat(client, prov, "第一轮问题", session_id="s2", chat_id="hist-2").status_code == 200
+
+    agent_messages._reset_for_test()  # 模拟 2h TTL 过期/进程重启
+    fake_agent_model.model = FakeAgentModel([{"content": "第二轮回答"}])
+    assert chat(client, prov, "第二轮问题", session_id="s2", chat_id="hist-2").status_code == 200
+
+    # 第二轮模型收到的上下文须含第一轮的 user/assistant 文本（system 之后）
+    seen = fake_agent_model.model.seen[0]
+    texts = [str(m.content) for m in seen]
+    assert "第一轮问题" in texts and "第一轮回答" in texts
+    assert texts.index("第一轮问题") < texts.index("第一轮回答")
+
+    # 历史按时间新→旧，第二轮后仍是同一个 chat
+    detail = client.get("/api/agent/chats/hist-2").json()
+    assert [m["kind"] for m in detail["messages"]] == ["user", "assistant"] * 2
+
+
+def test_agent_chat_history_newest_first(client, fake_agent_model):
+    prov = add_provider(client)
+    for sid, text in [("old", "旧对话"), ("new", "新对话")]:
+        fake_agent_model.model = FakeAgentModel([{"content": f"回:{text}"}])
+        assert chat(client, prov, text, session_id=sid, chat_id=sid).status_code == 200
+    lst = client.get("/api/agent/chats").json()
+    assert [c["id"] for c in lst] == ["new", "old"]
